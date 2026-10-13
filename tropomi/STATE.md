@@ -11,10 +11,10 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-Task 3: agree Level 2 standards for the style guide with the user (store unit
-per day, dimension/coordinate naming for `nobs`-indexed data, chunking, fill
-handling, quality-flag handling), and add the TROPOMI variables to
-`nomenclature_data.md`. Nothing is decided yet.
+Task 3 in progress: proposal written to `l2-standards-draft.md` (rules L2-1..12,
+draft nomenclature rows, five decisions). Awaiting the user's decisions; then
+move the rules into the style guide, the rows into `nomenclature_data.md`, and
+delete the draft.
 
 ## Open questions
 
