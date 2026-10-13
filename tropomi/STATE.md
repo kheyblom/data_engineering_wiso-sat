@@ -7,8 +7,7 @@ Read this first in a new session. Update it whenever work lands.
 - Task 1 done: `tropomi/CLAUDE.md` created.
 - Task 2 done: git repo initialised at `data_engineering_wiso-sat/`, `.gitignore`
   carried over from the sibling repos, remote `origin` set (SSH), `main` pushed.
-- Exploratory notebooks (`tropomi/testing_tropomi.ipynb`, `airs/testing.ipynb`)
-  are left untracked pending the user's call.
+- Exploratory notebooks (`testing*.ipynb`) are gitignored by decision.
 
 ## Next
 

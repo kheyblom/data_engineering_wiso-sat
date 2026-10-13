@@ -96,3 +96,6 @@ Thumbs.db
 
 # ---- EDrafting ----
 draft*
+
+# exploratory notebooks, not part of the pipeline
+testing*.ipynb

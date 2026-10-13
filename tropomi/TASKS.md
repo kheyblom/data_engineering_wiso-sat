@@ -18,7 +18,7 @@ This data also uses variables that are not in the style guide. We will work toge
 I want you to build the codebase. Design the codebase to be consistent with the other data_engineering codebases (see general notes).
 
 ## Design notes:
-- The environment is already created. See @../pyproject.yaml.
+- The environment is already created. See @../pyproject.toml.
 - Make sure to follow the style guides outlined in @/glade/u/home/kheyblom/work/style_guides.
 - Follow the structure and style in the past data_engineering products: @/glade/u/home/kheyblom/work/data_engineering. Make sure that we are consistent with each of those.
 - We will only produce zarr stores for a subset of the available variables. The config needs to be flexible to specify which variables we want to run the stores for during a production run.
@@ -37,6 +37,6 @@ Develop a plan to test this codebase so that we know that it works before we mov
 - use and update a CLAUDE.md that will take this information and effectively and efficiently handle this project. Don't be overly verbose. Keep the CLAUDE.md minimal and clean.
 - use information learned in each of the directories in: @/glade/u/home/kheyblom/work/data_engineering and add to this project's CLAUDE.md. Each directory contains a codebase for creating zarr stores for our data lake.
 - it is always important to minimize compute costs on derecho. we have a finite allocation and we need to managing our usage.
-- keep notes on your current working state. you may lose connection to the HPC system or I may need to start new sessions, so I need you to be able to easily pick up where you left off.
+- keep notes on your current working state. you may lose connection to the HPC system or I may need to start new sessions, so I need you to be able to easily pick up where you left off. Create and use the file STATE.md.
 - additional tasks may come up that need to occur between the above tasks. this task list can be flexible, but if substantial changes are need, I need to approve them.
 - mark tasks as completed when they are completed
