@@ -34,6 +34,14 @@ L3 gridded files in the raw tree are out of scope.
   The evidence and remaining work are in `l2-standards-draft.md`.
 - Canonical units: δD in `1e-3`, columns in `mol m-2` (x 1e4 / N_A from
   molec cm-2), mole fractions in `1e-6`, all on a dry-air basis.
+- **Project rules (agreed 2026-10-14, kept out of the style guide by the user):**
+  - **Verification covers every observation, not a sample.** Raw L2
+    variables are uncompressed and one HDF5 chunk each, so a full comparison
+    costs about what the build costs.
+  - **Dry-air and total-air mole fractions are different variables** with
+    different canonical names; never convert between them. Every mole
+    fraction in scope is dry-air (files plus Sarkar et al. 2026); MIPAS, the
+    only total-air product on disk, is excluded.
 - Every variable / unit / frequency needs an exact row in `nomenclature_data.md`
   before it is used; map onto it in `nomenclature-key_tropomi.md`, which the code
   parses (never restate the mapping in Python).
