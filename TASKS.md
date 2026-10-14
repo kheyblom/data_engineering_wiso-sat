@@ -9,12 +9,12 @@ Create a CLAUDE.md for this codebase. (Moved to the repo root 2026-10-14.)
 # 2. init a git repo [COMPLETED 2026-10-13]
 Check if a repo already exists for this codebase (data_engineering_wiso-sat). If the repo does not exist, initalize a github repo and connect to the remote (see general notes).
 
-# 3. Collaborate to update style guides
+# 3. Collaborate to update style guides [COMPLETED 2026-10-14]
 The data is different the previous data engineering codebases that have been built. Previous projects have only dealt with gridded datasets. This is a level 2 satellite retrieval product. Thus, we will likely need to work on creating the standards that will go into updating the style guide.
 
 This data also uses variables that are not in the style guide. We will work together to add all of the new variables that we need to.
 
-Progress: Level 2 rules written into the style guide and pushed 2026-10-14 (style_guides `7bc9f72`, `7137951`). Remaining: the TROPOMI variable subset and its rows in `nomenclature_data.md` (candidates in `docs/products/tropomi.md`). Other products add their rows when their readers are built.
+Progress: Level 2 rules written into the style guide and pushed 2026-10-14 (style_guides `7bc9f72`, `7137951`). TROPOMI production subset chosen and its 16 rows added to `nomenclature_data.md` 2026-10-14 (style_guides `fd94a93`; see `docs/products/tropomi.md`). Other products add their rows when their readers are built.
 
 # 4. Plan and build the codebase
 I want you to build the codebase. Design the codebase to be consistent with the other data_engineering codebases (see general notes).

@@ -75,58 +75,92 @@ is in `docs/l2-survey.md`.
 - **Geolocation store:**
   - `time`;
   - `lat`, `lon` (pixel centre);
-  - `pressure` on `level` (`meteo/pressure_levels`, 51 interfaces, Pa);
+  - `pressure` on `level` (`meteo/pressure_levels`, 51 interfaces, Pa), only
+    once the model-comparison set is produced: the kernels are what need it;
   - pixel corners, optional (`corner`, 32 B/obs).
-- **Filtering guidance to record in metadata, not apply** (Sarkar et al. 2026):
-  - iterations <= 10;
-  - SZA <= 70°;
-  - cloud optical thickness < 0.3;
-  - surface albedo >= 0.02;
-  - the clear-sky criteria of Schneider et al. (2022) Table 1.
+- **Filtering guidance to record in metadata, not apply.** Schneider et al.
+  (2022) Table 1, read from the publisher's image. Sarkar et al. (2026)
+  apply the all-scene and clear-sky rows.
+  - All scenes:
+    - iterations <= 10;
+    - reduced chi-squared of the final fit <= 150;
+    - reduced chi-squared of the pre-fit <= 150;
+    - SZA <= 70°.
+  - Clear sky: cloud optical thickness < 0.3 and surface albedo >= 0.02.
+  - Cloudy scenes: cloud height <= 2000 m and cloud optical thickness > 0.3.
+  - Schneider et al. recommend clear-sky and low-cloud scenes.
+- **What Table 1's terms are in the file:**
+  - **Cloud optical thickness and height:** these are `aerosol_optical_thickness`
+    and `aerosol_height`, SRON's effective scattering layer. The evidence:
+    - the paper fixes the layer's thickness d at 2500 m, and
+      `aerosol_geometric_thickness` is 2500 m on every pixel;
+    - SRON's PUM for the successor PAL product (SRON-ESG-RP-2024_020)
+      uses `aerosol_optical_thickness < 0.3` for clear sky.
+  - **Reduced chi-squared:** this is `chi_squared` / `number_of_spectral_points_*`,
+    which is inferred because no source defines it. In orbit 13847
+    (2020-06-15, flag 0):
+    - the median is ~10;
+    - 92% (final fit) and 99% (pre-fit) pass <= 150.
+    The alternative divisor, points minus degrees of freedom, differs by
+    ~2.5%. The counts vary per pixel (270-277 final, 309-316 pre-fit), so
+    the raw inputs are stored and the reduction is recorded as inferred.
+  - **No CH4 filter:** CH4 only drives the pre-fit of the cloud parameters.
+  - **Negative albedo:** flag-0 pixels reach negative surface albedo (p1
+    -0.95); the albedo >= 0.02 cut removes them.
 
-## Variable candidates (decision pending: the production subset)
+## Production subset (decided 2026-10-14)
 
-Proposed canonical names run general to specific, like the existing key.
+There are 16 one-dimensional stores, ~1.7 TB uncompressed. The rows are in
+`nomenclature_data.md` (style_guides `fd94a93`).
+- **Naming rule:** the quantity comes first, then qualifiers general to
+  specific (location, component, fit, band).
+- **Exception:** established terms stay whole (`solar_zenith_angle`).
+- **`quality_flags_retrieval`** is shared across products; the store
+  attributes carry each product's flag meanings.
 
 **Core: the retrieval plus the mandatory flag.**
 
-| source | proposed canonical_name | units | conversion |
+| source | canonical_name | units | conversion |
 | --- | --- | --- | --- |
 | `target_product/deltad` | `water_vapor_column_delta_d` | 1e-3 | x 1000 |
 | `target_product/deltad_precision` | `water_vapor_column_delta_d_standard_error` | 1e-3 | x 1000 |
-| `target_product/h2o_column` | `water_vapor_column` | mol m-2 | x 1e4 / N_A |
-| `target_product/h2o_column_precision` | `water_vapor_column_standard_error` | mol m-2 | x 1e4 / N_A |
+| `target_product/h2o_column` | `water_vapor_column_h2o` | mol m-2 | x 1e4 / N_A |
+| `target_product/h2o_column_precision` | `water_vapor_column_h2o_standard_error` | mol m-2 | x 1e4 / N_A |
 | `target_product/hdo_column` | `water_vapor_column_hdo` | mol m-2 | x 1e4 / N_A |
 | `target_product/hdo_column_precision` | `water_vapor_column_hdo_standard_error` | mol m-2 | x 1e4 / N_A |
-| `diagnostics/processing_quality_flags` | `retrieval_quality_flags` | 1 | none (int32; mandatory) |
+| `diagnostics/processing_quality_flags` | `quality_flags_retrieval` | unitless | none (int32; mandatory) |
 
-**Model comparison: kernels and priors** (50 layers each, ~5.2 TB uncompressed).
+**Filter inputs: everything Table 1 needs**, so users can filter without the
+raw files.
 
-| source | proposed canonical_name | units | conversion |
+| source | canonical_name | units | conversion |
 | --- | --- | --- | --- |
-| `target_product/h2o_column_averaging_kernel` | `water_vapor_column_averaging_kernel` | 1 | none |
-| `target_product/hdo_column_averaging_kernel` | `water_vapor_column_hdo_averaging_kernel` | 1 | none |
-| `target_product/h2o_profile_apriori` | `water_vapor_partial_column_apriori` | mol m-2 | x 1e4 / N_A |
-| `target_product/hdo_profile_apriori` | `water_vapor_partial_column_hdo_apriori` | mol m-2 | x 1e4 / N_A |
-| `meteo/dry_air_subcolumns` | `dry_air_partial_column` | mol m-2 | x 1e4 / N_A |
+| `diagnostics/iterations` | `iterations_retrieval` | unitless | none (int32) |
+| `instrument/solar_zenith_angle` | `solar_zenith_angle` | degree | none (respell `degrees`) |
+| `side_product/aerosol_optical_thickness` | `optical_thickness_scattering_layer` | unitless | none (squeeze `nwin`) |
+| `side_product/aerosol_height` | `height_scattering_layer` | m | none (above surface) |
+| `side_product/surface_albedo` | `albedo_surface_2365nm` | unitless | none (squeeze `nwin`) |
+| `diagnostics/chi_squared` | `chi_squared_retrieval` | unitless | none (unreduced) |
+| `diagnostics/chi_squared_prefit` | `chi_squared_prefit` | unitless | none (unreduced) |
+| `diagnostics/number_of_spectral_points_in_retrieval` | `spectral_point_count_retrieval` | unitless | none (int32; squeeze `nwin`) |
+| `diagnostics/number_of_spectral_points_in_prefit` | `spectral_point_count_prefit` | unitless | none (int32; squeeze `nwin`) |
 
-**Optional: inputs to the WISO-SAT filter**, so users can reproduce it
-without the raw files.
+**Deferred: model comparison.** These are 50 layers each, ~5.2 TB
+uncompressed. With the pressure grid they total ~31 TB.
+- Revisit after the bench measures how well kernels compress.
+- No canonical names or nomenclature rows yet. When they are added, they
+  must follow the naming rule.
 
-| source | proposed canonical_name | units | conversion |
-| --- | --- | --- | --- |
-| `diagnostics/iterations` | `retrieval_iterations` | 1 | none (int32) |
-| `instrument/solar_zenith_angle` | `solar_zenith_angle` | degree | none |
-| `side_product/aerosol_optical_thickness` | `scattering_optical_thickness` | 1 | none (squeeze `nwin`) |
-| `side_product/surface_albedo` | `surface_albedo` | 1 | none (squeeze `nwin`) |
+| source | units | conversion |
+| --- | --- | --- |
+| `target_product/h2o_column_averaging_kernel` | unitless | none |
+| `target_product/hdo_column_averaging_kernel` | unitless | none |
+| `target_product/h2o_profile_apriori` | mol m-2 | x 1e4 / N_A |
+| `target_product/hdo_profile_apriori` | mol m-2 | x 1e4 / N_A |
+| `meteo/dry_air_subcolumns` | mol m-2 | x 1e4 / N_A |
 
-- **Clear-sky criteria:** Schneider et al. (2022) Table 1 may need more inputs
-  (likely CH4-based). Check it before closing the optional set.
-- **"Cloud optical thickness" mapping:** mapping the paper's term to
-  `aerosol_optical_thickness` (SRON's scattering layer) is an inference, to be
-  confirmed.
 - **Left out unless asked:**
   - the other `meteo/` fields;
   - the CH4/CO side products;
   - the other aerosol and albedo parameters;
-  - the fit diagnostics.
+  - the remaining fit diagnostics.
