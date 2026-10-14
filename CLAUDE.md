@@ -12,8 +12,9 @@ then extend to the other products (decided 2026-10-14).
 
 - Read [STATE.md](STATE.md) first in a new session: it is the handoff, so keep
   it current. The task list is [TASKS.md](TASKS.md).
-- Notes for the product being worked on are in
-  `docs/products/<product>.md`; read only the one you need. The cross-product
+- Notes for the product being worked on are in `docs/products/`: `tropomi`,
+  `sciamachy`, `gosat` (GOSAT and GOSAT-2), `tropess` (AIRS and CrIS), `iasi`,
+  `tes`. Read only the one you need. The cross-product
   unit survey, the value checks and the WISO-SAT paper cross-check are in
   [docs/l2-survey.md](docs/l2-survey.md).
 - Environment: uv (`pyproject.toml`, `uv.lock`, `.venv` at the repo root). Run
@@ -21,7 +22,10 @@ then extend to the other products (decided 2026-10-14).
 - Remote: `git@github.com:kheyblom/data_engineering_wiso-sat.git` (SSH),
   branch `main`. Commit as work lands, with imperative messages that say what
   changed and why.
-- `tropomi/` and `airs/` hold only gitignored exploratory notebooks.
+- `notebooks/` holds gitignored exploratory notebooks. `tools/survey/` holds
+  the header and value scripts behind `docs/l2-survey.md`. They are light
+  (headers, or one file's variables) and run as
+  `.venv/bin/python -I tools/survey/<script>.py <files>`.
 
 ## Products in scope
 
@@ -61,7 +65,8 @@ validation/                   # per-product fixtures; one end-to-end test runs t
 **Agreed conditions for the shared design:**
 1. **Don't generalise early.** After TROPOMI's reader and fixture pass, and
    *before* any TROPOMI production run, write a second, deliberately different
-   reader (GOSAT is the cheapest, TES the strongest test) at fixture level only.
+   reader at fixture level only. GOSAT is the cheapest; TES is the strongest
+   test. Not SCIAMACHY: it uses the same SRON file format as TROPOMI.
    Share only what a second product actually needs.
 2. **Test every product after shared changes.** Every product keeps a tiny
    fixture, and the shared end-to-end test runs all of them after any change

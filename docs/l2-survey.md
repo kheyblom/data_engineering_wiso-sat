@@ -7,6 +7,10 @@ product's reader or nomenclature key. Decisions taken from it are in the root
 precedent it follows) are in this file's history at `7a0af0a`, when it was
 `tropomi/l2-standards-draft.md`.
 
+Per-product facts a reader needs (paths, dims, time and fill encodings,
+quirks) are in `docs/products/`. The scripts that produced this evidence are
+in `tools/survey/`.
+
 ## Units across the L2 sensors
 
 Header reads of one file per product, 2026-10-14. The AIRS and CrIS FS units
