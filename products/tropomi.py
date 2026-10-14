@@ -71,24 +71,34 @@ def digit_entries(directory):
     return sorted((entry for entry in os.listdir(directory) if entry.isdigit()), key=int)
 
 
-def list_granules(raw_root):
+def list_granules(raw_root, expected_empty=()):
     """Every orbit file under the raw root, in orbit order.
 
     Orbit order is time order and is the order the style guide requires. Walks
     year, month, day and orbit directories only, so the cost is one listing
     per directory and no file is opened.
 
+    Some orbit directories are empty upstream (353 checked against the server,
+    2026-10-14), and an empty one can also be a download that never arrived
+    (339 were). The two look the same on disk, so they are told apart by the
+    config, as missing days are: an empty directory is skipped only if its
+    orbit is in ``expected_empty``.
+
     Args:
         raw_root (str): The ``hdo`` directory.
+        expected_empty (Iterable): Orbit numbers whose directories are known to
+            be empty upstream (``expected_empty_granules`` in the config).
 
     Returns:
         list: :class:`Granule` per orbit file, sorted by orbit number.
 
     Raises:
         FileNotFoundError: If the root does not exist.
-        ValueError: If an orbit directory does not hold exactly one orbit file,
-            or holds one for a different orbit.
+        ValueError: If an orbit directory is empty and not declared, a declared
+            one holds a file, or one holds several orbit files or another
+            orbit's file.
     """
+    expected_empty = {int(orbit) for orbit in expected_empty}
     if not os.path.isdir(raw_root):
         raise FileNotFoundError(f'no raw data directory at {raw_root}')
 
@@ -106,6 +116,10 @@ def list_granules(raw_root):
                         for match in [FILE_RE.match(name)]
                         if match
                     ]
+                    if not matches and int(orbit) in expected_empty:
+                        continue
+                    if int(orbit) in expected_empty:
+                        problems.append(f'{orbit_dir} is declared empty but holds a file')
                     if len(matches) != 1:
                         problems.append(f'{orbit_dir} holds {len(matches)} orbit files')
                         continue

@@ -69,11 +69,13 @@ VERSION_ATTR = 'product_version'
 MATCH_SOURCES = ('time', 'latitude', 'longitude')
 
 
-def list_granules(raw_root):
+def list_granules(raw_root, expected_empty=()):
     """Every day with FOCAL files under the raw root, in date order.
 
     Args:
         raw_root (str): The product directory, e.g. ``.../raw/GOSAT``.
+        expected_empty (Iterable): Unused: FOCAL has no empty granule
+            directories, so none may be declared.
 
     Returns:
         list: :class:`Granule` per day, with paths in ``KINDS`` order.
@@ -85,6 +87,8 @@ def list_granules(raw_root):
     """
     if not os.path.isdir(raw_root):
         raise FileNotFoundError(f'no raw data directory at {raw_root}')
+    if list(expected_empty):
+        raise ValueError('GOSAT has no empty granules; expected_empty_granules must be unset')
 
     days = {}
     for entry in sorted(os.listdir(raw_root)):

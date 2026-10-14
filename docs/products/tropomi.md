@@ -12,14 +12,19 @@ is in `docs/l2-survey.md`.
   hdo/2017/11/08/373/s5p_l2_hdo_0003_00373.nc     (~1.1 GB each)
 ```
 
-- **Files:** 31,492 orbits from 2017-11-08 to 2024-05-30. Orbits per day
+- **Files:** 31,492 orbit directories from 2017-11-08 to 2024-05-30, but
+  only 30,800 orbit files: 692 directories are empty. **The download is
+  incomplete:**
+  - 339 of the empty orbits, and 12 of the 70 missing days, exist upstream;
+  - the rest are real upstream gaps, declared in the config;
+  - details are in `tropomi-download-gaps.md` (checked against the server,
+    2026-10-14). Orbits per day
   vary (5-14 seen); not every orbit has a file. Product version `0003` (from
   the filename); processor version `8.1` (root `version` attribute) in all 11
   files sampled across 2017-2024 (2026-10-14). The stores are named by the
   processor version.
-- **Missing days:** 70 days between the first and last orbit have no day
-  directory (listed 2026-10-14, now `expected_missing_days` in
-  `config/tropomi/config_zarr.yaml`). The tree also holds 195 stray
+- **Missing days:** 70 days have no day directory here. 58 are absent
+  upstream too (`expected_missing_days`), and 12 are a download gap. The tree also holds 195 stray
   `.DS_Store` files, which the reader skips.
 - **Groups:** there are no root variables, so open each group with `group=`.
   - `target_product`: deltad, h2o/hdo columns, precisions, averaging kernels,

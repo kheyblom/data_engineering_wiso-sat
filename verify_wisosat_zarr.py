@@ -63,7 +63,7 @@ from utils.granules import (
     check_order,
     decode_text,
 )
-from utils.log_utils import setup_logging
+from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import (
     canonical_frequency,
     conversion_factor,
@@ -854,7 +854,9 @@ def main(settings, args):
     if {'index', 'values'} & set(phases):
         reader = load_reader(settings)
         LOG.info(f'listing granules under {settings["directories"]["raw"]}')
-        granules = reader.list_granules(settings['directories']['raw'])
+        granules = reader.list_granules(
+            settings['directories']['raw'], settings.get('expected_empty_granules') or []
+        )
     if 'index' in phases or 'values' in phases:
         LOG.info('--- index')
         index = check_index(report, settings, groups, granules)
@@ -880,6 +882,7 @@ def main(settings, args):
         LOG.info('--- repository')
         check_repository(report, {store: repo for store, (repo, _) in opened.items()})
 
+    log_peak_memory(LOG)
     LOG.info(f'{report.n_checks} checks, {len(report.failures)} failures')
     if report.failures:
         for label in report.failures:

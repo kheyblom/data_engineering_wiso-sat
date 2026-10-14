@@ -1,0 +1,119 @@
+# Tier 2 bench for the TROPOMI build (TESTING.md): one real month, 2020-07
+# (395 orbits, ~1.25% of the record, no missing days), symlinked into a bench
+# raw tree by validation/stage_bench_tropomi.py. Everything else is the
+# production config, so what the bench measures is what production will do.
+# Every output path differs from production.
+product: tropomi
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_bench/raw/tropomi
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_bench/zarr/tropomi
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, with the
+  # data source wisosat.<product> and no product token (decided 2026-10-14)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_tropomi_bench.log
+# The processor version, the root 'version' attribute of every orbit file.
+# Declared so the stores can be named before a file is opened; the build and
+# the verifier check every orbit against it. The '0003' in the file names is the
+# product version and does not name the stores.
+version: '8.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+# Canonical names; each needs a row in nomenclature-key_tropomi.md. The
+# geolocation store is always built. quality_flags_retrieval is mandatory: the
+# style guide requires quality flags in every production run.
+variables:
+  # core: the retrieval and its flag
+  - water_vapor_column_delta_d
+  - water_vapor_column_delta_d_standard_error
+  - water_vapor_column_h2o
+  - water_vapor_column_h2o_standard_error
+  - water_vapor_column_hdo
+  - water_vapor_column_hdo_standard_error
+  - quality_flags_retrieval
+  # every input to the Schneider et al. (2022) Table 1 filters
+  - iterations_retrieval
+  - solar_zenith_angle
+  - optical_thickness_scattering_layer
+  - height_scattering_layer
+  - albedo_surface_2365nm
+  - chi_squared_retrieval
+  - chi_squared_prefit
+  - spectral_point_count_retrieval
+  - spectral_point_count_prefit
+
+# 2020-07 has an orbit directory on every day
+expected_missing_days: []
+# empty upstream as well (checked 2026-10-14)
+expected_empty_granules:
+  - '14176'  # 2020-07-08
+  - '14377'  # 2020-07-22
+  - '14398'  # 2020-07-24
+  - '14399'  # 2020-07-24
+  - '14493'  # 2020-07-30
+
+# Fill the files use without declaring it: SRON sets no _FillValue, so missing
+# values are the netCDF default fills. Declared per source, and only where they
+# occur (measured in orbit 13847): the verifier fails if a declared value never
+# occurs over the record, and if a netCDF default fill turns up in a source not
+# listed here. Floats are masked to NaN; integers keep the value and declare it
+# as _FillValue.
+source_fill_values:
+  target_product/deltad: [9.96921e+36]
+  target_product/deltad_precision: [9.96921e+36]
+  target_product/h2o_column: [9.96921e+36]
+  target_product/h2o_column_precision: [9.96921e+36]
+  target_product/hdo_column: [9.96921e+36]
+  target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/iterations: [-2147483647]
+  side_product/aerosol_optical_thickness: [9.96921e+36]
+  side_product/aerosol_height: [9.96921e+36]
+  side_product/surface_albedo: [9.96921e+36]
+  diagnostics/chi_squared: [9.96921e+36]
+  diagnostics/chi_squared_prefit: [9.96921e+36]
+  diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
+  diagnostics/number_of_spectral_points_in_prefit: [-2147483647]
+
+# Scale settings (design condition 3: per product, never in code). Starting
+# points only, to be measured by the bench:
+# - obs: 4,194,304 is 16 MiB of float32 and 32 MiB of int64 time, inside the
+#   guide's 5-40 MiB. One chunk spans ~4.7 orbits.
+# - granule: the whole ~31.5k-entry index in one chunk.
+# - granules_per_commit: ~1.5 GB of reads per batch at 16 variables; a batch
+#   is also what a walltime kill can lose.
+# - num_workers: read processes. HDF5 is not thread safe, so reads are spread
+#   over processes, never threads.
+chunks:
+  obs: 4194304
+  granule: 65536
+granules_per_commit: 20
+num_workers: 8
+
+# The upstream filtering guidance recorded in every store's quality_filtering
+# attribute. Recorded, never applied: every observation is kept.
+filtering_guidance: >-
+  Schneider et al. (2022), Table 1. All scenes: iterations <= 10; reduced
+  chi-squared of the final fit <= 150; reduced chi-squared of the pre-fit <=
+  150; solar zenith angle <= 70 degrees. Clear sky: cloud optical thickness <
+  0.3 and surface albedo >= 0.02. Cloudy scenes: cloud height <= 2000 m and
+  cloud optical thickness > 0.3. Clear-sky and low-cloud scenes are
+  recommended; Sarkar et al. (2026) apply the all-scene and clear-sky rows.
+  Cloud optical thickness and height are optical_thickness_scattering_layer
+  and height_scattering_layer (SRON's effective scattering layer). Reduced
+  chi-squared is inferred as chi_squared_retrieval /
+  spectral_point_count_retrieval (and the prefit pair); no source defines it.
+  processing_quality_flags == 0 alone still passes unphysical delta D, so
+  apply the filters above as well.
+
+# Global attributes, identical in every store of the product except where they
+# template {variable}. Coverage, history, date_created and verification are
+# deliberately absent: finalize_wisosat_zarr.py --attrs writes them once the
+# verifier has passed.
+attrs:
+  title: 'BENCH STORE -- WISO-SAT TROPOMI {version_label}, one month, not for use: {variable}'
+  summary: A Tier 2 bench store, NOT data. 2020-07 only.
+  Conventions: ACDD-1.3
+  source: BENCH, the SRON S5P L2 HDO product {version_label} for 2020-07
+  comment: Built from config_zarr_bench.yaml to size the production job. Not data.

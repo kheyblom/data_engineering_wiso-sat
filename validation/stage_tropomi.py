@@ -17,6 +17,10 @@ Chosen deliberately (see config/tropomi/config_zarr_fixture.yaml):
   absent, because the fixture exists to exercise them.
 - **Whole scanlines**, so the verifier's swath-layout check still applies.
 - **A stray .DS_Store**, as the real tree has, which the reader must skip.
+- **An empty orbit directory** (``EMPTY_ORBIT``), standing in for the 353
+  orbits that are empty upstream. The fixture config declares it in
+  ``expected_empty_granules``; orbit 13872 really does have a file upstream,
+  so this is a stand-in, not a measurement.
 
 Only the variables the pipeline reads are copied: every source in the key, the
 coordinate sources, and ``scanline``/``ground_pixel`` for the layout check.
@@ -51,6 +55,9 @@ WINDOWS = (
     ('2020/06/19', '13900', 2064, 36),
 )
 PIXELS = 215
+
+# an orbit directory left empty on purpose; see the module docstring
+EMPTY_ORBIT = ('2020/06/17', '13872')
 
 # read for the verifier's layout check, though no store holds them
 EXTRA_SOURCES = ('instrument/scanline', 'instrument/ground_pixel')
@@ -132,6 +139,8 @@ def main():
         for key, value in found.items():
             totals[key] += value
         print(f'staged  {target_path}  {count * PIXELS} obs  {found}')
+
+    os.makedirs(os.path.join(target, *EMPTY_ORBIT), exist_ok=True)
 
     # the real tree has these, and the reader must walk past them
     stray = os.path.join(target, '2020', '.DS_Store')

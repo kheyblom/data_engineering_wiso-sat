@@ -17,7 +17,8 @@ Per product:
    killed partway would leave them, then rebuilt and re-verified;
 4. the verifier must fail on a tampered value, naming the store;
 5. guards: an undeclared missing day, a wrong processor version, a run that
-   omits the quality flags, an unknown variable;
+   omits the quality flags, an unknown variable, and (where the product has
+   them) an undeclared empty granule directory;
 6. finalize: ``--attrs`` refuses without verification evidence; the full
    ``--attrs``, ``--tag``, ``--gc`` sequence; then the verifier still passes.
 
@@ -228,6 +229,10 @@ def test_product(results, config, scratch):
         ),
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
     }
+    if settings.get('expected_empty_granules'):
+        guards['an undeclared empty granule directory'] = (
+            {'expected_empty_granules': []}, 'holds 0 orbit files'
+        )
     for name, (changes, message) in guards.items():
         path = write_config(settings, scratch, f'{product}_guard.yaml', **changes)
         status, output = run('wisosat_zarr.py', '--config', path)

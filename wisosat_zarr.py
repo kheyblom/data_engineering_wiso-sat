@@ -29,7 +29,7 @@ import multiprocessing
 import os
 
 from utils.granules import check_coverage, check_order, check_time
-from utils.log_utils import setup_logging
+from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import coordinates, variables
 from utils.path_utils import (
     load_config,
@@ -159,7 +159,7 @@ def build(settings):
 
     raw = settings['directories']['raw']
     LOG.info(f'listing granules under {raw}')
-    granules = reader.list_granules(raw)
+    granules = reader.list_granules(raw, settings.get('expected_empty_granules') or [])
     check_order(granules)
     missing = check_coverage(granules, settings)
     LOG.info(
@@ -275,6 +275,7 @@ def main(settings):
         f'from {settings["directories"]["raw"]}'
     )
     build(settings)
+    log_peak_memory(LOG)
     LOG.info('done :-)')
 
 

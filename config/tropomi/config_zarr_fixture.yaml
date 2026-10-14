@@ -4,6 +4,8 @@
 #
 # What the fixture is built to exercise:
 # - 2020-06-18 is a real upstream gap, so the missing-day check sees one;
+# - orbit 13872's directory is staged empty, so an empty orbit directory is
+#   declared and skipped;
 # - windows of 23-47 scanlines give orbits of different sizes, so appends land
 #   mid-chunk at obs: 5000;
 # - granules_per_commit: 2 gives three commits per store, and so resume points;
@@ -41,6 +43,9 @@ variables:
 
 expected_missing_days:
   - 2020-06-18
+# staged empty, standing in for an orbit empty upstream
+expected_empty_granules:
+  - '13872'
 
 source_fill_values:
   target_product/deltad: [9.96921e+36]

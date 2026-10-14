@@ -30,13 +30,19 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-1. **Task 5 (in progress):** `TESTING.md`, the testing plan from fixture to
-   bench to production. Show the user any batch job before submitting it.
-2. **The cross-product naming pass** for kernels, priors and dry-air columns,
-   planned for the second-reader step and still open. GOSAT's kernel, a
-   priori, dry column and pressure grid wait on it. It does not block
-   TROPOMI, whose production subset excludes them.
-3. **GOSAT-2:** a config pair using `product: gosat2`. It needs a small shared
+1. **Task 5 (in progress):** `TESTING.md` is written.
+   - Tiers 0-1 pass: 35 cases over TROPOMI and GOSAT.
+   - **The Tier 2 bench commands are written but not submitted; they await
+     the user's approval.** The build and verify jobs are 8 cores x 1 h each
+     on develop, so 16 core-hours at most. The bench tree is staged.
+2. **The TROPOMI download is incomplete** (found 2026-10-14):
+   - 339 orbits and 12 days exist upstream but not on disk; the lists are in
+     `docs/products/tropomi-download-gaps.md`;
+   - the production build refuses to run until they are downloaded;
+   - re-downloading is the user's call (data_access).
+3. **The cross-product naming pass** for kernels, priors and dry-air columns.
+   GOSAT production waits on it.
+4. **GOSAT-2:** a config pair using `product: gosat2`. It needs a small shared
    change so the reader and key can be named apart from the product.
 
 ## Decisions carried into task 4 (2026-10-14, still binding)
