@@ -1,7 +1,7 @@
 We need to build a codebase that will prepare zarr stores for TROPOMI HDO L2 data products.
 
 Raw data is located here: @/glade/u/home/kheyblom/scratch/data/wiso-sat/raw/TROPOMI/tropomi.grid.surfsara.nl/
-We will be creating zarr stores for each day in the total database.
+We will be creating one zarr store per variable covering every day in the total database (changed from one store per day, 2026-10-14). Level 2 data only.
 
 # 1. init CLAUDE.md for the codebase [COMPLETED 2026-10-13]
 Create a CLAUDE.md in this directory.

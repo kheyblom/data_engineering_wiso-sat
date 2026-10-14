@@ -5,8 +5,9 @@ Guidance for Claude Code when working in `tropomi/`.
 ## Project
 
 Convert TROPOMI HDO Level 2 retrievals (raw netCDF, one file per orbit) into
-icechunk-backed zarr stores for the data lake: **one store per variable per
-day**, for a configurable subset of variables.
+icechunk-backed zarr stores for the data lake: **one store per variable covering
+the whole record**, for a configurable subset of variables. Level 2 only; the
+L3 gridded files in the raw tree are out of scope.
 
 - Task list: [TASKS.md](TASKS.md). Handoff / working state: [STATE.md](STATE.md)
   — read it first in a new session, and keep it current.
@@ -79,8 +80,8 @@ established by measurement there and apply here:
 
 **Does not carry over:** the spatial/temporal store pair and the
 `append`/`region` write strategies assume a lat/lon grid. L2 data is a
-ragged observation list, so chunking, the per-day store unit, and verification
-must be designed afresh (tasks 3-4).
+ragged observation list, so chunking, the orbit index, and verification
+must be designed afresh (tasks 3-4; see `l2-standards-draft.md`).
 
 ## Conventions
 
