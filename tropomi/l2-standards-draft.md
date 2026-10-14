@@ -15,6 +15,12 @@ store differs from a gridded one only where the data's shape forces it.
   (L2-1). Supersedes the per-day design and TASKS.md's "zarr stores for each
   day".
 - Scope is Level 2 only; L3 gridded files in the raw tree are ignored.
+- Column amounts in `mol m-2`; δD in `1e-3` (per mil). Decided 2026-10-14,
+  after the value check below confirmed every declared unit except TES's.
+- The raw `SCIAMACHY/` directory keeps its name although `H2O/` and `HDO/`
+  hold MIPAS files (see open decision on the store's `data_source`).
+- *Leaning, not final:* one shared geolocation store per product, joined on
+  `obs` (see the estimate below).
 
 ## Evidence for TROPOMI (measured 2026-10-13)
 
@@ -26,9 +32,10 @@ store differs from a gridded one only where the data's shape forces it.
   ground pixel = i % 215 within an orbit; this needs checking for every orbit.
   - Secondary dims: `nlayer` 50, `nlevel` 51, `ncorner` 4, `nwin` 1, and
     `ntime` 7 (a broken-down timestamp, ms resolution).
-- **Size:** the whole record is roughly 3e10 observations (an estimate from
-  sampled days). That is ~120 GB uncompressed per 1-D float32 variable and
-  ~6 TB per `(obs, 50)` variable.
+- **Size:** 31,492 orbit files. `nobs` per orbit is ~697,800 in 2018-2019 and
+  exactly 896,980 in every orbit sampled from 2020 on (the along-track
+  resolution change of Aug 2019). The whole record is ~2.6e10 observations:
+  ~105 GB uncompressed per 1-D float32 variable, ~5.2 TB per `(obs, 50)`.
 - **Fill:** there is no `_FillValue`; missing values are `9.96921e36`.
   - In orbit 16820, 71% of `nobs` have an `hdo_column` and 65% have
     `processing_quality_flags == 0`.
@@ -70,7 +77,10 @@ assumed.*
 
 **L2-5. Dimensions, coordinates and the orbit index.**
 - Observation dimension `obs` (from `nobs`).
-- Coordinates on `obs` in every store: `time`, `lat`, `lon` (pixel centre).
+- Coordinates `time`, `lat`, `lon` (pixel centre): either on `obs` in every
+  store, or once in a shared geolocation store (leaning; see the estimate
+  below). The orbit index stays in every store either way, so day and orbit
+  subsetting never needs the geolocation store.
 - **Orbit index:** a small `orbit` dimension (~25k entries, one chunk) holding:
   - `orbit_number`, `orbit_obs_start`, `orbit_obs_count`
   - `orbit_time_start`, `orbit_time_end`
@@ -171,7 +181,7 @@ the build cost. It checks:
 - that `time` never decreases;
 - the shared axis across sibling stores.
 
-## Units across the L2 sensors (decisions 2 and 3)
+## Units across the L2 sensors
 
 Header reads of one file per product, 2026-10-14. The AIRS and CrIS FS units
 were checked to be the same across processor versions (R1p11..R1p19); only
@@ -191,67 +201,213 @@ ESA MIPAS files** (a different instrument on the same Envisat platform).
 | AIRS (TROPESS Standard, FS) | none | `x`: `1` | `x_h2o` VMR profile: **`1`** |
 | CrIS-JPSS1 (TROPESS Standard, FS) | none | `x`: `1` | `x_h2o` VMR profile: **`1`** |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1) | `xded`, column-averaged: **`1e-3`** | — | `xh2o` column-avg dry-air mole fraction: **`1e-6`** |
-| IASI (KIT MUSICA L2) | `musica_deltad` profile: **`1e-3`** | ln-ratio proxy state: `1` | `musica_h2o` profile: **`ppmv`** |
+| IASI (KIT MUSICA L2) | `musica_deltad` profile: **`1e-3`** | ln-space proxy state `musica_wvp`: `1` | `musica_h2o` profile: **`ppmv`** |
 | MIPAS (ESA L2, in `SCIAMACHY/`) | none | separate HDO VMR profile: `1E-6` | H2O VMR profile, "in air": **`1E-6`** |
-| TES (L2 HDO Nadir Lite v006) | none | `HDO_H2O` ratio profile: `VMR` | `TotalColumnDensity`: **`molecules/m2`** (probably HDO, to confirm); `Species` dry-air VMR profile |
+| TES (L2 HDO Nadir Lite v006) | none | — | `Species` = stacked HDO + H2O dry-air VMR profiles: **`VMR`**; `TotalColumnDensity` (HDO): labelled **`molecules/m2`**, actually molec cm-2 |
 
 The differences are mostly **different quantities**, not different units for
-one quantity. Unit conversion can only unify within a quantity, so the
-recommendation is one canonical unit per quantity family. A different
+one quantity, so there is one canonical unit per quantity family. A different
 quantity gets its own canonical name, never a conversion.
 
-### Recommendation
+### Value check (2026-10-14)
 
-**δD → `1e-3` (per mil).**
-- It is already used by 5 of the 6 products that publish δD, it is the
-  community convention, and udunits parses it.
-- Only TROPOMI converts (x 1000, exact in float32 up to rounding).
-- Products publishing a ratio or separate HDO/H2O are **not** converted into
-  δD: that is a derivation needing a standard ratio, not a unit change. Note
-  SRON uses 3.1153e-4 and TROPESS 3.1152e-4.
-- Alternative `1`: TROPOMI unchanged, but five products divide by 1000.
+Read one file per product (one orbit for TROPOMI), applied each variable's
+declared fill, and compared percentiles with physical expectations. Single
+files, so this confirms units, not the distribution of the record.
 
-**Column amount (number per area) → `mol m-2`.**
-- It is SI, udunits-parseable, the CF canonical unit for
-  `atmosphere_mole_content_of_water_vapor`, and the ESA TROPOMI operational
-  convention. The HDO/H2O column ratio stays a plain mole ratio.
-- Conversions use the exact N_A = 6.02214076e23:
-  - TROPOMI and SCIAMACHY: x 1e4 / N_A (= 1.66053907e-20);
-  - TES: x 1 / N_A.
-- Alternative `kg m-2` (precipitable water): comparable with reanalysis TCWV,
-  but it needs molar masses (H2O 18.01528, HDO 19.02134 g/mol). The HDO/H2O
-  mass ratio then no longer equals the mole ratio δD is defined on, which is
-  a trap.
-- Alternative `molec cm-2`: no change for TROPOMI and SCIAMACHY, but udunits
-  cannot parse it and TES would still need x 1e-4.
+| product | variable (declared unit) | p1 / p50 / p99 | verdict |
+| --- | --- | --- | --- |
+| TROPOMI | `deltad` (`1`), flag == 0 | -0.99 / -0.25 / 13.3 | **fraction confirmed** (p50 = -250 per mil) |
+| TROPOMI | `h2o_column`, `hdo_column` (`molec. cm-2`) | p50 5.5e22, 1.3e19 | confirmed (~16 mm precipitable water; HDO/H2O ~2.3e-4) |
+| TROPOMI | column averaging kernels (`1`) | p50 1.02 / 2.01 | unitless confirmed |
+| SCIAMACHY | columns, kernel (`molec. cm-2`, `1`) | p50 1.1e22, 4.3e18; 0.27 | confirmed |
+| TROPESS RS/FS | `x` HDO/H2O ratio (`1`) | 1.1e-4 / 2.3e-4 / 3.0e-4 | **mole ratio confirmed** (p50 = -260 per mil vs VSMOW) |
+| TROPESS RS/FS | `x_h2o`, `x_h2o_raw` (`1`) | 2.5e-6 / 6e-4 / 3e-2 | **mol mol-1 confirmed** |
+| TROPESS FS | `observation_error_h2o` (`1`) | 0.017 / 0.088 / 0.37 | **relative (ln-space) error, not a mole fraction** — must not be x 1e6 |
+| TROPESS RS | `dd_col_p`, `dd_004` (`1e-3`); `x_h2o_col_p` (`1e-6`) | -327 / -247 / -153; 965 / 4077 / 9828 | confirmed |
+| GOSAT, GOSAT-2 | `xded` (`1e-3`); `xh2o` (`1e-6`); kernel (`1`) | -220 / -136 / -46; 131 / 2417 / 5951; ~1.0 | confirmed |
+| IASI | `musica_deltad` (`1e-3`); `musica_h2o` (`ppmv`) | -598 / -341 / 2; 2.7 / 168 / 28,450 | confirmed |
+| IASI | `musica_wvp` (`1`) | -0.88 / 0.12 / 10.0 | **ln-space state** (ln of ppmv, ln of ratio), not a mole fraction |
+| MIPAS | H2O `profile` (`1E-6`) | 0.9 / 6.0 / 452 | confirmed (stratospheric ppm) |
+| MIPAS | HDO `profile` (`1E-6`) | ~0 / 9.5e-4 / 0.039 | confirmed (HDO ~1e-3 ppm in the stratosphere) |
+| TES | `Species` / `Retrieval/HDO_H2O` (`VMR`) | HDO 4.7e-8, H2O 2.2e-4 (p50) | **mol mol-1 confirmed, but the array stacks two profiles** |
+| TES | `TotalColumnDensity` (`molecules/m2`) | p50 7.9e18 | **mislabelled: values are HDO in molec cm-2** |
 
-**Mole fraction, profiles and column averages → `1e-6` (ppm).**
-- Already used by GOSAT, GOSAT-2, TROPESS `x_h2o_col_p` and MIPAS (respelled
-  from `1E-6`), and by IASI (respelled from `ppmv`).
-- TROPESS `x_h2o` profiles and TES `Species` convert x 1e6.
-- Alternative `1` (mol mol-1): six products divide by 1e6.
-- Dry-air and moist-air mole fractions are different quantities and need
-  separate canonical names:
-  - dry air: GOSAT, TROPESS RS, TES;
-  - "in air": MIPAS;
-  - unstated: IASI and TROPESS FS, so their documentation needs checking.
+Findings that change the plan:
 
-**HDO/H2O ratio (not normalised) → `1`.**
-- TROPESS is unchanged; TES respells `VMR` to `1`.
+1. **TES `TotalColumnDensity` is in molec cm-2, not molecules/m2.**
+   Integrating the TES HDO profile over pressure gives a median 7.83e22
+   molecules/m2, and the file's value is exactly 1.000e-4 of that, per target.
+   It is the HDO column. Conversion to `mol m-2` is therefore x 1e4 / N_A, the
+   same as TROPOMI, not the 1 / N_A the label implies. The build must declare
+   the corrected source unit and record it in metadata.
+2. **TES `Species` (and `Retrieval/HDO_H2O`, an identical array) stacks two
+   profiles.** Levels 0-16 are HDO and 17-33 are H2O, on the same 17 pressures
+   repeated. `HDO_H2O` is a name, not a ratio. The two halves become two
+   variables, which is a restructuring the style guide would have to allow;
+   the ratio they imply is physical (p50 2.2e-4; δD from -82 per mil at the
+   surface to -650 aloft).
+3. **Two `1`-unit variables are log-space and must never be scaled with their
+   neighbours:** TROPESS `observation_error_h2o` and IASI `musica_wvp`. The
+   nomenclature key must map them to their own canonical names, with units `1`.
+4. Not unit problems, but worth recording:
+   - TROPOMI `processing_quality_flags == 0` still passes δD from -0.99 to
+     +13 (p1/p99) and `h2o_column` up to 1.7e26; SRON's own filtering
+     guidance needs to go in the metadata.
+   - TROPOMI column kernels reach p99 ~700 in some layers.
+   - TROPESS `x_h2o` reaches 0.44 mol mol-1 (unphysical).
+   - The GOSAT and GOSAT-2 files contain only flag-0 soundings, so they arrive
+     pre-filtered.
+
+### Canonical units (decided except mole fraction)
+
+**δD → `1e-3`** *(decided)*.
+- TROPOMI converts x 1000.
+- AIRS/CrIS RS, GOSAT, GOSAT-2 and IASI are unchanged.
+- Products publishing a ratio or separate HDO/H2O are not converted into δD:
+  that would be a derivation, not a unit change.
+
+**Column amount → `mol m-2`** *(decided)*.
+- TROPOMI, SCIAMACHY and TES (corrected label) all convert x 1e4 / N_A
+  (= 1.66053907e-20), with N_A = 6.02214076e23 exact.
+
+**Mole fraction → `1e-6` (recommended).** Where it applies:
+
+| product | variables | conversion |
+| --- | --- | --- |
+| GOSAT, GOSAT-2 | `xh2o`, `xh2o_uncertainty`, `h2o_profile_apriori` | none |
+| AIRS, CrIS-SNPP (RS) | `x_h2o_col_p`, `x_h2o_col_p_error` | none |
+| AIRS, CrIS-SNPP (RS); AIRS, CrIS-JPSS1 (FS) | `x_h2o`, `x_h2o_raw` profiles | x 1e6 |
+| IASI | `musica_h2o`, `_apriori`, `_error` | none (respell `ppmv`) |
+| MIPAS | H2O and HDO `profile`, `profile_error`, `extended_profile`, `a_priori_profile` | none (respell `1E-6`) |
+| TES | HDO and H2O halves of `Species`; `ConstraintVector`, `Retrieval/Initial` | x 1e6 (`ConstraintVector` declares `mole/mole`) |
+| TROPOMI, SCIAMACHY | none — they publish columns | — |
+
+- MIPAS covariances are `1E-12`, i.e. (1e-6)^2, and stay consistent.
+- HDO in ppm is small (MIPAS ~1e-3, TES p50 0.05). That costs no precision in
+  float32, whose relative precision does not depend on magnitude.
+- Not mole fractions, so they stay `1`: the HDO/H2O ratios (TROPESS `x`,
+  `xa`, `x_raw`), the log-space variables (finding 3), averaging kernels, and
+  flags.
 
 All conversions are a single multiplication applied once in float32. The
 verifier compares against `raw x factor` computed the same way, so the
 expected mismatch is zero, with a 1-ulp tolerance stated if it is not.
 
+## Dry-air vs total-air mole fraction (for discussion)
+
+1. **The two quantities.**
+   - Dry-air mole fraction: x_dry = n_w / n_dry.
+   - Total (moist) air mole fraction: x_tot = n_w / (n_dry + n_w).
+   - So x_tot = x_dry / (1 + x_dry), and x_dry = x_tot / (1 - x_tot).
+   - Both are mol mol-1, so **no unit conversion can tell them apart or
+     reconcile them**. Specific humidity (a mass fraction) is a third,
+     different quantity.
+2. **How much it matters.** The relative difference is about x itself:
+
+   | regime | typical x | dry vs total |
+   | --- | --- | --- |
+   | tropical surface | 30,000 ppm | ~3% (30,000 dry is 29,126 total) |
+   | mid-latitude surface | 5,000 ppm | 0.5% |
+   | upper troposphere | 100 ppm | 0.01% |
+   | stratosphere (MIPAS) | 5 ppm | negligible |
+
+   The tropical figure is larger than GOSAT's own `xh2o` uncertainty (p50
+   15.5 ppm on 2,417, ~0.6%), so the difference is not noise.
+3. **What it does not affect.**
+   - δD and HDO/H2O ratios: the basis cancels if both species share it.
+   - Columns in `mol m-2`, which are absolute amounts.
+   - Column-averaged "X" quantities (GOSAT `xh2o`, TROPESS `x_h2o_col_p`),
+     which are dry-air by convention (column / dry-air column).
+4. **What each product declares.**
+   - Dry, explicitly:
+     - GOSAT and GOSAT-2 `xh2o` (CF-style standard name
+       `dry_atmosphere_mole_fraction_of_water_vapor`) and their a priori;
+     - TROPESS RS `x_h2o` ("dry_air_volume_mixing_ratio") and `x_h2o_col_p`;
+     - TES `Species` ("relative to dry air").
+   - Total air: MIPAS, via the CF standard name
+     `mole_fraction_of_water_vapor_in_air`. In CF "in_air" includes the water
+     vapour; whether ESA meant that exactly is worth confirming, though it is
+     negligible at MIPAS altitudes.
+   - Unstated:
+     - TROPESS FS `x_h2o`. It is the same MUSES algorithm as RS, so probably
+       dry, but needs confirming.
+     - IASI MUSICA `musica_h2o` (`ppmv`): the product documentation needs
+       checking.
+5. **Options.**
+   - **A (recommended):** separate canonical names that carry the basis
+     (e.g. `..._mole_fraction_dry_air` / `..._mole_fraction_in_air`). Each is
+     stored as published, with a `mole_fraction_basis` attribute.
+   - B: convert everything to one basis. H2O can convert itself exactly, but
+     HDO needs the matching H2O value. That is a derivation, which the guide's
+     "exactly represents the original data" rules out without approval.
+   - C: ignore the difference. Not acceptable, given point 2.
+6. **Before naming:** confirm the basis for TROPESS FS and IASI MUSICA from
+   their product documentation.
+
+## Shared geolocation store: volume estimate
+
+Per product, from file counts and per-file `obs` sizes sampled across each
+record (4-6 files; TES and MIPAS vary most). Coordinates as they would be
+stored:
+- `time` as int64 and `lat`/`lon` as float32 (every source publishes float32
+  centres): **16 B per observation**.
+- A per-observation pressure grid on top for profile products: 4 B x levels.
+
+All figures are uncompressed. `time` compresses very well and `lat`/`lon`
+little, so the stored savings will be somewhat smaller.
+
+| product | files | ~obs | lat/lon/time per store | pressure grid per profile store |
+| --- | --- | --- | --- | --- |
+| TROPOMI | 31,492 orbits | 2.6e10 | **419 GB** | 5.3 TB (51 levels) |
+| IASI (MUSICA) | 4,568 | 1.6e9 | **25 GB** | 182 GB (29) |
+| SCIAMACHY (SICOR) | 41,616 | 7.8e7 | 1.25 GB | 19 GB (61) |
+| AIRS FS | 1,424 | 4.1e7 | 0.66 GB | 2.8 GB (17) |
+| CrIS-JPSS1 FS | 1,208 | 3.0e7 | 0.48 GB | 2.0 GB (17) |
+| AIRS RS | 6,361 | 1.1e7 | 0.18 GB | 0.76 GB (17) |
+| GOSAT H2O / DED | 4,498 / 4,498 | 7.2e6 / 2.5e6 | 0.12 / 0.04 GB | 0.17 / 0.06 GB (6) |
+| TES | 75 | 2.9e6 | 0.05 GB | 0.20 GB (17) |
+| CrIS-SNPP RS | 1,865 | 2.8e6 | 0.05 GB | 0.19 GB (17) |
+| MIPAS H2O / HDO | 35,124 / 30,213 orbits | 2.3e6 / 1.9e6 | 0.04 / 0.03 GB | 0.25 / 0.21 GB (27) |
+| GOSAT-2 H2O / DED | 1,010 / 1,010 | 1.4e6 / 6.1e5 | 0.02 / 0.01 GB | 0.03 / 0.01 GB (6) |
+
+How to read it:
+- **Saving = (N - 1) x the per-store figure**, for N variable stores of one
+  product.
+  - At TROPOMI N = 6, a shared store saves **~2.1 TB** of lat/lon/time.
+  - If profile variables carried their own pressure grid, each extra profile
+    store would add 5.3 TB more.
+- **Relative to the data, for 1-D float32 variables:** coordinates in every
+  store cost 20 N B/obs against 4 N + 16 B/obs shared. That is 64% less at
+  N = 5 and 72% less at N = 10, the same for every sensor because the dtypes
+  are the same.
+- **TROPOMI is ~94% of the total**, and IASI most of the rest. For the TROPESS,
+  GOSAT, MIPAS and TES products the saving is under 1 GB per store.
+
+What a shared store costs:
+- A variable store alone no longer says where its values are.
+- The join on `obs` relies on L2-4 (identical observation axes), which the
+  verifier already checks.
+- The guide must allow a geolocation store holding several coordinate arrays,
+  as an exception to one variable per store.
+- Recommended form, if chosen: one `<...>.geolocation.zarr` per product with
+  `time`, `lat`, `lon` and, for profile products, the per-observation pressure
+  grid. Every variable store keeps the orbit index, so subsetting by day or
+  orbit still works without it.
+
 ## Open decisions
 
-2. Column unit: `mol m-2` (recommended), `kg m-2`, or `molec cm-2`.
-3. δD unit: `1e-3` (recommended) or `1`.
-6. Coordinates in every store (L2-5): `time` + `lat` + `lon` cost ~16 bytes
-   per observation, about 4x a 1-D float32 variable, repeated in each store.
-   - Recommended: keep them in every store, so each store is
-     self-describing like a gridded one.
-   - Alternative: a single geolocation store joined on `obs`.
-7. MIPAS sits under `SCIAMACHY/` in the raw tree. Should it be moved or
-   relabelled before an AIRS/MIPAS project reads it?
+6. **Geolocation:** confirm one shared geolocation store per product (leaning
+   yes), and whether it also carries the per-observation pressure grid
+   (recommended).
+7. **MIPAS `data_source` in store names:** keeping the raw directory as
+   `SCIAMACHY/` is fine. But the files declare `sensor: MIPAS`, and SICOR
+   SCIAMACHY water stores would sit beside them, so the stores should use
+   `mipas` as `data_source`. Recommended: `mipas` in store names, raw
+   directory unchanged. Needs confirmation.
+8. **Mole fraction unit:** `1e-6` (recommended) or `1`.
+9. **Dry vs total air:** option A (separate canonical names), pending the
+   TROPESS FS and IASI documentation check.
+10. **TES:** allow splitting the stacked `Species` array into HDO and H2O
+    stores, and declare the corrected column unit.
 5. *(deferred)* The production variable subset.
