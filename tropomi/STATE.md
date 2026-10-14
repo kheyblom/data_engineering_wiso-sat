@@ -20,14 +20,22 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-Draft cross-checked against Sarkar et al. (2026), the WISO-SAT data descriptor
-(the user supplied the PDF; it is not in the repo). Await the user's
-decisions 6-11 in the draft: geolocation store, MIPAS scope (it is not in
-WISO-SAT), mole-fraction unit, single dry-air basis, TES split (including the
-kernel blocks), and coverage gaps (TES 2011-2015, AIRS 2020-04..2021-01).
-Then rebuild the nomenclature table, move the rules into the style guide and
-the rows into `nomenclature_data.md`, and delete the draft. Decision 5
-(variable subset) is deferred.
+- **Decided 2026-10-14:**
+  - one geolocation store per product, holding the pressure grid;
+  - MIPAS excluded;
+  - mole fractions in ppm on one dry-air basis;
+  - TES split, with the column-unit correction;
+  - coverage gaps flagged but not chased.
+- **L2 rules written into the style guide:** `style_guides` commit
+  `7bc9f72` (plus the `inst` row), **committed locally, not pushed**.
+- **Waiting on the user's decision 5:** the TROPOMI variable subset
+  (candidates in `l2-standards-draft.md`), and approval to push `7bc9f72`.
+- **Then:**
+  - add the variable rows to `nomenclature_data.md`;
+  - write `nomenclature-key_tropomi.md`;
+  - fold the TROPOMI facts into `CLAUDE.md`;
+  - delete the draft;
+  - mark task 3 done.
 
 ## Open questions
 

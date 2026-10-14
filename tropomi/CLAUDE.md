@@ -23,8 +23,17 @@ L3 gridded files in the raw tree are out of scope.
 - Style guide and authoritative nomenclature:
   `/glade/u/home/kheyblom/work/style_guides/` (`style-guide_data-engineering_raw-to-datalake.md`,
   `nomenclature_data.md`). Any deviation needs the user's approval.
-- The guide has **no Level 2 rules yet** (task 3). Do not invent them — propose
-  and agree them with the user, then add them to the guide.
+- The guide's **"Level 2 satellite retrieval data"** section (added
+  2026-10-14) governs this project:
+  - one store per variable over the whole record;
+  - every observation kept, with no filtering;
+  - one shared `geolocation` store per product (`time`, `lat`, `lon`,
+    pressure grid);
+  - an identical `obs` axis and granule (orbit) index in every store.
+
+  The evidence and remaining work are in `l2-standards-draft.md`.
+- Canonical units: δD in `1e-3`, columns in `mol m-2` (x 1e4 / N_A from
+  molec cm-2), mole fractions in `1e-6`, all on a dry-air basis.
 - Every variable / unit / frequency needs an exact row in `nomenclature_data.md`
   before it is used; map onto it in `nomenclature-key_tropomi.md`, which the code
   parses (never restate the mapping in Python).
@@ -80,8 +89,9 @@ established by measurement there and apply here:
 
 **Does not carry over:** the spatial/temporal store pair and the
 `append`/`region` write strategies assume a lat/lon grid. L2 data is a
-ragged observation list, so chunking, the orbit index, and verification
-must be designed afresh (tasks 3-4; see `l2-standards-draft.md`).
+ragged observation list. The replacements (obs-only chunking, append in
+orbit order, resume from the granule index) are in the style guide and in
+`l2-standards-draft.md` § Rules.
 
 ## Conventions
 

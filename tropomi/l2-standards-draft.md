@@ -1,8 +1,11 @@
 # Level 2 standards — draft proposal (task 3)
 
-**Status: proposal, partly decided.** Once agreed, the rules go into
-`style-guide_data-engineering_raw-to-datalake.md` under "Level 2 satellite retrieval data", the
-variables into `nomenclature_data.md`, and this file is deleted.
+**Status: rules decided and moved into the style guide** (`style_guides`
+commit `7bc9f72`, with the `inst` frequency row in `nomenclature_data.md`).
+What remains here is the evidence, the unit and value survey, and the
+TROPOMI variable candidates. Once the variable rows are in
+`nomenclature_data.md`, the TROPOMI-specific facts move to `CLAUDE.md` and
+this file is deleted.
 
 Each rule names the gridded precedent it follows. The aim is that a Level 2
 store differs from a gridded one only where the data's shape forces it.
@@ -19,8 +22,17 @@ store differs from a gridded one only where the data's shape forces it.
   after the value check below confirmed every declared unit except TES's.
 - The raw `SCIAMACHY/` directory keeps its name. Its `H2O/` and `HDO/` hold
   MIPAS files, which are not in WISO-SAT (open decision 7).
-- *Leaning, not final:* one shared geolocation store per product, joined on
-  `obs` (see the estimate below).
+- One shared geolocation store per product, joined on `obs`, holding `time`,
+  `lat`, `lon` and the per-observation pressure grid. Decided 2026-10-14.
+- MIPAS (`SCIAMACHY/H2O`, `SCIAMACHY/HDO`) is excluded; the SCIAMACHY product
+  is `HDO_SICORv10`.
+- Mole fractions in `1e-6` (ppm), on a single dry-air basis. Separate
+  dry/total-air canonical names are the rule if a total-air product is ever
+  added.
+- TES: split the stacked arrays, including the 4 blocks of the kernel and
+  covariances, and declare the corrected column unit (molec cm-2).
+- Coverage gaps (TES 2011-2015, AIRS 2020-04 .. 2021-01) are flagged and not
+  chased; use the data on disk.
 
 ## Evidence for TROPOMI (measured 2026-10-13)
 
@@ -47,139 +59,27 @@ store differs from a gridded one only where the data's shape forces it.
   some units are byte strings.
 - **Day boundary:** in the sampled pair, orbits did not straddle UTC midnight.
 
-## Proposed rules
+## Rules
 
-**L2-1. One store per variable, covering the whole record.**
-- Follows the general one-store-per-variable rule.
-- Replaces, for L2 only, the gridded rule requiring separate spatial and
-  temporal stores: an observation list has no lat/lon axes to chunk against,
-  so there is one layout (L2-8).
+Moved into the style guide's "Level 2 satellite retrieval data" section,
+which is now authoritative. The rationale and gridded precedent for each rule
+are in this file's history at `7a0af0a` (rules L2-1 .. L2-12).
 
-**L2-2. Observations are appended in orbit order and keep source order within
-an orbit.** Orbit order is time order. The build checks that `time` never
-decreases across the whole store.
-*Precedent: gridded time axes are derived from the data and checked, not
-assumed.*
-
-**L2-3. No observation selection and no quality filtering.** *(decided)*
-- Every observation in the raw files is kept, failed retrievals included (they
-  read back NaN).
-- The quality flag is its own variable store and is mandatory in every
-  production run.
-- Upstream filtering guidance goes in metadata.
-
-**L2-4. Sibling stores share an identical observation axis and orbit index.**
-- Every variable store from one product has the same `obs` length, the same
-  coordinates and the same orbit index, so `xr.merge(..., join='exact')` works.
-- The build and the verifier both check this.
-
-*Precedent: GLEAM's `check_time_axis` pinning a variable family.*
-
-**L2-5. Dimensions, coordinates and the orbit index.**
-- Observation dimension `obs` (from `nobs`).
-- Coordinates `time`, `lat`, `lon` (pixel centre): either on `obs` in every
-  store, or once in a shared geolocation store (leaning; see the estimate
-  below). The orbit index stays in every store either way, so day and orbit
-  subsetting never needs the geolocation store.
-- **Orbit index:** a small `orbit` dimension (~25k entries, one chunk) holding:
-  - `orbit_number`, `orbit_obs_start`, `orbit_obs_count`
-  - `orbit_time_start`, `orbit_time_end`
-  - `source_file`
-
-  It does three jobs:
-  - It replaces a search through ~3e10 timestamps: finding a day or an orbit is
-    one tiny read.
-  - It maps every observation back to its raw file and index (scanline and
-    ground pixel follow from the index, see Evidence), so no per-observation
-    traceability coordinates are needed.
-  - It is the build's resume state (L2-11).
-
-  *Precedent: gridded 1-D index coordinates are kept as one small chunk for
-  exactly this reason.*
-- **Secondary dims:**
-  - Renamed without the `n` prefix: `layer`, `level`, `corner`.
-  - Length-1 dims (`nwin`) are squeezed.
-  - `ntime` becomes the `time` coordinate.
-  - Each change is recorded in metadata.
-- Pixel corners are their own variable stores, if selected.
-
-**L2-6. Time encoding: int64 `milliseconds since 1900-01-01`,
-`proleptic_gregorian`.** Same epoch and calendar as the gridded
-`days since 1900-01-01`; milliseconds because the source resolves them.
-
-**L2-7. Fill values.**
-- Undeclared source fill is declared in config
-  (`source_fill_values: [9.96921e36]`) and checked to occur before masking.
-- It is masked to NaN and recorded in a `source_fill_values_masked` attribute.
-- Floats store NaN as their fill value. Integer variables keep their dtype and
-  carry an explicit `_FillValue`.
-
-*Precedent: MSWEP `source_fill_values` / `check_source_fill`; dtype rules.*
-
-**L2-8. Chunking: one layout, chunked only along `obs`.**
-- Target ~16-32 MiB uncompressed per chunk, matching the gridded 24.7 MiB.
-- Starting points for the task 4 bench:
-  - 4,194,304 obs for a 1-D float32 variable (16 MiB, ~7k chunks over the
-    record);
-  - 131,072 obs for an `(obs, 50)` float32 variable (25 MiB, ~230k chunks,
-    about the GLEAM spatial store's count).
-- Secondary dims are never split.
-- Time-ordered chunks make a day or an orbit a contiguous read. A regional
-  time series is a full scan; that is inherent to L2, and L3 products exist to
-  serve it.
-- Default zarr v3 zstd compression, as in the gridded stores. `time` may add a
-  delta filter, to be measured in the bench.
-
-**L2-9. Naming.** *(`inst`, `native_swath` decided)*
-```
-<data_source>.<version>.<product>.<temporal_frequency>.<grid_name>.<variable>.zarr
-tropomi.v_0003.hdo.inst.native_swath.<variable>.zarr
-```
-- This is the guide's existing convention with its product slot (`v_3_5.nrt`).
-  There is no date component and no deviation.
-- No layout or year directories are needed: there are only a handful of stores.
-- New nomenclature rows:
-  - temporal frequency `inst`: instantaneous observation, no temporal
-    aggregation;
-  - grid name `native_swath`: the instrument's own pixels, not regridded.
-
-**L2-10. Metadata.** The required `history`, `verification` and
-`date_created`, plus:
-- `Conventions: CF-1.11, ACDD-1.3` and `featureType: point`. This is a CF
-  discrete-sampling-geometry point collection.
-- ACDD coverage read off the data: `time_coverage_*` and `geospatial_*`.
-- `product_version` and `processor_version`; per-file provenance lives in the
-  orbit index.
-- Upstream attributes are kept as `original_*`. An upstream `standard_name` is
-  kept only if it is a real CF standard name, else moved to
-  `original_standard_name`. Byte-string attributes are decoded.
-- `ancillary_variables` names the sibling stores needed to interpret this one,
-  e.g. an averaging kernel needs the pressure levels.
-- `quality_filtering: none applied`, plus upstream filtering guidance.
-
-**L2-11. Incremental build and missing data.**
-- **Append and resume:** the store is appended a batch of orbits at a time,
-  each batch one icechunk commit. Resume starts after the last orbit in the
-  committed orbit index, which is written in the same commit as its data so
-  the two cannot disagree.
-  - Batches do not land on chunk boundaries, because orbit sizes vary. Each
-    append therefore rewrites the trailing partial chunk; that is safe only
-    because there is exactly one writer at a time. How the build handles this
-    is a task 4 detail.
-- **Missing days:** listed in config as `expected_missing_days`. The build
-  fails on any gap that is not listed. Missing days simply do not appear on
-  the axis; there is no regular axis to fill.
-
-*Precedent: GLEAM append/resume; MSWEP `expected_missing_times`.*
-
-**L2-12. Verification covers every observation, not a sample.** Raw variables
-are uncompressed and one HDF5 chunk each, so the comparison costs about what
-the build cost. It checks:
-- the obs count against the orbit index and raw `nobs`;
-- values against raw after masking and unit conversion;
-- coordinates against raw;
-- that `time` never decreases;
-- the shared axis across sibling stores.
+Design details that are the codebase's business rather than the guide's
+(they carry into task 4):
+- **Granule index.** For TROPOMI a granule is an orbit, ~31.5k entries,
+  stored as one chunk. Resume starts after the last committed granule, which
+  is written in the same commit as its data.
+- **Appends.** Orbit sizes vary, so appends do not land on chunk boundaries;
+  each append rewrites the trailing partial chunk, which is safe only with a
+  single writer.
+- **Missing days.** They are declared in config as `expected_missing_days`,
+  and the build fails on any gap that is not declared.
+- **Chunking starting points for the bench:** 4,194,304 obs for 1-D float32;
+  131,072 obs for `(obs, 50)`.
+- **Traceability.** Scanline and ground pixel are derivable from the
+  position within an orbit (i // 215, i % 215); the verifier must confirm
+  this for every orbit.
 
 ## Units across the L2 sensors
 
@@ -483,22 +383,68 @@ gathered for (its L3 gridding is out of scope here).
 - Withdrawn: the earlier recommendation of `mipas` as `data_source`. It is
   superseded by finding 1.
 
+## TROPOMI variable candidates (decision 5)
+
+Proposed canonical names run general to specific, like the existing key.
+Conversions follow the decided units. "Geolocation" means the shared store,
+not a nomenclature row: its coordinates keep `time`/`lat`/`lon`/`pressure`,
+as the gridded stores keep theirs.
+
+**Recommended core: the retrieval itself, plus the mandatory flag.**
+
+| source | proposed canonical_name | units | conversion |
+| --- | --- | --- | --- |
+| `target_product/deltad` | `water_vapor_column_delta_d` | 1e-3 | x 1000 |
+| `target_product/deltad_precision` | `water_vapor_column_delta_d_standard_error` | 1e-3 | x 1000 |
+| `target_product/h2o_column` | `water_vapor_column` | mol m-2 | x 1e4 / N_A |
+| `target_product/h2o_column_precision` | `water_vapor_column_standard_error` | mol m-2 | x 1e4 / N_A |
+| `target_product/hdo_column` | `water_vapor_column_hdo` | mol m-2 | x 1e4 / N_A |
+| `target_product/hdo_column_precision` | `water_vapor_column_hdo_standard_error` | mol m-2 | x 1e4 / N_A |
+| `diagnostics/processing_quality_flags` | `retrieval_quality_flags` | 1 | none (int32; mandatory) |
+
+**Recommended for anyone comparing with a model: kernels and priors.** These
+are the 50-layer variables, ~5.2 TB each uncompressed.
+
+| source | proposed canonical_name | units | conversion |
+| --- | --- | --- | --- |
+| `target_product/h2o_column_averaging_kernel` | `water_vapor_column_averaging_kernel` | 1 | none |
+| `target_product/hdo_column_averaging_kernel` | `water_vapor_column_hdo_averaging_kernel` | 1 | none |
+| `target_product/h2o_profile_apriori` | `water_vapor_partial_column_apriori` | mol m-2 | x 1e4 / N_A |
+| `target_product/hdo_profile_apriori` | `water_vapor_partial_column_hdo_apriori` | mol m-2 | x 1e4 / N_A |
+| `meteo/dry_air_subcolumns` | `dry_air_partial_column` | mol m-2 | x 1e4 / N_A |
+
+**Optional: the inputs to the WISO-SAT TROPOMI filter**, so users can
+reproduce it without the raw files.
+
+| source | proposed canonical_name | units | conversion |
+| --- | --- | --- | --- |
+| `diagnostics/iterations` | `retrieval_iterations` | 1 | none (int32) |
+| `instrument/solar_zenith_angle` | `solar_zenith_angle` | degree | none |
+| `side_product/aerosol_optical_thickness` | `scattering_optical_thickness` | 1 | none (squeeze `nwin`) |
+| `side_product/surface_albedo` | `surface_albedo` | 1 | none (squeeze `nwin`) |
+
+- The clear-sky criteria of Schneider et al. (2022) Table 1 may need more
+  inputs (likely CH4-based); that table needs checking before the optional
+  set is closed.
+- SRON's `aerosol_*` variables describe the retrieval's scattering layer
+  (cloud or aerosol), which is why the paper's "cloud optical thickness"
+  filter maps to `aerosol_optical_thickness`. That mapping is an inference
+  and is to be confirmed.
+- **Geolocation store contents:**
+  - `time` (from `instrument/time`);
+  - `lat`, `lon` (pixel centre);
+  - `pressure` on `level` (`meteo/pressure_levels`, 51 interfaces, Pa, kept as
+    published);
+  - pixel corners, optional (`corner` dim, 32 B/obs extra).
+- **Left out unless asked:** the remaining `meteo/` fields (temperature, wind,
+  surface altitude), the CH4/CO side products, the other aerosol and albedo
+  parameters, and the fit diagnostics (`chi_squared*`, `rms`, `degrees_of_freedom*`).
+  `quality_flag`, `convergence` and `glintflag` are "Not implemented" upstream
+  and are never included.
+
 ## Open decisions
 
-6. **Geolocation:** confirm one shared geolocation store per product (leaning
-   yes), and whether it also carries the per-observation pressure grid
-   (recommended).
-7. **MIPAS scope:** `SCIAMACHY/H2O` and `SCIAMACHY/HDO` hold MIPAS, which is
-   not in WISO-SAT.
-   - Recommended: exclude them; the SCIAMACHY product is `HDO_SICORv10`.
-   - If they are kept, they need a `mipas` data source, because a `sciamachy`
-     name would misattribute the instrument.
-11. **Coverage gaps:** TES 2011-2015 and AIRS 2020-04 .. 2021-01 are absent
-    from disk. Are they a download gap to fill, or intended?
-8. **Mole fraction unit:** `1e-6` (recommended) or `1`.
-9. **Dry vs total air:** every in-scope mole fraction is dry-air (files
-   plus the paper), so use one dry-air basis now and keep option A as the
-   rule for any future total-air product.
-10. **TES:** allow splitting the stacked `Species` array into HDO and H2O
-    stores, and declare the corrected column unit.
-5. *(deferred)* The production variable subset.
+5. **Variable subset:** core only, core + kernels/priors, or + filter inputs.
+   This also decides which rows go into `nomenclature_data.md`.
+12. **Pushing the style guide:** `7bc9f72` is committed locally in
+    `style_guides`, not pushed.
