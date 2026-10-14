@@ -37,7 +37,7 @@ stores.
 | --- | --- | --- | --- |
 | TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | fixture passes |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
-| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O separately | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | daily file | later |
+| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT fixture passes |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
 | CrIS (SNPP RS; JPSS1 FS) | `CRIS/TRPSYL2HDOCRSRS_*`, `CRIS/TRPSDL2HDOCRS1FS_*` | daily file | later |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
@@ -72,6 +72,15 @@ validation/stage_<product>.py, validation/test_pipeline.py
   granule index.
 - **Granule index:** six coordinates on a `granule` dimension in every store,
   appended in the same commit as the data.
+- **Multi-file granules** (GOSAT: each day's DED and H2O files merged onto one
+  obs axis):
+  - the reader marks where a variable is absent, and shared code fills it
+    (NaN, or the config's `absent_fill_values` for integers);
+  - the verifier places each file's observations by matching the reader's
+    `MATCH_SOURCES` against the stored geolocation, rather than repeating the
+    merge.
+- **The time unit is per product**, from the key's coordinate table
+  (TROPOMI ms, GOSAT ns: the coarsest unit that holds the source exactly).
 - **Test after any shared change** (condition 2), from the repo root:
   `uv run python validation/stage_<product>.py` once, then
   `TMPDIR=<scratch> uv run python validation/test_pipeline.py` (~25 s per

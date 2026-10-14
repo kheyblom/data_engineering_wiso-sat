@@ -55,16 +55,21 @@ BRANCH = 'main'
 COMMIT_MESSAGE = 'write granules {first}..{last} ({count})'
 COMMIT_PREFIX = 'write granules '
 
-# time is stored at the precision the style guide asks for L2 observation
-# times: int64 milliseconds since 1900-01-01, proleptic_gregorian
-TIME_UNITS = 'milliseconds since 1900-01-01'
+# time is int64 since 1900-01-01, proleptic_gregorian, in the coarsest unit
+# that holds the source times exactly (style guide). The unit is per product,
+# from the coordinate key: milliseconds for TROPOMI, nanoseconds for GOSAT,
+# whose float64 seconds land on no coarser decimal grid
+TIME_EPOCH = '1900-01-01'
 TIME_CALENDAR = 'proleptic_gregorian'
+# the CF unit word -> numpy's datetime64 unit
+TIME_UNIT_CODES = {'seconds': 's', 'milliseconds': 'ms', 'microseconds': 'us', 'nanoseconds': 'ns'}
 # the int64 a NaT encodes to, for a granule that holds no observations
 TIME_FILL = np.iinfo('int64').min
 
-# source attributes that describe the container or fill rather than the
-# quantity; the store sets its own
-DROPPED_ATTRS = ('_FillValue', 'missing_value', 'units', 'long_name')
+# source attributes that describe the container, fill or time encoding rather
+# than the quantity; the store sets its own. xarray refuses to write a time
+# whose attributes already hold 'calendar'
+DROPPED_ATTRS = ('_FillValue', 'missing_value', 'units', 'long_name', 'calendar')
 
 NOMENCLATURE_NOTE = (
     'Variable names, units and long names follow the internal data engineering '
@@ -83,6 +88,29 @@ LAYOUT_NOTE = (
     'are appended in source granule order and keep their source order within a '
     'granule; time never decreases along obs.'
 )
+
+
+def time_units(product):
+    """The product's time units, from its coordinate key.
+
+    Args:
+        product (str): The product.
+
+    Returns:
+        tuple: The CF units string, e.g. 'milliseconds since 1900-01-01', and
+            the matching numpy datetime64 unit code, e.g. 'ms'.
+
+    Raises:
+        ValueError: If the key's units are not '<unit> since 1900-01-01'.
+    """
+    units = coordinates(product)['time'].units
+    word, _, epoch = units.partition(' since ')
+    if epoch != TIME_EPOCH or word not in TIME_UNIT_CODES:
+        raise ValueError(
+            f'time units {units!r} in the {product} key must be one of '
+            f'{sorted(TIME_UNIT_CODES)} since {TIME_EPOCH}'
+        )
+    return units, TIME_UNIT_CODES[word]
 
 
 def configure_runtime(settings):
@@ -134,6 +162,23 @@ def resolve_chunks(settings):
     return {'obs': int(chunks['obs']), GRANULE_DIM: int(chunks[GRANULE_DIM])}
 
 
+def absent_fill(settings, source):
+    """The value an integer source holds where its file lacks the observation.
+
+    Only a merged granule has such observations (GOSAT: a sounding in the H2O
+    file but not the DED file). Floats are NaN there; an integer needs a value
+    the source never writes, declared in ``absent_fill_values``.
+
+    Args:
+        settings (dict): The loaded configuration.
+        source (str): The source path.
+
+    Returns:
+        int | None: The declared value.
+    """
+    return (settings.get('absent_fill_values') or {}).get(source)
+
+
 def declared_fill(settings, source):
     """The fill values the config declares for one source variable.
 
@@ -158,9 +203,10 @@ def check_fill_config(settings, sources):
         ValueError: On an unknown source, or more than one value for a source.
     """
     declared = settings.get('source_fill_values') or {}
-    unknown = sorted(set(declared) - set(sources))
-    if unknown:
-        raise ValueError(f'source_fill_values names sources the key does not: {unknown}')
+    for key in ('source_fill_values', 'absent_fill_values'):
+        unknown = sorted(set(settings.get(key) or {}) - set(sources))
+        if unknown:
+            raise ValueError(f'{key} names sources the key does not: {unknown}')
     for source, values in declared.items():
         if len(values or []) > 1:
             # an integer store can carry only one _FillValue, and no float
@@ -168,36 +214,68 @@ def check_fill_config(settings, sources):
             raise ValueError(f'source_fill_values declares {len(values)} values for {source}')
 
 
-def mask_and_convert(values, fill, factor):
-    """Mask declared fill and apply a unit conversion, keeping the dtype.
+def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
+    """Mask declared fill, fill absent observations, and convert units.
 
     Args:
         values (numpy.ndarray): Raw values.
         fill (list): Declared fill values for this source.
         factor (float | None): The conversion factor, or None.
+        absent (numpy.ndarray | None): Along ``obs``, True where the
+            observation is not in this source's file.
+        absent_value (int | None): What an integer source holds there.
 
     Returns:
         tuple: The stored values, the integer ``_FillValue`` to declare (None
-            for floats), and how many values were masked.
+            for floats), and how many values were masked as source fill.
 
     Raises:
         ValueError: If an integer source needs a unit conversion, which would
-            change its dtype.
+            change its dtype; if an integer source has absent observations and
+            no declared value for them, or a value the source itself writes; or
+            if its source fill and absent value differ, since an integer store
+            carries only one ``_FillValue``.
     """
     dtype = values.dtype
     is_float = np.issubdtype(dtype, np.floating)
+    absent = np.zeros(values.shape[0], dtype=bool) if absent is None else absent
+    # broadcast the per-observation mask over any secondary dimensions
+    absent = absent.reshape(absent.shape + (1,) * (values.ndim - 1))
+    absent = np.broadcast_to(absent, values.shape)
     masked = np.zeros(values.shape, dtype=bool)
     for value in fill:
-        masked |= values == np.asarray(value, dtype=dtype)
+        masked |= (values == np.asarray(value, dtype=dtype)) & ~absent
     count = int(masked.sum())
 
     if not is_float:
         if factor is not None:
             raise ValueError('an integer source cannot take a unit conversion')
-        return values, (np.asarray(fill[0], dtype=dtype) if fill else None), count
+        declared = np.asarray(fill[0], dtype=dtype) if fill else None
+        if not absent.any():
+            return values, declared, count
+        if absent_value is None:
+            raise ValueError(
+                'an integer source has absent observations but no '
+                'absent_fill_values entry in the config'
+            )
+        absent_value = np.asarray(absent_value, dtype=dtype)
+        if declared is not None and declared != absent_value:
+            raise ValueError(
+                f'source fill {declared} and absent fill {absent_value} differ; '
+                f'an integer store has one _FillValue'
+            )
+        if ((values == absent_value) & ~absent).any():
+            raise ValueError(
+                f'absent fill {absent_value} occurs in the source itself, so it '
+                f'could not tell a missing observation from a real value'
+            )
+        out = values.copy()
+        out[absent] = absent_value
+        return out, absent_value, count
 
+    masked |= absent
     if factor is None:
-        out = values.copy() if count else values
+        out = values.copy() if masked.any() else values
         out[masked] = np.nan
         return out, None, count
 
@@ -306,6 +384,8 @@ def coordinate_attrs(product, name, array, settings, fill):
     )
     if entry.unit_conversion == 'decoded':
         attrs['unit_conversion'] = f'decoded from {entry.original_units!r} to a timestamp'
+        if 'calendar' in source:
+            attrs['original_calendar'] = str(source['calendar'])
     else:
         attrs['units'] = entry.units
         attrs['unit_conversion'] = (
@@ -375,6 +455,13 @@ def assemble(store, datas, obs_start, settings):
                     f'{data.granule.id} but {first.values.dtype} {first.dims} before it'
                 )
         values = np.concatenate([data.arrays[source].values for data in datas])
+        absent = None
+        if any(data.arrays[source].absent is not None for data in datas):
+            absent = np.concatenate([
+                np.zeros(data.n_obs, dtype=bool) if data.arrays[source].absent is None
+                else data.arrays[source].absent
+                for data in datas
+            ])
         fill = declared_fill(settings, source)
 
         if store == GEOLOCATION:
@@ -385,9 +472,27 @@ def assemble(store, datas, obs_start, settings):
             attrs = variable_attrs(product, name, first, settings, fill)
 
         if np.issubdtype(values.dtype, np.datetime64):
+            # the reader decodes to the key's unit; anything else would be
+            # rounded or padded by the encoding rather than stored exactly
+            unit = time_units(product)[1]
+            if np.datetime_data(values.dtype)[0] != unit:
+                raise ValueError(
+                    f'{source} decodes to {values.dtype}, but the key stores '
+                    f'time in {unit}'
+                )
             stored, integer_fill, count = values, None, 0
         else:
-            stored, integer_fill, count = mask_and_convert(values, fill, factor)
+            stored, integer_fill, count = mask_and_convert(
+                values, fill, factor, absent, absent_fill(settings, source)
+            )
+        if first.absent is not None:
+            attrs['absent_observations'] = (
+                'This product merges several source files per granule into one '
+                'obs axis. Where an observation is not in the file this '
+                f'variable comes from, it holds '
+                f'{"NaN" if np.issubdtype(values.dtype, np.floating) else integer_fill}, '
+                'which no source value equals.'
+            )
         if integer_fill is not None:
             fills[name] = integer_fill
         variables[name] = xr.Variable(first.dims, stored, attrs)
@@ -434,7 +539,7 @@ def global_attrs(settings, store, versions):
     return derived | format_attrs(settings, store)
 
 
-def build_encoding(observations, index, chunks, fills):
+def build_encoding(observations, index, chunks, fills, product):
     """Zarr encoding for every variable of a first write.
 
     Args:
@@ -442,10 +547,12 @@ def build_encoding(observations, index, chunks, fills):
         index (xarray.Dataset): Its index entries, on ``granule``.
         chunks (dict): From ``resolve_chunks``.
         fills (dict): Integer variable -> the ``_FillValue`` it declares.
+        product (str): The product, whose key sets the time units.
 
     Returns:
         dict: Encoding for ``to_icechunk``.
     """
+    units, _ = time_units(product)
     encoding = {}
     for dataset in (observations, index):
         for name, variable in dataset.variables.items():
@@ -455,7 +562,7 @@ def build_encoding(observations, index, chunks, fills):
             encoding[name] = {'chunks': shape}
             if np.issubdtype(variable.dtype, np.datetime64):
                 encoding[name].update(
-                    {'units': TIME_UNITS, 'calendar': TIME_CALENDAR, 'dtype': 'int64',
+                    {'units': units, 'calendar': TIME_CALENDAR, 'dtype': 'int64',
                      '_FillValue': TIME_FILL}
                 )
             elif np.issubdtype(variable.dtype, np.floating):

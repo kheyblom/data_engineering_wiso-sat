@@ -238,7 +238,7 @@ def build(settings):
                     # the first commit creates the arrays, so it carries the
                     # encoding and the store's global attributes
                     observations.attrs = global_attrs(settings, store, versions)
-                    encoding = build_encoding(observations, index, chunks, fills)
+                    encoding = build_encoding(observations, index, chunks, fills, product)
                 message = COMMIT_MESSAGE.format(
                     first=subset[0].granule.id, last=subset[-1].granule.id, count=len(subset)
                 )

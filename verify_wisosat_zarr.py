@@ -55,7 +55,14 @@ import netCDF4
 import numpy as np
 import zarr
 
-from utils.granules import GRANULE_DIM, INDEX_FIELDS, check_coverage, check_order, decode_text
+from utils.granules import (
+    FILE_SEPARATOR,
+    GRANULE_DIM,
+    INDEX_FIELDS,
+    check_coverage,
+    check_order,
+    decode_text,
+)
 from utils.log_utils import setup_logging
 from utils.nomenclature import (
     canonical_frequency,
@@ -76,21 +83,20 @@ from utils.zarr_utils import (
     BRANCH,
     COMMIT_PREFIX,
     TIME_CALENDAR,
-    TIME_UNITS,
+    TIME_EPOCH,
+    absent_fill,
     declared_fill,
     open_existing_repository,
     resolve_chunks,
     store_sources,
     time_source,
+    time_units,
 )
 
 LOG = logging.getLogger(__name__)
 
 PHASES = ('structure', 'index', 'values', 'repository')
 DEFAULT_PHASES = PHASES
-
-# the epoch the stores count milliseconds from
-EPOCH = np.datetime64('1900-01-01T00:00:00', 'ms')
 
 # global attributes the build writes and the style guide or this project
 # requires on every store
@@ -172,81 +178,104 @@ def parse_args():
     return parser.parse_args()
 
 
-def to_epoch_ms(values):
-    """datetime64 values as the int64 milliseconds the stores hold.
+def to_epoch(values, unit):
+    """datetime64 values as the int64 count the stores hold.
 
     Args:
-        values (numpy.ndarray): datetime64.
+        values (numpy.ndarray): datetime64, already in ``unit``.
+        unit (str): numpy datetime64 unit code, from the key, e.g. 'ms'.
 
     Returns:
-        numpy.ndarray: int64 milliseconds since 1900-01-01.
+        numpy.ndarray: int64 ``unit`` since 1900-01-01.
     """
-    return (values.astype('datetime64[ms]') - EPOCH).astype('int64')
+    return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
-def read_expected(granule, reader_name, items, time):
-    """Read one granule with h5py and compute what the stores should hold.
+def read_expected(granule, reader_name, items, time, unit):
+    """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
+    Each file is read on its own: in a multi-file granule, where each file's
+    observations sit along the store's obs axis is worked out afterwards, by
+    matching them to the stored geolocation, rather than by repeating the
+    build's merge.
 
     Args:
         granule (Granule): The granule.
         reader_name (str): The product, whose reader supplies the time decoding
             and the layout check.
-        items (list): ``(source, fill, factor)`` per source to read.
+        items (list): ``(source, fill, factor, absent)`` per source to read.
         time (str): The time coordinate's source path.
+        unit (str): The datetime64 unit the key stores time in.
 
     Returns:
-        dict: ``n_obs``, ``version``, ``problems`` (layout), and per source the
-            ``expected`` stored values, the ``dtype`` as published, its
-            ``attrs``, how many values matched a declared ``fill``, and how many
-            matched a netCDF default fill that was ``undeclared``.
+        list: Per file, a dict with ``path``, ``n_obs``, ``version``,
+            ``problems`` (layout), and ``sources``: per source present in the
+            file, the ``expected`` stored values, the ``dtype`` as published,
+            its ``attrs``, how many values matched a declared ``fill``, how many
+            matched an ``undeclared`` netCDF default fill, and how many equal
+            the declared ``absent`` value, which must be none.
     """
     reader = __import__(f'products.{reader_name}', fromlist=['decode_time'])
-    out = {'sources': {}}
-    with h5py.File(granule.path, 'r') as handle:
-        out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
-        out['n_obs'] = int(handle[time].shape[0])
-        out['problems'] = reader.check_granule(handle)
-        for source, fill, factor in items:
-            dataset = handle[source]
-            raw = dataset[...]
-            # the style guide's squeeze, done here without the build's helper
-            raw = raw.reshape([size for axis, size in enumerate(raw.shape) if axis == 0 or size != 1])
-            attrs = {
-                key: decode_text(value) for key, value in dataset.attrs.items()
-                if key not in ('DIMENSION_LIST', 'REFERENCE_LIST', 'CLASS', 'NAME', '_Netcdf4Dimid')
-            }
-            entry = {'dtype': str(raw.dtype), 'attrs': attrs}
-            if source == time:
-                entry['expected'] = to_epoch_ms(reader.decode_time(raw))
-                entry.update(fill=0, undeclared=0)
+    files = []
+    for path in granule.paths:
+        out = {'path': path, 'sources': {}}
+        with h5py.File(path, 'r') as handle:
+            out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
+            out['n_obs'] = int(handle[time].shape[0])
+            out['problems'] = reader.check_granule(handle)
+            for source, fill, factor, absent in items:
+                if source not in handle:
+                    continue
+                dataset = handle[source]
+                raw = dataset[...]
+                # the style guide's squeeze, done here without the build's helper
+                raw = raw.reshape(
+                    [size for axis, size in enumerate(raw.shape) if axis == 0 or size != 1]
+                )
+                attrs = {
+                    key: decode_text(value) for key, value in dataset.attrs.items()
+                    if key not in ('DIMENSION_LIST', 'REFERENCE_LIST', 'CLASS', 'NAME', '_Netcdf4Dimid')
+                }
+                entry = {'dtype': str(raw.dtype), 'attrs': attrs}
+                if source == time:
+                    entry.update(
+                        expected=to_epoch(reader.decode_time(raw), unit),
+                        fill=0, undeclared=0, absent=0,
+                    )
+                    out['sources'][source] = entry
+                    continue
+
+                masked = np.zeros(raw.shape, dtype=bool)
+                for value in fill:
+                    masked |= raw == np.asarray(value, dtype=raw.dtype)
+                default = netCDF4.default_fillvals.get(raw.dtype.str[1:])
+                undeclared = 0
+                if default is not None and not any(
+                    np.asarray(value, dtype=raw.dtype) == np.asarray(default, dtype=raw.dtype)
+                    for value in fill
+                ):
+                    undeclared = int((raw == np.asarray(default, dtype=raw.dtype)).sum())
+                clashes = 0
+                if absent is not None:
+                    clashes = int((raw == np.asarray(absent, dtype=raw.dtype)).sum())
+
+                if raw.dtype.kind == 'f':
+                    expected = raw.astype('float64')
+                    expected[masked] = np.nan
+                    if factor is not None:
+                        expected = expected * factor
+                    with np.errstate(over='ignore'):
+                        expected = expected.astype(raw.dtype)
+                else:
+                    expected = raw
+                entry.update(
+                    expected=expected, fill=int(masked.sum()), undeclared=undeclared,
+                    absent=clashes,
+                )
                 out['sources'][source] = entry
-                continue
-
-            masked = np.zeros(raw.shape, dtype=bool)
-            for value in fill:
-                masked |= raw == np.asarray(value, dtype=raw.dtype)
-            default = netCDF4.default_fillvals.get(raw.dtype.str[1:])
-            undeclared = 0
-            if default is not None and not any(
-                np.asarray(value, dtype=raw.dtype) == np.asarray(default, dtype=raw.dtype)
-                for value in fill
-            ):
-                undeclared = int((raw == np.asarray(default, dtype=raw.dtype)).sum())
-
-            if raw.dtype.kind == 'f':
-                expected = raw.astype('float64')
-                expected[masked] = np.nan
-                if factor is not None:
-                    expected = expected * factor
-                with np.errstate(over='ignore'):
-                    expected = expected.astype(raw.dtype)
-            else:
-                expected = raw
-            entry.update(expected=expected, fill=int(masked.sum()), undeclared=undeclared)
-            out['sources'][source] = entry
-    return out
+        files.append(out)
+    return files
 
 
 def same_values(stored, expected):
@@ -323,9 +352,10 @@ def check_structure(report, settings, store, group, chunks):
     for name in sorted(expected_vars & names):
         array, attrs = group[name], dict(group[name].attrs)
         if name == 'time' or name.startswith('granule_time'):
+            units = time_units(product)[0]
             report.check(
-                f'{store}/{name}: int64 {TIME_UNITS!r}, {TIME_CALENDAR}',
-                str(array.dtype) == 'int64' and attrs.get('units') == TIME_UNITS
+                f'{store}/{name}: int64 {units!r}, {TIME_CALENDAR}',
+                str(array.dtype) == 'int64' and attrs.get('units') == units
                 and attrs.get('calendar') == TIME_CALENDAR,
                 f'{array.dtype} {attrs.get("units")!r} {attrs.get("calendar")!r}',
             )
@@ -341,10 +371,11 @@ def check_structure(report, settings, store, group, chunks):
                 f'{array.dtype} {array.fill_value}',
             )
         else:
+            expected_fill = fill[0] if fill else absent_fill(settings, source)
             report.check(
                 f'{store}/{name}: integer, _FillValue is the declared fill',
-                attrs.get('_FillValue') == (fill[0] if fill else None),
-                f'{array.dtype} {attrs.get("_FillValue")!r} against declared {fill}',
+                attrs.get('_FillValue') == expected_fill,
+                f'{array.dtype} {attrs.get("_FillValue")!r} against declared {expected_fill!r}',
             )
 
         if store == GEOLOCATION:
@@ -442,7 +473,7 @@ def check_index(report, settings, groups, granules):
         'index: granule ids and files are the raw listing, in order',
         [str(value) for value in reference['granule_id']] == [g.id for g in granules]
         and [str(value) for value in reference['granule_file']]
-        == [os.path.basename(g.path) for g in granules],
+        == [FILE_SEPARATOR.join(os.path.basename(path) for path in g.paths) for g in granules],
         f'{len(reference["granule_id"])} indexed, {len(granules)} listed',
     )
     counts = reference['granule_obs_count'].astype('int64')
@@ -461,8 +492,11 @@ class Pass:
         mismatches (dict): ``(store, name)`` -> mismatching values.
         fill (dict): Source -> values matching a declared fill.
         undeclared (dict): Source -> values matching an undeclared default fill.
+        absent (dict): Source -> raw values equal to its declared absent fill.
+        missing (dict): Source -> granules where no file holds it.
         problems (list): ``(granule id, problem)`` from the layout check.
         index (dict): Index field -> mismatching granules.
+        placement (dict): Merge failures in multi-file granules, by kind.
         versions (set): Processor versions seen.
         bounds (list): ``[lat_min, lat_max, lon_min, lon_max]``.
         decreasing (int): Places where time decreases.
@@ -474,13 +508,75 @@ class Pass:
         self.mismatches = {}
         self.fill = {}
         self.undeclared = {}
+        self.absent = {}
+        self.missing = {}
         self.problems = []
         self.index = {'granule_obs_count': 0, 'granule_time_start': 0, 'granule_time_end': 0}
+        self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
         self.bounds = [np.inf, -np.inf, np.inf, -np.inf]
         self.decreasing = 0
         self.dtypes = {}
         self.attrs = {}
+
+
+def observation_keys(columns):
+    """Rows of matching columns as hashable keys, bit for bit.
+
+    Args:
+        columns (list): Equal-length 1-D arrays.
+
+    Returns:
+        list: One tuple of raw integers per row. Floats are compared by their
+            bit patterns, so a key matches only the identical value.
+    """
+    views = [
+        column.view(f'u{column.dtype.itemsize}') if column.dtype.kind == 'f' else column
+        for column in columns
+    ]
+    return list(zip(*(view.tolist() for view in views)))
+
+
+def place_files(files, stored_keys, match_sources, seen):
+    """Where each file's observations sit in one stored granule.
+
+    A single file fills the granule in order. A multi-file granule was merged
+    by the build; here each file's observations are found again by matching
+    their identifying coordinates to the stored ones, so the merge is checked
+    without repeating it: every observation must be found exactly once, keep
+    its file's order, and every stored observation must come from some file.
+
+    Args:
+        files (list): From ``read_expected``.
+        stored_keys (list): ``observation_keys`` of the stored granule.
+        match_sources (tuple): The source paths that identify an observation.
+        seen (Pass): Where to count failures.
+
+    Returns:
+        list: Per file, an int array of store positions within the granule,
+            or None where its observations could not all be placed.
+    """
+    if len(files) == 1:
+        return [np.arange(files[0]['n_obs'])]
+
+    lookup = {}
+    for position, key in enumerate(stored_keys):
+        lookup.setdefault(key, position)
+    covered = np.zeros(len(stored_keys), dtype=bool)
+    placed = []
+    for entry in files:
+        keys = observation_keys([entry['sources'][source]['expected'] for source in match_sources])
+        positions = np.array([lookup.get(key, -1) for key in keys], dtype='int64')
+        if (positions < 0).any():
+            seen.placement['unmatched'] += int((positions < 0).sum())
+            placed.append(None)
+            continue
+        if (np.diff(positions) <= 0).any():
+            seen.placement['reordered'] += 1
+        covered[positions] = True
+        placed.append(positions)
+    seen.placement['unaccounted'] += int((~covered).sum())
+    return placed
 
 
 def check_values(report, settings, groups, granules, index, num_workers, batch):
@@ -499,7 +595,10 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
         Pass: What the pass saw, for the evidence lines.
     """
     product = settings['product']
+    reader = load_reader(settings)
     time = time_source(product)
+    _, unit = time_units(product)
+    coordinate_names = {entry.original: name for name, entry in coordinates(product).items()}
     targets = []
     for store in groups:
         for name, source in store_sources(product, store).items():
@@ -507,9 +606,13 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
                 key_variable(product, name).unit_conversion
             )
             targets.append((store, name, source, factor))
-    items = sorted({(source, tuple(declared_fill(settings, source)), factor)
-                    for _, _, source, factor in targets})
-    items = [(source, list(fill), factor) for source, fill, factor in items]
+    items = sorted(
+        {(source, tuple(declared_fill(settings, source)), factor, absent_fill(settings, source))
+         for _, _, source, factor in targets},
+        key=lambda item: item[0],
+    )
+    items = [(source, list(fill), factor, absent) for source, fill, factor, absent in items]
+    match_sources = tuple(getattr(reader, 'MATCH_SOURCES', ()))
     starts = index['granule_obs_start']
     counts = index['granule_obs_count']
     stored_start = index['granule_time_start']
@@ -526,80 +629,142 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
         for begin in range(0, len(granules), batch):
             end = min(begin + batch, len(granules))
             chunk = granules[begin:end]
-            if pool is None:
-                results = [read_expected(g, product, items, time) for g in chunk]
-            else:
-                results = list(pool.map(
-                    read_expected, chunk, [product] * len(chunk), [items] * len(chunk),
-                    [time] * len(chunk),
-                ))
+            arguments = (chunk, [product] * len(chunk), [items] * len(chunk),
+                         [time] * len(chunk), [unit] * len(chunk))
+            results = list((pool.map if pool else map)(read_expected, *arguments))
             obs0 = int(starts[begin])
             obs1 = int(starts[end - 1] + counts[end - 1])
             stored = {
                 (store, name): np.asarray(groups[store][name][obs0:obs1])
                 for store, name, _, _ in targets
             }
-            for offset, (granule, result) in enumerate(zip(chunk, results)):
+            for offset, (granule, files) in enumerate(zip(chunk, results)):
                 position = begin + offset
                 lo = int(starts[position]) - obs0
                 hi = lo + int(counts[position])
-                seen.versions.add(result['version'])
-                seen.problems += [(granule.id, problem) for problem in result['problems']]
-                if result['n_obs'] != int(counts[position]):
+                for entry in files:
+                    seen.versions.add(entry['version'])
+                    seen.problems += [(granule.id, problem) for problem in entry['problems']]
+
+                # how many observations the granule should hold: every
+                # distinct one across its files, found from raw alone
+                if len(files) == 1:
+                    n_expected = files[0]['n_obs']
+                else:
+                    n_expected = len(set().union(*(
+                        observation_keys([entry['sources'][s]['expected'] for s in match_sources])
+                        for entry in files
+                    )))
+                if n_expected != int(counts[position]):
                     seen.index['granule_obs_count'] += 1
-                expected_time = result['sources'][time]['expected']
-                if expected_time.size:
-                    seen.index['granule_time_start'] += int(expected_time[0] != stored_start[position])
-                    seen.index['granule_time_end'] += int(expected_time[-1] != stored_end[position])
-                    seen.decreasing += int((np.diff(expected_time) < 0).sum())
-                    if previous is not None and expected_time[0] < previous:
-                        seen.decreasing += 1
-                    previous = expected_time[-1]
-                for store, name, source, _ in targets:
-                    entry = result['sources'][source]
-                    key = (store, name)
-                    seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(
-                        stored[key][lo:hi], entry['expected']
+                    continue
+
+                stored_time = stored[(GEOLOCATION, 'time')][lo:hi]
+                if stored_time.size:
+                    times = [entry['sources'][time]['expected'] for entry in files]
+                    seen.index['granule_time_start'] += int(
+                        min(t.min() for t in times if t.size) != stored_start[position]
                     )
-                    seen.dtypes.setdefault(source, set()).add(entry['dtype'])
-                    seen.attrs.setdefault(source, entry['attrs'])
-                for source, entry in result['sources'].items():
-                    seen.fill[source] = seen.fill.get(source, 0) + entry['fill']
-                    seen.undeclared[source] = seen.undeclared.get(source, 0) + entry['undeclared']
-                for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
-                    values = result['sources'][coordinates(product)[name].original]['expected']
-                    finite = values[np.isfinite(values)]
-                    if finite.size:
-                        seen.bounds[low] = min(seen.bounds[low], float(finite.min()))
-                        seen.bounds[high] = max(seen.bounds[high], float(finite.max()))
+                    seen.index['granule_time_end'] += int(
+                        max(t.max() for t in times if t.size) != stored_end[position]
+                    )
+                    seen.decreasing += int((np.diff(stored_time) < 0).sum())
+                    if previous is not None and stored_time[0] < previous:
+                        seen.decreasing += 1
+                    previous = stored_time[-1]
+
+                stored_keys = (
+                    observation_keys([
+                        stored[(GEOLOCATION, coordinate_names[source])][lo:hi]
+                        for source in match_sources
+                    ]) if len(files) > 1 else None
+                )
+                placed = place_files(files, stored_keys, match_sources, seen)
+
+                for store, name, source, _ in targets:
+                    key = (store, name)
+                    values = stored[key][lo:hi]
+                    covered = np.zeros(values.shape[0], dtype=bool)
+                    holders = 0
+                    for entry, positions in zip(files, placed):
+                        if source not in entry['sources'] or positions is None:
+                            continue
+                        holders += 1
+                        found = entry['sources'][source]
+                        seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(
+                            values[positions], found['expected']
+                        )
+                        covered[positions] = True
+                        seen.dtypes.setdefault(source, set()).add(found['dtype'])
+                        seen.attrs.setdefault(source, found['attrs'])
+                    if not holders:
+                        seen.missing[source] = seen.missing.get(source, 0) + 1
+                        continue
+                    # where no file holds the observation, the store must say
+                    # so: NaN, or the declared absent fill for an integer
+                    rest = values[~covered]
+                    if rest.size:
+                        if rest.dtype.kind == 'f':
+                            wrong = int((~np.isnan(rest)).sum())
+                        else:
+                            wrong = int((rest != absent_fill(settings, source)).sum())
+                        seen.mismatches[key] = seen.mismatches.get(key, 0) + wrong
+
+                for entry in files:
+                    for source, found in entry['sources'].items():
+                        seen.fill[source] = seen.fill.get(source, 0) + found['fill']
+                        seen.undeclared[source] = seen.undeclared.get(source, 0) + found['undeclared']
+                        seen.absent[source] = seen.absent.get(source, 0) + found['absent']
+                    for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
+                        values = entry['sources'][coordinates(product)[name].original]['expected']
+                        finite = values[np.isfinite(values)]
+                        if finite.size:
+                            seen.bounds[low] = min(seen.bounds[low], float(finite.min()))
+                            seen.bounds[high] = max(seen.bounds[high], float(finite.max()))
             LOG.info(f'checked granules {begin}-{end - 1} of {len(granules)}')
     finally:
         if pool is not None:
             pool.shutdown()
 
-    for (store, name), count in seen.mismatches.items():
+    for store, name, _, _ in targets:
+        count = seen.mismatches.get((store, name), 0)
         report.check(
             f'{store}/{name}: every observation matches raw, bit for bit',
             count == 0, f'{count} mismatches over {int(counts.sum())} obs',
         )
     for field, count in seen.index.items():
         report.check(f'index: {field} matches every raw file', count == 0, f'{count} granules differ')
+    if any(len(granule.paths) > 1 for granule in granules):
+        report.check(
+            'merged granules: every file observation placed once, in file '
+            'order, and every stored observation from some file',
+            not any(seen.placement.values()), f'{seen.placement}',
+        )
     report.check(
-        f'every granule declares processor version {settings["version"]!r}',
+        f'every file declares processor version {settings["version"]!r}',
         seen.versions == {str(settings['version'])}, f'{sorted(seen.versions)}',
     )
     report.check(
         'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
     )
     report.check(
-        'every granule has the documented swath layout', not seen.problems,
+        'every file has the documented layout', not seen.problems,
         f'{len(seen.problems)} problems, first {seen.problems[:3]}',
     )
-    for source, fill, _ in items:
+    for source, fill, _, absent in items:
+        report.check(
+            f'{source}: held by a file of every granule',
+            not seen.missing.get(source), f'{seen.missing.get(source, 0)} granules lack it',
+        )
         if fill:
             report.check(
                 f'{source}: declared fill {fill} occurs in the record',
                 seen.fill.get(source, 0) > 0, f'{seen.fill.get(source, 0)} values',
+            )
+        if absent is not None:
+            report.check(
+                f'{source}: absent fill {absent} never occurs in raw',
+                seen.absent.get(source, 0) == 0, f'{seen.absent.get(source, 0)} values',
             )
         report.check(
             f'{source}: no undeclared netCDF default fill',

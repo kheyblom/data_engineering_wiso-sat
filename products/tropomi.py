@@ -114,7 +114,7 @@ def list_granules(raw_root):
                         problems.append(f'{orbit_dir} holds {name}, a different orbit')
                         continue
                     granules.append(
-                        Granule(id=match['orbit'], day=date, path=os.path.join(orbit_dir, name))
+                        Granule(id=match['orbit'], day=date, paths=(os.path.join(orbit_dir, name),))
                     )
     if problems:
         raise ValueError(
@@ -172,7 +172,7 @@ def read_granule(granule, sources, time_source):
     Raises:
         KeyError: If a source is not in the file.
     """
-    with netCDF4.Dataset(granule.path, 'r') as handle:
+    with netCDF4.Dataset(granule.paths[0], 'r') as handle:
         # masking off: the shared code masks the fill values the config
         # declares, and nothing else may decide what counts as missing
         handle.set_auto_mask(False)

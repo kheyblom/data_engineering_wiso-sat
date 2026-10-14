@@ -1,0 +1,230 @@
+# Production config for the GOSAT (IUP FOCAL v3.0.1) stores.
+#
+# One run builds the geolocation store plus one store per variable listed, in
+# a single pass over the days. Each day's DED and H2O files are merged onto one
+# obs axis (decided 2026-10-14; see products/gosat.py). NOT YET RUN: GOSAT is
+# the second reader of design condition 1, built at fixture level.
+product: gosat
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/GOSAT
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_gosat.log
+# the files' root product_version attribute, checked on every file
+version: 'v3.0.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+# canonical names, each a row of nomenclature-key_gosat.md; both quality flags
+# are mandatory
+variables:
+  - water_vapor_column_delta_d
+  - water_vapor_column_delta_d_standard_error
+  - quality_flags_retrieval_delta_d
+  - water_vapor_column_mole_fraction_dry_air
+  - water_vapor_column_mole_fraction_dry_air_standard_error
+  - quality_flags_retrieval_h2o
+  - solar_zenith_angle
+
+# days between the first and last file with no files of either kind (listed
+# 2026-10-14). The build fails on any other gap.
+expected_missing_days:
+  - 2009-05-05
+  - 2009-05-06
+  - 2009-05-07
+  - 2009-05-08
+  - 2009-05-09
+  - 2009-05-10
+  - 2009-05-11
+  - 2009-05-12
+  - 2009-05-13
+  - 2009-05-14
+  - 2009-05-15
+  - 2009-05-21
+  - 2009-05-24
+  - 2009-05-27
+  - 2010-05-23
+  - 2010-05-24
+  - 2013-03-28
+  - 2013-03-29
+  - 2014-02-08
+  - 2014-05-25
+  - 2014-05-26
+  - 2014-05-27
+  - 2014-05-28
+  - 2014-05-29
+  - 2014-05-31
+  - 2014-12-15
+  - 2014-12-16
+  - 2014-12-17
+  - 2014-12-18
+  - 2014-12-19
+  - 2014-12-20
+  - 2014-12-21
+  - 2014-12-22
+  - 2014-12-23
+  - 2014-12-24
+  - 2014-12-25
+  - 2014-12-26
+  - 2014-12-27
+  - 2014-12-28
+  - 2014-12-29
+  - 2014-12-30
+  - 2014-12-31
+  - 2015-01-01
+  - 2015-01-02
+  - 2015-01-03
+  - 2015-01-04
+  - 2015-01-05
+  - 2015-01-06
+  - 2015-01-07
+  - 2015-01-08
+  - 2015-01-09
+  - 2015-01-10
+  - 2015-01-11
+  - 2015-01-12
+  - 2015-01-13
+  - 2015-01-14
+  - 2015-01-15
+  - 2015-01-16
+  - 2015-01-17
+  - 2015-01-18
+  - 2015-01-19
+  - 2015-01-20
+  - 2015-01-21
+  - 2015-01-22
+  - 2015-01-23
+  - 2015-01-24
+  - 2015-01-25
+  - 2015-01-26
+  - 2015-01-27
+  - 2015-01-28
+  - 2015-01-29
+  - 2015-01-30
+  - 2015-01-31
+  - 2015-09-14
+  - 2015-11-16
+  - 2017-03-19
+  - 2018-05-18
+  - 2018-05-19
+  - 2018-05-20
+  - 2018-05-21
+  - 2018-05-22
+  - 2018-05-23
+  - 2018-07-23
+  - 2018-07-27
+  - 2018-07-31
+  - 2018-08-04
+  - 2018-08-13
+  - 2018-11-25
+  - 2018-11-26
+  - 2018-11-27
+  - 2018-11-28
+  - 2018-11-29
+  - 2018-11-30
+  - 2018-12-01
+  - 2018-12-02
+  - 2018-12-03
+  - 2018-12-04
+  - 2018-12-05
+  - 2018-12-06
+  - 2018-12-07
+  - 2018-12-08
+  - 2018-12-09
+  - 2018-12-10
+  - 2018-12-11
+  - 2018-12-12
+  - 2018-12-13
+  - 2018-12-14
+  - 2018-12-15
+  - 2018-12-16
+  - 2018-12-17
+  - 2018-12-18
+  - 2018-12-19
+  - 2018-12-20
+  - 2018-12-21
+  - 2018-12-22
+  - 2018-12-23
+  - 2018-12-24
+  - 2018-12-25
+  - 2018-12-26
+  - 2018-12-27
+  - 2020-06-14
+  - 2020-06-15
+  - 2020-06-16
+  - 2020-06-17
+  - 2020-08-24
+  - 2020-08-25
+  - 2020-08-26
+  - 2020-11-25
+  - 2020-11-27
+  - 2020-12-11
+  - 2021-11-18
+  - 2021-11-19
+  - 2021-11-20
+  - 2021-11-21
+  - 2021-11-22
+  - 2021-11-23
+  - 2021-11-24
+  - 2021-11-25
+
+# FOCAL declares no fill and the sampled files hold none: they publish only
+# soundings that passed quality control. The verifier fails if a netCDF default
+# fill turns up anywhere.
+source_fill_values: {}
+
+# What an integer variable holds at a sounding its file does not have (the
+# merge). -2147483647, the netCDF default int fill, is never written by FOCAL
+# (flags are 0 or 1), and the verifier confirms that over the whole record.
+absent_fill_values:
+  xded_quality_flag: -2147483647
+  xh2o_quality_flag: -2147483647
+
+# Scale settings (design condition 3). The whole record is ~7e6 soundings
+# (~28 MB per float32 store), so one chunk would hold the lot; 1,048,576 obs
+# is 4 MiB of float32 and 8 MiB of int64 time, near the guide's 5-40 MiB
+# floor while keeping several chunks for partial reads.
+chunks:
+  obs: 1048576
+  granule: 8192
+granules_per_commit: 365
+num_workers: 4
+
+filtering_guidance: >-
+  FOCAL v3.0 files hold only soundings that passed IUP's multi-stage
+  product-level quality control (Sarkar et al. 2026), and every flag sampled is
+  0 (good). No further filtering is recommended upstream.
+
+attrs:
+  title: >-
+    WISO-SAT GOSAT Level 2 (IUP FOCAL {version_label}): {variable}
+  summary: >-
+    One variable of the IUP FOCAL GOSAT delta D and XH2O retrievals as
+    distributed for WISO-SAT, every sounding of the record, stored as an
+    icechunk-backed zarr store. Each day's DED and H2O files are merged onto
+    one obs axis of distinct soundings. Join with the geolocation store of the
+    same product on obs for time, latitude and longitude.
+  Conventions: ACDD-1.3
+  source: >-
+    IUP FOCAL GOSAT Level 2 product {version_label}, one DED and one H2O
+    netCDF file per day, University of Bremen
+  institution: Institute of Environmental Physics (IUP), University of Bremen (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  # the Sarkar et al. data descriptor was not found by search (2026-10-14);
+  # complete its citation from the copy the user read before production
+  references: >-
+    Sarkar et al. (2026), the WISO-SAT data descriptor. FOCAL Product
+    Specification Document Version 3, www.esa-ghg-cci.org.
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs; every other store of this product shares
+    its obs axis and granule index.
+  granule: >-
+    one day; granule_id is the date, and granule_file names the day's DED and
+    H2O files
+  known_data_gaps: >-
+    138 days between 2009-04-23 and 2021-12-31 have no files upstream; they are
+    listed in the build config (expected_missing_days).

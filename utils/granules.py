@@ -1,14 +1,19 @@
-"""The granule: one source file, the unit every product is read, written and resumed in.
+"""The granule: the unit every product is read, written and resumed in.
 
 Each product's reader (``products/<product>.py``) lists its granules and reads
 one at a time into the shapes defined here. Everything downstream of that is
 shared, so this module is the interface between the two halves:
 
-- ``Granule`` is one source file and its place in the record. A reader returns
-  them in source order (orbit order for TROPOMI), which the style guide
-  requires the stores to keep.
+- ``Granule`` is one source file, or the few files a product splits one
+  granule across, and its place in the record. A reader returns them in source
+  order (orbit order for TROPOMI), which the style guide requires the stores to
+  keep. GOSAT is the multi-file case: each day's DED and H2O files hold
+  overlapping sets of soundings, merged into one obs axis per day (decided
+  2026-10-14).
 - ``SourceArray`` is one source variable from one granule, raw: no fill
-  masked, no unit converted. Its dimensions are already the store's: the
+  masked, no unit converted. In a merged granule a variable can be absent at
+  some observations (the sounding is not in its file); those are marked, and
+  shared code fills them. Its dimensions are already the store's: the
   observation dimension is ``obs``, others lose a leading ``n``, and length-1
   dimensions are squeezed. Masking and conversion are shared code, because they
   are driven by the config and the nomenclature key rather than the format.
@@ -16,7 +21,8 @@ shared, so this module is the interface between the two halves:
 
 The granule index every store carries is derived from these: one entry per
 granule with its identifier, first observation, observation count, start and
-end time, and file name.
+end time, and file name (several, joined by ``FILE_SEPARATOR``, for a
+multi-file granule).
 """
 
 from __future__ import annotations
@@ -29,7 +35,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 
-# The granule index, one entry per source file, carried identically by every
+# The granule index, one entry per granule, carried identically by every
 # store of a product. Coordinates on their own dimension, so a store's data
 # variable is still its only data variable
 GRANULE_DIM = 'granule'
@@ -47,23 +53,26 @@ INDEX_ATTRS = {
     'granule_obs_count': {'long_name': 'number of observations in the granule'},
     'granule_time_start': {'long_name': 'time of the first observation of the granule'},
     'granule_time_end': {'long_name': 'time of the last observation of the granule'},
-    'granule_file': {'long_name': 'source file name of the granule'},
+    'granule_file': {'long_name': 'source file name(s) of the granule, separated by "; "'},
 }
+
+# joins the file names of a multi-file granule in its index entry
+FILE_SEPARATOR = '; '
 
 
 class Granule(NamedTuple):
-    """One source file.
+    """One granule: one source file, or the files one is split across.
 
     Attributes:
         id (str): The product's identifier for it, e.g. an orbit number.
         day (datetime.date): The UTC day the source tree files it under, which
             is what coverage is checked against.
-        path (str): Absolute path to the file.
+        paths (tuple): Absolute paths of its files, in the reader's order.
     """
 
     id: str
     day: datetime.date
-    path: str
+    paths: tuple
 
 
 class SourceArray(NamedTuple):
@@ -72,16 +81,21 @@ class SourceArray(NamedTuple):
     Attributes:
         dims (tuple): Store dimension names, ``obs`` first.
         values (numpy.ndarray): The values exactly as the file holds them,
-            except that time has been decoded to datetime64[ms].
+            except that time has been decoded to datetime64. Where ``absent``
+            is set the value is a placeholder.
         attrs (dict): The source variable's attributes, byte strings decoded.
         dimension_note (str): What was renamed and squeezed, for the metadata,
             e.g. 'nobs -> obs; nwin (length 1) squeezed'.
+        absent (numpy.ndarray | None): Along ``obs``, True where the
+            observation is not in the file this variable comes from. None when
+            it is present everywhere, as in every single-file granule.
     """
 
     dims: tuple
     values: np.ndarray
     attrs: dict
     dimension_note: str
+    absent: np.ndarray | None = None
 
 
 class GranuleData(NamedTuple):
@@ -193,10 +207,10 @@ def time_bounds(time):
         time (numpy.ndarray): The granule's decoded times.
 
     Returns:
-        tuple: ``(start, end)`` as datetime64[ms].
+        tuple: ``(start, end)``, in the times' own datetime64 unit.
     """
     if not time.size:
-        nat = np.datetime64('NaT', 'ms')
+        nat = np.datetime64('NaT', np.datetime_data(time.dtype)[0])
         return nat, nat
     return time[0], time[-1]
 
@@ -215,13 +229,18 @@ def index_entries(datas, time_source, obs_start):
     counts = np.array([data.n_obs for data in datas], dtype='int64')
     starts = obs_start + np.concatenate([[0], np.cumsum(counts)[:-1]]).astype('int64')
     bounds = [time_bounds(data.arrays[time_source].values) for data in datas]
+    unit = datas[0].arrays[time_source].values.dtype
     return {
         'granule_id': np.array([data.granule.id for data in datas], dtype=object),
         'granule_obs_start': starts,
         'granule_obs_count': counts,
-        'granule_time_start': np.array([start for start, _ in bounds], dtype='datetime64[ms]'),
-        'granule_time_end': np.array([end for _, end in bounds], dtype='datetime64[ms]'),
-        'granule_file': np.array([os.path.basename(data.granule.path) for data in datas], dtype=object),
+        'granule_time_start': np.array([start for start, _ in bounds], dtype=unit),
+        'granule_time_end': np.array([end for _, end in bounds], dtype=unit),
+        'granule_file': np.array(
+            [FILE_SEPARATOR.join(os.path.basename(path) for path in data.granule.paths)
+             for data in datas],
+            dtype=object,
+        ),
     }
 
 
