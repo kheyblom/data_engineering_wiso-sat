@@ -20,16 +20,14 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-- **Decided 2026-10-14:**
-  - one geolocation store per product, holding the pressure grid;
-  - MIPAS excluded;
-  - mole fractions in ppm on one dry-air basis;
-  - TES split, with the column-unit correction;
-  - coverage gaps flagged but not chased.
-- **L2 rules written into the style guide:** `style_guides` commit
-  `7bc9f72` (plus the `inst` row), **committed locally, not pushed**.
-- **Waiting on the user's decision 5:** the TROPOMI variable subset
-  (candidates in `l2-standards-draft.md`), and approval to push `7bc9f72`.
+- **Style guide final and pushed** (`style_guides` `7bc9f72`, `7137951`).
+- **Deferred cleanup recorded** as task 2 in GLEAM and MSWEP `TASKS.md`:
+  - add `cdm_data_type: Grid`;
+  - fix `standard_name` to the new rule.
+
+  MSWEP's is pushed; GLEAM's `TASKS.md` is untracked there.
+- **Next: decision 5,** the TROPOMI variable subset (candidates in
+  `l2-standards-draft.md`).
 - **Then:**
   - add the variable rows to `nomenclature_data.md`;
   - write `nomenclature-key_tropomi.md`;

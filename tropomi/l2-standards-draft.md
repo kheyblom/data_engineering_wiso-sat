@@ -1,7 +1,11 @@
 # Level 2 standards — draft proposal (task 3)
 
 **Status: rules decided and moved into the style guide** (`style_guides`
-commit `7bc9f72`, with the `inst` frequency row in `nomenclature_data.md`).
+commits `7bc9f72` and `7137951`, pushed; `inst` row in `nomenclature_data.md`).
+The user's review moved the cross-cutting rules to General and replaced CF
+`featureType` with ACDD `cdm_data_type` (`Point` here). The lake never sets
+`standard_name`, but a source one (SRON's `delta_d`, `water_column`, ...) is
+retained unchanged.
 What remains here is the evidence, the unit and value survey, and the
 TROPOMI variable candidates. Once the variable rows are in
 `nomenclature_data.md`, the TROPOMI-specific facts move to `CLAUDE.md` and
