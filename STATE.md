@@ -39,8 +39,15 @@ Read this first in a new session. Update it whenever work lands.
   - the 9 inputs that reproduce the Schneider et al. (2022) Table 1 filters.
 - **Model comparison deferred:** kernels, priors and the dry-air partial
   column (~26 TB), plus the geolocation pressure grid (~5.3 TB), which only
-  the kernels need. Revisit after the bench measures compression. They have
-  no nomenclature rows yet.
+  the kernels need. They have no nomenclature rows yet (decided 2026-10-14).
+  - Measure kernel compression with a standalone scratch script; that needs
+    no rows.
+  - At the second-reader step (GOSAT or TES), name the kernels, priors and
+    dry-air columns in one design pass across all products. The layouts
+    differ: column kernels, block matrices, log space, SVD components, and
+    priors as partial columns or as mole fractions.
+  - Add rows per product as each is built, and for TROPOMI only if the bench
+    makes the set affordable.
 - **Filtering guidance for the metadata** is Table 1 in full, plus the inferred
   reduced chi-squared (chi2 / spectral points). Details are in
   `docs/products/tropomi.md`.

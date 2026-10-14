@@ -147,9 +147,18 @@ raw files.
 
 **Deferred: model comparison.** These are 50 layers each, ~5.2 TB
 uncompressed. With the pressure grid they total ~31 TB.
-- Revisit after the bench measures how well kernels compress.
-- No canonical names or nomenclature rows yet. When they are added, they
-  must follow the naming rule.
+- Revisit after the bench measures how well kernels compress. A standalone
+  scratch script measures it; that needs no nomenclature rows.
+- No canonical names or nomenclature rows yet. At the second-reader step
+  (GOSAT or TES), the kernels, priors and dry-air columns are named in one
+  design pass across all products, following the naming rule.
+  - Every product has kernels and priors, in different layouts:
+    - column kernels: TROPOMI, SCIAMACHY, GOSAT;
+    - block matrices: TES;
+    - log-space ratio kernels: TROPESS;
+    - SVD components: IASI;
+    - priors as partial columns or as mole fractions.
+  - A TROPOMI-only name would fix the pattern too early.
 
 | source | units | conversion |
 | --- | --- | --- |
