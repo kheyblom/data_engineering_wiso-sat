@@ -25,7 +25,7 @@ Read this first in a new session. Update it whenever work lands.
   - add `cdm_data_type: Grid`;
   - fix `standard_name` to the new rule.
 
-  MSWEP's is pushed; GLEAM's `TASKS.md` is untracked there.
+  Both are pushed (GLEAM's `TASKS.md` is tracked as of `8a093d4`).
 - **Next: decision 5,** the TROPOMI variable subset (candidates in
   `l2-standards-draft.md`).
 - **Then:**
