@@ -17,8 +17,8 @@ store differs from a gridded one only where the data's shape forces it.
 - Scope is Level 2 only; L3 gridded files in the raw tree are ignored.
 - Column amounts in `mol m-2`; δD in `1e-3` (per mil). Decided 2026-10-14,
   after the value check below confirmed every declared unit except TES's.
-- The raw `SCIAMACHY/` directory keeps its name although `H2O/` and `HDO/`
-  hold MIPAS files (see open decision on the store's `data_source`).
+- The raw `SCIAMACHY/` directory keeps its name. Its `H2O/` and `HDO/` hold
+  MIPAS files, which are not in WISO-SAT (open decision 7).
 - *Leaning, not final:* one shared geolocation store per product, joined on
   `obs` (see the estimate below).
 
@@ -247,6 +247,12 @@ Findings that change the plan:
    variables, which is a restructuring the style guide would have to allow;
    the ratio they imply is physical (p50 2.2e-4; δD from -82 per mil at the
    surface to -650 aloft).
+   - Sarkar et al. (2026) confirm the stacked state vector, and that the
+     `AveragingKernel` (34 x 34) holds separate HDO and H2O blocks.
+   - The kernel, `ObservationErrorCovariance` and the error covariances
+     therefore split into four 17 x 17 blocks (HDO-HDO, HDO-H2O, H2O-HDO,
+     H2O-H2O). The cross blocks are needed to apply the kernel to δD, so they
+     cannot be dropped.
 3. **Two `1`-unit variables are log-space and must never be scaled with their
    neighbours:** TROPESS `observation_error_h2o` and IASI `musica_wvp`. The
    nomenclature key must map them to their own canonical names, with units `1`.
@@ -329,11 +335,14 @@ expected mismatch is zero, with a 1-ulp tolerance stated if it is not.
      `mole_fraction_of_water_vapor_in_air`. In CF "in_air" includes the water
      vapour; whether ESA meant that exactly is worth confirming, though it is
      negligible at MIPAS altitudes.
-   - Unstated:
-     - TROPESS FS `x_h2o`. It is the same MUSES algorithm as RS, so probably
-       dry, but needs confirming.
-     - IASI MUSICA `musica_h2o` (`ppmv`): the product documentation needs
-       checking.
+   - Not stated in the files (the headers say nothing either way), but
+     **dry per Sarkar et al. (2026)**:
+     - IASI MUSICA H2O: the paper describes it as "VMR relative to dry air
+       (ppmv)". That is for the L3 product, which is built from the same L2pp
+       retrieval.
+     - TROPESS FS `x_h2o`: the paper's Table 1 defines satellite VMR as
+       "relative to dry air", and FS is the same MUSES algorithm as RS, whose
+       files say dry explicitly. The paper does not call out FS by name.
 5. **Options.**
    - **A (recommended):** separate canonical names that carry the basis
      (e.g. `..._mole_fraction_dry_air` / `..._mole_fraction_in_air`). Each is
@@ -342,8 +351,12 @@ expected mismatch is zero, with a 1-ulp tolerance stated if it is not.
      HDO needs the matching H2O value. That is a derivation, which the guide's
      "exactly represents the original data" rules out without approval.
    - C: ignore the difference. Not acceptable, given point 2.
-6. **Before naming:** confirm the basis for TROPESS FS and IASI MUSICA from
-   their product documentation.
+6. **Consequence of the paper:** every mole fraction in the WISO-SAT
+   products is dry-air. The only total-air quantity on disk is MIPAS, which
+   the paper does not include (see the cross-check below). If MIPAS is out of
+   scope, a single dry-air canonical basis covers everything, with no
+   `_in_air` names needed now. Option A stays the rule for any future
+   total-air product.
 
 ## Shared geolocation store: volume estimate
 
@@ -395,19 +408,97 @@ What a shared store costs:
   grid. Every variable store keeps the orbit index, so subsetting by day or
   orbit still works without it.
 
+## Cross-check against Sarkar et al. (2026), WISO-SAT data descriptor
+
+Read 2026-10-14. The paper describes the eight products these raw files were
+gathered for (its L3 gridding is out of scope here).
+
+**Confirms earlier findings:**
+- Units:
+  - GOSAT and GOSAT-2 `XH2O` in ppmv dry and δD in per mil;
+  - SCIAMACHY and TROPOMI columns in molec cm-2;
+  - AIRS and CrIS on 17 levels, publishing the HDO/H2O ratio (not δD).
+- The SCIAMACHY product is SRON's L2 HDO/H2O columns (Schneider et al. 2018),
+  i.e. `HDO_SICORv10`, 2003-2012. It publishes no δD; WISO-SAT derives it.
+- TES stores HDO and H2O as one stacked state vector (finding 2).
+- **Pre-filtered sources:**
+  - The TROPESS Summary (RS) files "include only retrievals passing internal
+    convergence and sensitivity checks".
+  - GOSAT and GOSAT-2 FOCAL v3.0 have undergone "rigorous multi-stage
+    product-level quality control". This matches the all-flag-0 GOSAT files.
+- The TROPESS FS kernel is logarithmic (HDO/H2O in ln space). This is
+  consistent with treating `observation_error_h2o` as log-space.
+
+**Corrects or adds:**
+1. **MIPAS is not part of WISO-SAT.** The paper's SCIAMACHY is the SRON
+   column product, not MIPAS limb profiles. `SCIAMACHY/H2O` and
+   `SCIAMACHY/HDO` (MIPAS 2PE/2PS files, 2002-2012) look like a download that
+   picked up the wrong Envisat instrument. That changes decision 7: the
+   question is whether MIPAS is in scope at all, not how to name it.
+2. **The dry-air basis is settled by the paper** for IASI and TROPESS FS (see
+   the dry-air section, point 4).
+3. **Upstream / WISO-SAT filtering guidance to record in metadata (L2-10),
+   not apply:**
+   - TROPOMI: iterations <= 10, SZA <= 70°, cloud optical thickness < 0.3,
+     surface albedo >= 0.02, plus the clear-sky criteria of Schneider et al.
+     (2022) Table 1.
+   - SCIAMACHY:
+     - flag 0, iterations < 12, SZA < 70°;
+     - 0.7 <= H2O/H2O_apriori <= 1.3 and 0.9 <= CH4/CH4_apriori <= 1.1;
+     - -600 < δD < 0 per mil;
+     - log(RMS) within ±6σ of the median, log uncertainties within ±5σ.
+   - TROPESS Standard (FS): DOF >= 1, COD <= 0.5.
+   - TES: strict COD <= 0.5 and DOF >= 1; relaxed COD <= 3.6 and DOF >= 0.5.
+   - These are WISO-SAT's choices, citing the product papers. Each store's
+     metadata should name its source.
+4. **Coverage gaps against the paper's periods** (dates on disk, first ..
+   last file):
+   - **TES: 2004-09 .. 2010-12** (75 monthly files; 2005 has 11 months). The
+     paper uses TES 2004-2015 (Table 2). 2011-2015 is missing from disk, or
+     was deliberately not downloaded.
+   - **AIRS: RS 2002-09 .. 2020-03, FS 2021-02 .. 2024-09.** That leaves a
+     ~10-month gap (2020-04 .. 2021-01) between the two streams, against the
+     paper's continuous 2002-2024.
+   - CrIS: SNPP RS 2015-12 .. 2021-05 and JPSS1 FS 2021-04 .. 2024-09; they
+     overlap by two months.
+   - The others match the paper or exceed it: TROPOMI 2017-11 .. 2024-05
+     against the paper's 2019-2021; SCIAMACHY 2003-01 .. 2012-04; GOSAT
+     2009-2021; GOSAT-2 2019-2021; IASI L2 2014-2020.
+5. **IASI:** the paper grids MUSICA *L3*, the KIT data bag excluded here. The
+   `IASI_L2` files (`L2pp`, the a posteriori processed L2 of Diekmann et al.
+   2021) are the L2 source of the same data. They are valid L2 but are not
+   what WISO-SAT itself read.
+6. *Aside (L3, out of scope):* the paper states the WISO-SAT TROPOMI
+   `deltad_1deg` is in per mil. The `TROPOMI_averaged_files` sampled before
+   the L3 exclusion had a median of -0.175, which is a fraction, and carry no
+   `units` attribute. Worth raising with the authors if those files are the
+   published ones.
+
+**Previous answers re-checked:**
+- Unit verdicts: unchanged.
+- TES column label correction: unchanged. The paper does not address it; the
+  integration test stands.
+- Geolocation estimate: unchanged, except that the MIPAS rows drop out if
+  MIPAS is out of scope.
+- Withdrawn: the earlier recommendation of `mipas` as `data_source`. It is
+  superseded by finding 1.
+
 ## Open decisions
 
 6. **Geolocation:** confirm one shared geolocation store per product (leaning
    yes), and whether it also carries the per-observation pressure grid
    (recommended).
-7. **MIPAS `data_source` in store names:** keeping the raw directory as
-   `SCIAMACHY/` is fine. But the files declare `sensor: MIPAS`, and SICOR
-   SCIAMACHY water stores would sit beside them, so the stores should use
-   `mipas` as `data_source`. Recommended: `mipas` in store names, raw
-   directory unchanged. Needs confirmation.
+7. **MIPAS scope:** `SCIAMACHY/H2O` and `SCIAMACHY/HDO` hold MIPAS, which is
+   not in WISO-SAT.
+   - Recommended: exclude them; the SCIAMACHY product is `HDO_SICORv10`.
+   - If they are kept, they need a `mipas` data source, because a `sciamachy`
+     name would misattribute the instrument.
+11. **Coverage gaps:** TES 2011-2015 and AIRS 2020-04 .. 2021-01 are absent
+    from disk. Are they a download gap to fill, or intended?
 8. **Mole fraction unit:** `1e-6` (recommended) or `1`.
-9. **Dry vs total air:** option A (separate canonical names), pending the
-   TROPESS FS and IASI documentation check.
+9. **Dry vs total air:** every in-scope mole fraction is dry-air (files
+   plus the paper), so use one dry-air basis now and keep option A as the
+   rule for any future total-air product.
 10. **TES:** allow splitting the stacked `Species` array into HDO and H2O
     stores, and declare the corrected column unit.
 5. *(deferred)* The production variable subset.

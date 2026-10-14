@@ -20,12 +20,14 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-Await the user's decisions 6-10 in the draft (geolocation store, MIPAS
-data_source name, mole-fraction unit, dry vs total air, TES split). Pending a
-docs check: dry/total-air basis of TROPESS FS `x_h2o` and IASI `musica_h2o`.
+Draft cross-checked against Sarkar et al. (2026), the WISO-SAT data descriptor
+(the user supplied the PDF; it is not in the repo). Await the user's
+decisions 6-11 in the draft: geolocation store, MIPAS scope (it is not in
+WISO-SAT), mole-fraction unit, single dry-air basis, TES split (including the
+kernel blocks), and coverage gaps (TES 2011-2015, AIRS 2020-04..2021-01).
 Then rebuild the nomenclature table, move the rules into the style guide and
 the rows into `nomenclature_data.md`, and delete the draft. Decision 5
-(variable subset) is deliberately deferred.
+(variable subset) is deferred.
 
 ## Open questions
 
