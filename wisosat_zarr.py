@@ -167,6 +167,11 @@ def build(settings):
         f'{len(missing)} days absent upstream, as declared'
     )
 
+    # the version names every store, so it is checked on the first granule
+    # before any repository is created under a name that may be wrong
+    time = time_source(product)
+    check_versions([reader.read_granule(granules[0], [time], time)], settings)
+
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
     repositories, states = {}, {}
     for store in stores:
@@ -194,27 +199,26 @@ def build(settings):
     ]
     LOG.info(f'{len(batches)} batches from granule {start}')
 
-    time = time_source(product)
+    # every source of every store not yet complete. A store ahead of the
+    # restart point needs nothing from the first batches but everything after,
+    # so the list is fixed for the whole pass rather than per batch
+    incomplete = [store for store in stores if states[store]['n_granules'] < len(granules)]
+    sources = sorted(
+        {time} | {
+            source for store in incomplete
+            for source in store_sources(product, store).values()
+        }
+    )
     written = {store: 0 for store in stores}
     masked = {store: {} for store in stores}
     versions = None
-    source_reader = None
+    source_reader = Reader(reader, sources, time, num_workers)
     try:
+        pending = source_reader.submit(granules[batches[0][0]:batches[0][1]])
         for position, (begin, end) in enumerate(batches):
             needed = [store for store in stores if states[store]['n_granules'] < end]
-            sources = sorted(
-                {time} | {
-                    source for store in needed
-                    for source in store_sources(product, store).values()
-                }
-            )
-            # the set of stores still behind only shrinks, so the source list
-            # is fixed by the first batch; a store that was ahead simply
-            # receives nothing until the pass catches up with it
-            if source_reader is None:
-                source_reader = Reader(reader, sources, time, num_workers)
-                pending = source_reader.submit(granules[begin:end])
             datas = source_reader.collect(pending)
+            # the next batch is read while this one is written
             if position + 1 < len(batches):
                 nxt = batches[position + 1]
                 pending = source_reader.submit(granules[nxt[0]:nxt[1]])
@@ -252,8 +256,7 @@ def build(settings):
                 f'({sum(data.n_obs for data in datas)} obs)'
             )
     finally:
-        if source_reader is not None:
-            source_reader.close()
+        source_reader.close()
 
     for store in stores:
         LOG.info(
