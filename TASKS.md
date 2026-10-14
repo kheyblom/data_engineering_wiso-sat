@@ -29,6 +29,8 @@ I want you to build the codebase. Design the codebase to be consistent with the 
     - every product keeps a tiny fixture, and the shared end-to-end test runs all of them after any change to shared code;
     - scale settings (batching, caches, memory) live in per-product config, not code.
 
+Progress: Shared pipeline, TROPOMI reader, key, configs and fixture built 2026-10-14; the end-to-end fixture test passes (17 cases). Store naming and the one-pass build decided 2026-10-14. Remaining: the second product reader at fixture level (needs its nomenclature rows first).
+
 
 # 5. Create a testing plan for the codebase
 Develop a plan to test this codebase so that we know that it works before we move to production runs.

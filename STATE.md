@@ -5,34 +5,46 @@ Read this first in a new session. Update it whenever work lands.
 ## Status (2026-10-14)
 
 - **Tasks 1-3 done.** Root `CLAUDE.md`; repo on GitHub (SSH remote, `main`).
-- **One codebase for all WISO-SAT L2 products** (user decision, 2026-10-14).
-  The docs are restructured; **nothing is built yet**.
-  - Root `CLAUDE.md`: scope, product table, governing rules, design
-    conditions.
-  - `docs/products/*.md`: per-product reader facts, measured from header
-    reads and sampled values.
-  - `docs/l2-survey.md`: cross-product units, value checks, dry-air basis,
-    geolocation estimate, and the Sarkar et al. (2026) cross-check.
-  - `tools/survey/`: the scripts behind that evidence.
-  - `notebooks/`: gitignored exploration.
-- **Task 3 closed.**
-  - The L2 rules are in the style guide (`style_guides` `7bc9f72`,
-    `7137951`).
-  - The 16 TROPOMI rows are in `nomenclature_data.md` (`style_guides`
-    `fd94a93`, pushed).
-  - The subset, the naming rule and the source-to-canonical map are in
-    `docs/products/tropomi.md` ("Production subset").
+- **Task 4 in progress: the shared pipeline and the TROPOMI reader are built,
+  and the fixture passes.**
+  - Layout and usage are in `CLAUDE.md` ("Layout").
+  - `validation/test_pipeline.py` runs 17 cases on the TROPOMI fixture, all
+    passing. They cover:
+    - a clean build and full verification;
+    - a no-op re-run, and resume from a simulated kill;
+    - tamper detection;
+    - four build guards;
+    - the finalize sequence.
+  - The fixture is already staged at
+    `/glade/derecho/scratch/kheyblom/data/wisosat_fixture/` (5 orbits,
+    38,055 obs).
+  - `config/tropomi/config_zarr.yaml` is written but **not run**; its scale
+    settings are bench starting points.
+- **Decided 2026-10-14 during task 4 (user):**
+  - Stores are named `wisosat.<product>.<version>.inst.native_swath.<variable>.zarr`.
+    The version is taken from the file attributes (TROPOMI processor `8.1` ->
+    `v_8_1`), and there is no product token.
+  - One pass, many stores: each granule is read once and written to every
+    store of the config.
+  - The raw root moved to `data/wisosat/raw/`.
 - **Elsewhere:** GLEAM and MSWEP carry a deferred task 2 (add `cdm_data_type:
   Grid`; `standard_name` from the source only). Both are pushed.
 
-## Next: task 4 (do not start until the user asks)
+## Next (task 4, in order)
 
-1. Write `nomenclature-key_tropomi.md` from the map in
-   `docs/products/tropomi.md`. It is machine read; model it on
-   `data_engineering_mswep/nomenclature-key_mswep.md`.
-2. Design the shared reader interface.
+1. **Second reader at fixture level (design condition 1), before any TROPOMI
+   production run.** GOSAT is the cheapest; TES is the strongest test.
+   - Its variables need rows in `nomenclature_data.md` first, and the user
+     reviews style_guides edits before they are committed.
+   - This is also the step for the cross-product naming pass on kernels,
+     priors and dry-air columns (see below).
+   - Share only what the second reader actually needs; then run
+     `test_pipeline.py` for both products.
+2. **Check the citations** in `config/tropomi/config_zarr.yaml` `references`
+   (DOI, pages) before production.
+3. Then task 5 (`TESTING.md`: the bench plan) and task 6.
 
-## Decisions carried into task 4 (2026-10-14)
+## Decisions carried into task 4 (2026-10-14, still binding)
 
 - **Subset:** 16 one-dimensional stores, ~1.7 TB uncompressed:
   - the core 7;

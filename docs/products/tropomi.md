@@ -14,7 +14,13 @@ is in `docs/l2-survey.md`.
 
 - **Files:** 31,492 orbits from 2017-11-08 to 2024-05-30. Orbits per day
   vary (5-14 seen); not every orbit has a file. Product version `0003` (from
-  the filename); processor version `8.1` (root `version` attribute).
+  the filename); processor version `8.1` (root `version` attribute) in all 11
+  files sampled across 2017-2024 (2026-10-14). The stores are named by the
+  processor version.
+- **Missing days:** 70 days between the first and last orbit have no day
+  directory (listed 2026-10-14, now `expected_missing_days` in
+  `config/tropomi/config_zarr.yaml`). The tree also holds 195 stray
+  `.DS_Store` files, which the reader skips.
 - **Groups:** there are no root variables, so open each group with `group=`.
   - `target_product`: deltad, h2o/hdo columns, precisions, averaging kernels,
     a priori profiles.
@@ -25,8 +31,10 @@ is in `docs/l2-survey.md`.
   flattened in scanline-then-pixel order (e.g. 4173 x 215 = 897,195).
   - Scanline = i // 215 and ground pixel = i % 215 within an orbit. The
     verifier must confirm this for every orbit.
-  - `nobs` is ~697,800 per orbit in 2018-2019 and exactly 896,980 in every
-    orbit sampled from 2020 on (the Aug 2019 along-track resolution change).
+  - `nobs` is ~697,800 per orbit in 2018-2019 and ~897,000 from 2020 on
+    (the Aug 2019 along-track resolution change), but varies more than that:
+    625,220 to 1,204,215 were seen in 11 files sampled 2026-10-14. Each is a
+    whole number of 215-pixel scanlines.
   - The record totals ~2.6e10 observations: ~105 GB uncompressed per 1-D
     float32 variable, ~5.2 TB per `(obs, 50)`.
 - **Secondary dims:**
@@ -41,8 +49,9 @@ is in `docs/l2-survey.md`.
 - **Flags:** `quality_flag`, `convergence` and `glintflag` are "Not
   implemented". `processing_quality_flags` is the real flag (CF
   `flag_masks`/`flag_values`).
-- **Storage:** variables are uncompressed, one HDF5 chunk spanning the whole
-  variable, so reading one variable of one orbit is ~5 MB.
+- **Storage:** each variable is one HDF5 chunk spanning the whole variable,
+  zlib level 1 with shuffle (corrected 2026-10-14; earlier noted as
+  uncompressed). Reading the 19 variables of one orbit took 2.6 s cold.
 - **Units:**
   - `deltad` is a fraction (`1`; median -0.25), so it converts x 1000 to per
     mil.
@@ -59,7 +68,7 @@ is in `docs/l2-survey.md`.
   - The column kernels reach p99 ~700 in some layers; this is unexplained and
     not a unit issue.
 
-## Build details (task 4)
+## Build details (built 2026-10-14; fixture passes, bench next)
 
 - **Granule:** an orbit. The granule index has ~31.5k entries and is stored as
   one chunk. Resume starts after the last committed orbit, whose index entry
@@ -69,6 +78,16 @@ is in `docs/l2-survey.md`.
   single writer.
 - **Missing days:** declared in config as `expected_missing_days`. The build
   fails on any gap that is not declared.
+- **Fill as measured in orbit 13847:** the float fill 9.96921e36 occurs in
+  every float source of the subset except `solar_zenith_angle`, `lat` and
+  `lon`. The int fill -2147483647 occurs in `iterations` and both
+  spectral-point counts, but not in `processing_quality_flags`.
+  `deltad_precision` also holds real NaNs (5,447 in that orbit), which stay
+  NaN. The verifier fails if a declared fill never occurs over the record, or
+  if an undeclared netCDF default fill occurs anywhere.
+- **Fixture:** `validation/stage_tropomi.py` writes orbits 13857, 13870,
+  13871, 13899 and 13900, each cut to 23-47 mid-orbit scanlines (38,055 obs).
+  2020-06-18, a real upstream gap, falls between them.
 - **Chunking starting points for the bench** (the guide allows 5-40 MiB):
   - 4,194,304 obs for 1-D float32 (16 MiB);
   - 131,072 obs for `(obs, 50)` float32 (25 MiB).

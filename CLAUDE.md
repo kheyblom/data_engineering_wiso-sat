@@ -35,7 +35,7 @@ stores.
 
 | product | raw subpath | granule | status |
 | --- | --- | --- | --- |
-| TROPOMI (SRON HDO L2, 0003) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | designing |
+| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | fixture passes |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O separately | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | daily file | later |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
@@ -51,16 +51,32 @@ stores.
 - Coverage gaps are flagged and not chased: TES 2011-2015 and AIRS
   2020-04 .. 2021-01 are absent from disk.
 
-## Planned layout (task 4; nothing built yet)
+## Layout (built 2026-10-14)
 
 ```
-wiso_sat_zarr.py, verify_wiso_sat_zarr.py, finalize_wiso_sat_zarr.py, submit_wiso_sat_zarr.sh
-products/<product>.py         # reader: list granules, open one as a standard obs-indexed Dataset
-utils/                        # granule index, geolocation, write/resume, nomenclature, units, logging
-config/<product>/*.yaml
-nomenclature-key_<source>.md  # one per product, machine read
-validation/                   # per-product fixtures; one end-to-end test runs them all
+wisosat_zarr.py               # build: one pass over the granules writes every store of a config
+verify_wisosat_zarr.py        # read-only; every observation, h5py vs the build's netCDF4
+finalize_wisosat_zarr.py      # --status, then --attrs, --tag, --gc (dry run without --apply)
+submit_wisosat_zarr.sh        # CONFIG=... [VERIFY=1] ./submit_wisosat_zarr.sh; show the user first
+products/<product>.py         # reader: list_granules, read_granule, decode_time, check_granule
+utils/                        # granules (shared types), nomenclature, path_utils, zarr_utils
+config/<product>/config_zarr*.yaml
+nomenclature-key_<product>.md # machine read: variable, coordinate and frequency tables
+validation/stage_<product>.py, validation/test_pipeline.py
 ```
+
+- **One config = one product; one run builds many stores.** The geolocation
+  store is always built; `variables` lists canonical names, and quality flags
+  are mandatory. Each granule is read once, in a `spawn` process pool, and
+  appended to every store. Each store is its own repo and resumes from its own
+  granule index.
+- **Granule index:** six coordinates on a `granule` dimension in every store,
+  appended in the same commit as the data.
+- **Test after any shared change** (condition 2), from the repo root:
+  `uv run python validation/stage_<product>.py` once, then
+  `TMPDIR=<scratch> uv run python validation/test_pipeline.py` (~25 s per
+  product, login node). `utils` and `products` are installed editable
+  (hatchling) so `validation/` can import them.
 
 **Agreed conditions for the shared design:**
 1. **Don't generalise early.** After TROPOMI's reader and fixture pass, and
@@ -90,7 +106,10 @@ validation/                   # per-product fixtures; one end-to-end test runs t
 
   Any deviation needs the user's approval.
 - **Naming, units and attributes:**
-  - Store names: `<source>.<version>.<product>.inst.native_swath.<variable>.zarr`.
+  - Store names: `wisosat.<product>.<version>.inst.native_swath.<variable>.zarr`
+    (decided 2026-10-14). The version is the processor version from the files'
+    attributes (TROPOMI `v_8_1`), declared in config and checked on every
+    granule. There is no product token.
   - Canonical units: δD in `1e-3`; columns in `mol m-2` (x 1e4 / N_A from
     molec cm-2); mole fractions in `1e-6`, dry-air basis.
   - Never set `standard_name`; a source one is retained unchanged.
@@ -118,8 +137,7 @@ Read those repos' `CLAUDE.md` and `TESTING.md` before designing. These were
 established by measurement there and apply here:
 
 - Python capped `<3.14` (numpy segfault in xarray CF masking on 3.14).
-- No `parallel=True` in `open_mfdataset` (HDF5 crashes when threaded).
-- Clear netCDF `.encoding` and rebuild it; the zarr backend rejects it.
+- HDF5 is not thread safe: read granules in processes, never threads.
 - Everything derived from YAML config; no hardcoded paths, variables or
   chunks.
 - Each store built from raw and verified against raw independently.
@@ -129,9 +147,9 @@ established by measurement there and apply here:
   - `--attrs` cannot drop variable attributes.
 - A store carries `history`, `date_created`, and a `verification` attribute
   only once the verifier has actually run on it.
-- Resume works through icechunk commits. Each `to_icechunk` write forks the
-  session, so unreachable snapshots are normal; `garbage_collect` alone cleans
-  them.
+- Resume works through icechunk commits. Writes here are numpy, not dask, so
+  builds leave no unreachable snapshots; `garbage_collect` cleans any that a
+  killed run leaves.
 - Delete a fixture store before re-running it: builds resume, so a complete
   store is a silent no-op.
 - Batch jobs:
@@ -144,6 +162,14 @@ established by measurement there and apply here:
 `append`/`region` write strategies, both of which assume a lat/lon grid. L2
 uses obs-only chunking, appends in granule order, and resumes from the
 granule index.
+
+**Learned here (2026-10-14):**
+- An xarray append replaces the group's attributes with the appended
+  dataset's, and `xr.merge` drops them. `write_append` carries them explicitly.
+- A float `_FillValue` is stored as base64 in zarr v3 attributes; check the
+  array's `fill_value` instead.
+- Integer stores with a `_FillValue` decode to float64 under xarray's default
+  masking. They are stored as int32.
 
 ## Conventions
 
