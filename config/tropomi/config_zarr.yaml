@@ -195,16 +195,16 @@ attrs:
   institution: SRON Netherlands Institute for Space Research (source data)
   creator_name: Kyle Heyblom
   creator_email: heyblom@umich.edu
-  # Schneider et al. checked 2026-10-14 against the AMT article page. The
-  # Sarkar et al. data descriptor was not found by search; complete its
-  # citation from the copy the user read before production
+  # both checked 2026-10-14 against their DOI records (Sarkar et al. has no
+  # volume or article number yet)
   references: >-
     Schneider, A., Borsdorff, T., aan de Brugh, J., Lorente, A., Aemisegger,
     F., Noone, D., Henze, D., Kivi, R., and Landgraf, J. (2022), Retrieving
     H2O/HDO columns over cloudy and clear-sky scenes from the Tropospheric
     Monitoring Instrument (TROPOMI), Atmos. Meas. Tech., 15, 2251-2275,
-    doi:10.5194/amt-15-2251-2022. Sarkar et al. (2026), the WISO-SAT data
-    descriptor.
+    doi:10.5194/amt-15-2251-2022. Sarkar, M., Dee, S., Frazer, M., Bailey, A., Good, S., et al. (2026), WISO-SAT:
+    A global database of stable hydrogen isotopes in water vapor from eight
+    satellite missions, Scientific Data, doi:10.1038/s41597-026-08218-8.
   related_store: >-
     wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
     time, lat and lon for every obs; every other store of this product shares

@@ -10,19 +10,11 @@ Read this first in a new session. Update it whenever work lands.
   both products** (~75 s on a login node). Layout and usage are in `CLAUDE.md`.
   - Fixtures are staged under `/glade/derecho/scratch/kheyblom/data/wisosat_fixture/`.
   - Neither production config has been run.
-- **Waiting on the user:**
-  1. **Four new rows in `nomenclature_data.md`, drafted and NOT committed**
-     (style_guides working tree):
-     - `water_vapor_column_mole_fraction_dry_air` and `_standard_error`;
-     - `quality_flags_retrieval_delta_d` and `quality_flags_retrieval_h2o`.
-
-     The user reviews the diff, possibly with `#@CLAUDE` comments, then it is
-     committed and pushed. The GOSAT key already uses these names; rename
-     both together if review changes them.
-  2. **The Sarkar et al. (2026) citation.** Web search found no WISO-SAT data
-     descriptor, so `references` in both production configs names it without
-     a DOI. Schneider et al. (2022) is checked: AMT 15, 2251-2275,
-     doi:10.5194/amt-15-2251-2022.
+- **Task 4 closed 2026-10-14.**
+  - The four GOSAT rows are committed in style_guides (`3966e69`).
+  - Both citations are checked against their DOI records: Schneider et al.
+    2022, and Sarkar et al. 2026 (Scientific Data,
+    doi:10.1038/s41597-026-08218-8; no volume or article number yet).
 - **Decided 2026-10-14 (user), all reflected in the code and docs:**
   - **Store names:**
     - `wisosat.<product>.<version>.inst.native_swath.<variable>.zarr`;
@@ -38,15 +30,13 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-1. After the rows are committed, close task 4. Design condition 1 is met at
-   fixture level.
-2. **The cross-product naming pass** for kernels, priors and dry-air columns.
-   It was planned for the second-reader step; GOSAT has its column kernel, a
-   priori, dry column and pressure grid waiting. It does not block TROPOMI,
-   whose production subset excludes them.
-3. Task 5: `TESTING.md`, the bench plan (tiny fixture, then bench, then
-   production), with any batch job shown to the user first.
-4. GOSAT-2: a config pair using `product: gosat2`. It needs a small shared
+1. **Task 5 (in progress):** `TESTING.md`, the testing plan from fixture to
+   bench to production. Show the user any batch job before submitting it.
+2. **The cross-product naming pass** for kernels, priors and dry-air columns,
+   planned for the second-reader step and still open. GOSAT's kernel, a
+   priori, dry column and pressure grid wait on it. It does not block
+   TROPOMI, whose production subset excludes them.
+3. **GOSAT-2:** a config pair using `product: gosat2`. It needs a small shared
    change so the reader and key can be named apart from the product.
 
 ## Decisions carried into task 4 (2026-10-14, still binding)

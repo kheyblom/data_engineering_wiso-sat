@@ -213,10 +213,12 @@ attrs:
   institution: Institute of Environmental Physics (IUP), University of Bremen (source data)
   creator_name: Kyle Heyblom
   creator_email: heyblom@umich.edu
-  # the Sarkar et al. data descriptor was not found by search (2026-10-14);
-  # complete its citation from the copy the user read before production
+  # Sarkar et al. checked 2026-10-14 against its DOI record (no volume or
+  # article number yet)
   references: >-
-    Sarkar et al. (2026), the WISO-SAT data descriptor. FOCAL Product
+    Sarkar, M., Dee, S., Frazer, M., Bailey, A., Good, S., et al. (2026), WISO-SAT:
+    A global database of stable hydrogen isotopes in water vapor from eight
+    satellite missions, Scientific Data, doi:10.1038/s41597-026-08218-8. FOCAL Product
     Specification Document Version 3, www.esa-ghg-cci.org.
   related_store: >-
     wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
