@@ -1,3 +1,15 @@
+[build-system]
+# the project is installed (editable, by uv sync) for one reason, as in
+# data_engineering_gleam: so that `from utils...` and `from products...`
+# resolve from validation/. Without it only the repo root works, because a
+# script's own directory is what lands on sys.path.
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# the entry points stay scripts; only the two packages are installed
+packages = ["utils", "products"]
+
 [project]
 name = "data_engineering_wiso-sat"
 version = "0.1.0"

@@ -1,6 +1,6 @@
 We need to build one codebase that prepares zarr stores for all of the WISO-SAT Level 2 data products (TROPOMI, SCIAMACHY, GOSAT, GOSAT-2, AIRS, CrIS, IASI, TES), with separate configs and nomenclature keys for each product. We design around TROPOMI first, then extend to the other products. (Restructured 2026-10-14 from a TROPOMI-only codebase; approved by the user.)
 
-Raw data is located here: @/glade/u/home/kheyblom/scratch/data/wiso-sat/raw/
+Raw data is located here: @/glade/u/home/kheyblom/scratch/data/wisosat/raw/
 We will create one zarr store per variable covering the full record of each product (changed from one store per day, 2026-10-14). Level 2 data only.
 
 # 1. init CLAUDE.md for the codebase [COMPLETED 2026-10-13]

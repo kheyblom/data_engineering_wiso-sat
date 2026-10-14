@@ -7,7 +7,7 @@ is in `docs/l2-survey.md`.
 ## Raw data (measured 2026-10-13/14)
 
 ```
-/glade/derecho/scratch/kheyblom/data/wiso-sat/raw/TROPOMI/tropomi.grid.surfsara.nl/
+/glade/derecho/scratch/kheyblom/data/wisosat/raw/TROPOMI/tropomi.grid.surfsara.nl/
   hdo/<YYYY>/<MM>/<DD>/<orbit>/s5p_l2_hdo_<product_version>_<orbit:05d>.nc
   hdo/2017/11/08/373/s5p_l2_hdo_0003_00373.nc     (~1.1 GB each)
 ```

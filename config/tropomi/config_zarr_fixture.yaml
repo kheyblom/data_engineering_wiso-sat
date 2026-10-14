@@ -1,0 +1,87 @@
+# TROPOMI pipeline test fixture: five real orbits cut to a scanline window
+# each, staged by validation/stage_tropomi.py. Every path differs from
+# production, so this can never address a real store.
+#
+# What the fixture is built to exercise:
+# - 2020-06-18 is a real upstream gap, so the missing-day check sees one;
+# - windows of 23-47 scanlines give orbits of different sizes, so appends land
+#   mid-chunk at obs: 5000;
+# - granules_per_commit: 2 gives three commits per store, and so resume points;
+# - num_workers: 2 runs reads through the process pool, as production does;
+# - each window holds valid retrievals, float and int fill, and source NaNs.
+product: tropomi
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/raw/tropomi
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/zarr/tropomi
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_tropomi_fixture.log
+version: '8.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+variables:
+  - water_vapor_column_delta_d
+  - water_vapor_column_delta_d_standard_error
+  - water_vapor_column_h2o
+  - water_vapor_column_h2o_standard_error
+  - water_vapor_column_hdo
+  - water_vapor_column_hdo_standard_error
+  - quality_flags_retrieval
+  - iterations_retrieval
+  - solar_zenith_angle
+  - optical_thickness_scattering_layer
+  - height_scattering_layer
+  - albedo_surface_2365nm
+  - chi_squared_retrieval
+  - chi_squared_prefit
+  - spectral_point_count_retrieval
+  - spectral_point_count_prefit
+
+expected_missing_days:
+  - 2020-06-18
+
+source_fill_values:
+  target_product/deltad: [9.96921e+36]
+  target_product/deltad_precision: [9.96921e+36]
+  target_product/h2o_column: [9.96921e+36]
+  target_product/h2o_column_precision: [9.96921e+36]
+  target_product/hdo_column: [9.96921e+36]
+  target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/iterations: [-2147483647]
+  side_product/aerosol_optical_thickness: [9.96921e+36]
+  side_product/aerosol_height: [9.96921e+36]
+  side_product/surface_albedo: [9.96921e+36]
+  diagnostics/chi_squared: [9.96921e+36]
+  diagnostics/chi_squared_prefit: [9.96921e+36]
+  diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
+  diagnostics/number_of_spectral_points_in_prefit: [-2147483647]
+
+chunks:
+  obs: 5000
+  granule: 4
+granules_per_commit: 2
+num_workers: 2
+
+filtering_guidance: >-
+  TEST FIXTURE. See config_zarr.yaml for the real guidance.
+
+attrs:
+  title: 'TEST STORE -- WISO-SAT TROPOMI {version_label}, staged subset, not for use: {variable}'
+  summary: >-
+    A correctness fixture, NOT data: five orbits cut to a scanline window each.
+  Conventions: ACDD-1.3
+  source: >-
+    TEST FIXTURE, subset from the SRON S5P L2 HDO product {version_label}
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr
+  comment: >-
+    TEST FIXTURE built from config_zarr_fixture.yaml by
+    validation/test_pipeline.py. Not data.
+
+# exercises the per-variable attribute path; fixture text on purpose, so it
+# can never be mistaken for a real note
+variable_attrs:
+  quality_flags_retrieval:
+    comment: TEST FIXTURE attribute for {variable}, and no other store.

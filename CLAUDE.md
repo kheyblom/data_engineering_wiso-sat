@@ -29,7 +29,7 @@ then extend to the other products (decided 2026-10-14).
 
 ## Products in scope
 
-Raw root: `/glade/derecho/scratch/kheyblom/data/wiso-sat/raw/`. Each line is
+Raw root: `/glade/derecho/scratch/kheyblom/data/wisosat/raw/`. Each line is
 one product: one observation axis, one geolocation store, one set of variable
 stores.
 

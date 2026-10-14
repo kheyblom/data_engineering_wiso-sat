@@ -1,0 +1,228 @@
+# Production config for the TROPOMI (SRON HDO L2, processor 8.1) stores.
+#
+# One run builds the geolocation store plus one store per variable listed, in a
+# single pass over the orbits. NOT YET RUN: the scale settings below are the
+# starting points from docs/products/tropomi.md, to be set by the bench, and
+# design condition 1 (a second product's reader at fixture level) comes before
+# any production run.
+product: tropomi
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/TROPOMI/tropomi.grid.surfsara.nl/hdo
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, with the
+  # data source wisosat.<product> and no product token (decided 2026-10-14)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_tropomi.log
+# The processor version, the root 'version' attribute of every orbit file.
+# Declared so the stores can be named before a file is opened; the build and
+# the verifier check every orbit against it. The '0003' in the file names is the
+# product version and does not name the stores.
+version: '8.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+# Canonical names; each needs a row in nomenclature-key_tropomi.md. The
+# geolocation store is always built. quality_flags_retrieval is mandatory: the
+# style guide requires quality flags in every production run.
+variables:
+  # core: the retrieval and its flag
+  - water_vapor_column_delta_d
+  - water_vapor_column_delta_d_standard_error
+  - water_vapor_column_h2o
+  - water_vapor_column_h2o_standard_error
+  - water_vapor_column_hdo
+  - water_vapor_column_hdo_standard_error
+  - quality_flags_retrieval
+  # every input to the Schneider et al. (2022) Table 1 filters
+  - iterations_retrieval
+  - solar_zenith_angle
+  - optical_thickness_scattering_layer
+  - height_scattering_layer
+  - albedo_surface_2365nm
+  - chi_squared_retrieval
+  - chi_squared_prefit
+  - spectral_point_count_retrieval
+  - spectral_point_count_prefit
+
+# Days between the first and last orbit with no orbit directory, as SRON
+# distributes them (listed 2026-10-14). The build fails on any other gap: a
+# missing day not listed here is an incomplete download until shown otherwise.
+expected_missing_days:
+  - 2017-11-18
+  - 2017-11-30
+  - 2017-12-01
+  - 2017-12-02
+  - 2017-12-03
+  - 2017-12-04
+  - 2017-12-05
+  - 2017-12-06
+  - 2017-12-07
+  - 2017-12-08
+  - 2017-12-09
+  - 2017-12-10
+  - 2017-12-11
+  - 2017-12-15
+  - 2017-12-20
+  - 2017-12-21
+  - 2018-01-06
+  - 2018-01-10
+  - 2018-01-11
+  - 2018-01-12
+  - 2018-01-13
+  - 2018-01-14
+  - 2018-01-15
+  - 2018-01-16
+  - 2018-01-17
+  - 2018-01-18
+  - 2018-01-19
+  - 2018-01-20
+  - 2018-01-21
+  - 2018-01-22
+  - 2018-01-23
+  - 2018-01-24
+  - 2018-01-25
+  - 2018-01-26
+  - 2018-01-27
+  - 2018-02-12
+  - 2018-03-02
+  - 2018-03-03
+  - 2018-03-04
+  - 2018-03-05
+  - 2018-03-06
+  - 2018-03-14
+  - 2020-06-18
+  - 2020-10-06
+  - 2020-10-08
+  - 2021-10-03
+  - 2022-02-07
+  - 2022-08-14
+  - 2022-08-15
+  - 2022-10-27
+  - 2022-12-06
+  - 2023-04-04
+  - 2023-04-05
+  - 2023-05-21
+  - 2023-07-02
+  - 2023-08-22
+  - 2023-10-04
+  - 2023-12-22
+  - 2024-01-01
+  - 2024-01-02
+  - 2024-01-03
+  - 2024-01-04
+  - 2024-04-10
+  - 2024-04-11
+  - 2024-04-12
+  - 2024-04-13
+  - 2024-04-14
+  - 2024-04-15
+  - 2024-04-16
+  - 2024-04-17
+
+# Fill the files use without declaring it: SRON sets no _FillValue, so missing
+# values are the netCDF default fills. Declared per source, and only where they
+# occur (measured in orbit 13847): the verifier fails if a declared value never
+# occurs over the record, and if a netCDF default fill turns up in a source not
+# listed here. Floats are masked to NaN; integers keep the value and declare it
+# as _FillValue.
+source_fill_values:
+  target_product/deltad: [9.96921e+36]
+  target_product/deltad_precision: [9.96921e+36]
+  target_product/h2o_column: [9.96921e+36]
+  target_product/h2o_column_precision: [9.96921e+36]
+  target_product/hdo_column: [9.96921e+36]
+  target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/iterations: [-2147483647]
+  side_product/aerosol_optical_thickness: [9.96921e+36]
+  side_product/aerosol_height: [9.96921e+36]
+  side_product/surface_albedo: [9.96921e+36]
+  diagnostics/chi_squared: [9.96921e+36]
+  diagnostics/chi_squared_prefit: [9.96921e+36]
+  diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
+  diagnostics/number_of_spectral_points_in_prefit: [-2147483647]
+
+# Scale settings (design condition 3: per product, never in code). Starting
+# points only, to be measured by the bench:
+# - obs: 4,194,304 is 16 MiB of float32 and 32 MiB of int64 time, inside the
+#   guide's 5-40 MiB. One chunk spans ~4.7 orbits.
+# - granule: the whole ~31.5k-entry index in one chunk.
+# - granules_per_commit: ~1.5 GB of reads per batch at 16 variables; a batch
+#   is also what a walltime kill can lose.
+# - num_workers: read processes. HDF5 is not thread safe, so reads are spread
+#   over processes, never threads.
+chunks:
+  obs: 4194304
+  granule: 65536
+granules_per_commit: 20
+num_workers: 8
+
+# The upstream filtering guidance recorded in every store's quality_filtering
+# attribute. Recorded, never applied: every observation is kept.
+filtering_guidance: >-
+  Schneider et al. (2022), Table 1. All scenes: iterations <= 10; reduced
+  chi-squared of the final fit <= 150; reduced chi-squared of the pre-fit <=
+  150; solar zenith angle <= 70 degrees. Clear sky: cloud optical thickness <
+  0.3 and surface albedo >= 0.02. Cloudy scenes: cloud height <= 2000 m and
+  cloud optical thickness > 0.3. Clear-sky and low-cloud scenes are
+  recommended; Sarkar et al. (2026) apply the all-scene and clear-sky rows.
+  Cloud optical thickness and height are optical_thickness_scattering_layer
+  and height_scattering_layer (SRON's effective scattering layer). Reduced
+  chi-squared is inferred as chi_squared_retrieval /
+  spectral_point_count_retrieval (and the prefit pair); no source defines it.
+  processing_quality_flags == 0 alone still passes unphysical delta D, so
+  apply the filters above as well.
+
+# Global attributes, identical in every store of the product except where they
+# template {variable}. Coverage, history, date_created and verification are
+# deliberately absent: finalize_wisosat_zarr.py --attrs writes them once the
+# verifier has passed.
+attrs:
+  title: >-
+    WISO-SAT TROPOMI HDO Level 2 (SRON, processor {version_label}): {variable}
+  summary: >-
+    One variable of the SRON TROPOMI HDO/H2O total column retrieval
+    (Schneider et al. 2022) as distributed for WISO-SAT, every observation of
+    the record on the native swath, stored as an icechunk-backed zarr store.
+    Join with the geolocation store of the same product on obs for time,
+    latitude and longitude.
+  Conventions: ACDD-1.3
+  source: >-
+    SRON S5P L2 HDO product {version_label} (product version 0003), one netCDF
+    file per orbit, from tropomi.grid.surfsara.nl
+  source_product_version: '0003'
+  institution: SRON Netherlands Institute for Space Research (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  # citations to check against the papers (DOI, pages) before production
+  references: >-
+    Schneider et al. (2022), Retrieving H2O/HDO columns over cloudy and
+    clear-sky scenes from the Tropospheric Monitoring Instrument (TROPOMI),
+    Atmospheric Measurement Techniques. Sarkar et al. (2026), the WISO-SAT
+    data descriptor.
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs; every other store of this product shares
+    its obs axis and granule index.
+  granule: one orbit file; granule_id is the orbit number
+  known_data_gaps: >-
+    70 days between 2017-11-08 and 2024-05-30 have no orbit files upstream;
+    they are listed in the build config (expected_missing_days). Not every
+    orbit number has a file.
+
+variable_attrs:
+  quality_flags_retrieval:
+    comment: >-
+      Mandatory. SRON's processing quality flags, with their CF flag_masks,
+      flag_values and flag_meanings as published. 0 is success. The
+      'quality_flag' and 'convergence' variables in the source are not
+      implemented and are not stored.
+  chi_squared_retrieval:
+    comment: >-
+      Unreduced. Reduced chi-squared is inferred as this divided by
+      spectral_point_count_retrieval.
+  chi_squared_prefit:
+    comment: >-
+      Unreduced. Reduced chi-squared is inferred as this divided by
+      spectral_point_count_prefit.
