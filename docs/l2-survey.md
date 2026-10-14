@@ -1,89 +1,11 @@
-# Level 2 standards — draft proposal (task 3)
+# L2 product survey (all WISO-SAT products)
 
-**Status: rules decided and moved into the style guide** (`style_guides`
-commits `7bc9f72` and `7137951`, pushed; `inst` row in `nomenclature_data.md`).
-The user's review moved the cross-cutting rules to General and replaced CF
-`featureType` with ACDD `cdm_data_type` (`Point` here). The lake never sets
-`standard_name`, but a source one (SRON's `delta_d`, `water_column`, ...) is
-retained unchanged.
-What remains here is the evidence, the unit and value survey, and the
-TROPOMI variable candidates. Once the variable rows are in
-`nomenclature_data.md`, the TROPOMI-specific facts move to `CLAUDE.md` and
-this file is deleted.
-
-Each rule names the gridded precedent it follows. The aim is that a Level 2
-store differs from a gridded one only where the data's shape forces it.
-
-## Decided (2026-10-14)
-
-- Keep every observation; no selection, no quality filtering (L2-3).
-- Temporal frequency `inst`, grid name `native_swath` (L2-9).
-- **One store per variable covering the whole record**, not one per day
-  (L2-1). Supersedes the per-day design and TASKS.md's "zarr stores for each
-  day".
-- Scope is Level 2 only; L3 gridded files in the raw tree are ignored.
-- Column amounts in `mol m-2`; δD in `1e-3` (per mil). Decided 2026-10-14,
-  after the value check below confirmed every declared unit except TES's.
-- The raw `SCIAMACHY/` directory keeps its name. Its `H2O/` and `HDO/` hold
-  MIPAS files, which are not in WISO-SAT (open decision 7).
-- One shared geolocation store per product, joined on `obs`, holding `time`,
-  `lat`, `lon` and the per-observation pressure grid. Decided 2026-10-14.
-- MIPAS (`SCIAMACHY/H2O`, `SCIAMACHY/HDO`) is excluded; the SCIAMACHY product
-  is `HDO_SICORv10`.
-- Mole fractions in `1e-6` (ppm), on a single dry-air basis. Separate
-  dry/total-air canonical names are the rule if a total-air product is ever
-  added.
-- TES: split the stacked arrays, including the 4 blocks of the kernel and
-  covariances, and declare the corrected column unit (molec cm-2).
-- Coverage gaps (TES 2011-2015, AIRS 2020-04 .. 2021-01) are flagged and not
-  chased; use the data on disk.
-
-## Evidence for TROPOMI (measured 2026-10-13)
-
-- **Files:** one per orbit, `hdo/YYYY/MM/DD/<orbit>/s5p_l2_hdo_0003_<orbit>.nc`,
-  ~1.1 GB, 5-14 orbits per day, 2017-11-08 .. 2024-05-30.
-  - Processor version `8.1` (root attribute); product version `0003` (filename).
-- **Observation layout:** `nobs` is the full L1B swath flattened in scanline
-  then pixel order (e.g. 4173 x 215 = 897,195). So scanline = i // 215 and
-  ground pixel = i % 215 within an orbit; this needs checking for every orbit.
-  - Secondary dims: `nlayer` 50, `nlevel` 51, `ncorner` 4, `nwin` 1, and
-    `ntime` 7 (a broken-down timestamp, ms resolution).
-- **Size:** 31,492 orbit files. `nobs` per orbit is ~697,800 in 2018-2019 and
-  exactly 896,980 in every orbit sampled from 2020 on (the along-track
-  resolution change of Aug 2019). The whole record is ~2.6e10 observations:
-  ~105 GB uncompressed per 1-D float32 variable, ~5.2 TB per `(obs, 50)`.
-- **Fill:** there is no `_FillValue`; missing values are `9.96921e36`.
-  - In orbit 16820, 71% of `nobs` have an `hdo_column` and 65% have
-    `processing_quality_flags == 0`.
-  - Flagged observations still carry unphysical values, e.g.
-    `deltad = -7593`.
-- **Flags:** `quality_flag` is "Not implemented"; `processing_quality_flags` is
-  the real flag.
-- **Upstream metadata:** most `standard_name`s are not CF standard names, and
-  some units are byte strings.
-- **Day boundary:** in the sampled pair, orbits did not straddle UTC midnight.
-
-## Rules
-
-Moved into the style guide's "Level 2 satellite retrieval data" section,
-which is now authoritative. The rationale and gridded precedent for each rule
-are in this file's history at `7a0af0a` (rules L2-1 .. L2-12).
-
-Design details that are the codebase's business rather than the guide's
-(they carry into task 4):
-- **Granule index.** For TROPOMI a granule is an orbit, ~31.5k entries,
-  stored as one chunk. Resume starts after the last committed granule, which
-  is written in the same commit as its data.
-- **Appends.** Orbit sizes vary, so appends do not land on chunk boundaries;
-  each append rewrites the trailing partial chunk, which is safe only with a
-  single writer.
-- **Missing days.** They are declared in config as `expected_missing_days`,
-  and the build fails on any gap that is not declared.
-- **Chunking starting points for the bench:** 4,194,304 obs for 1-D float32;
-  131,072 obs for `(obs, 50)`.
-- **Traceability.** Scanline and ground pixel are derivable from the
-  position within an orbit (i // 215, i % 215); the verifier must confirm
-  this for every orbit.
+Evidence gathered on 2026-10-13/14 while settling the Level 2 rules (now in
+the style guide) and the canonical units. Read this before writing a new
+product's reader or nomenclature key. Decisions taken from it are in the root
+`CLAUDE.md`. The original rule proposals (L2-1 .. L2-12, each with the gridded
+precedent it follows) are in this file's history at `7a0af0a`, when it was
+`tropomi/l2-standards-draft.md`.
 
 ## Units across the L2 sensors
 
@@ -169,7 +91,7 @@ Findings that change the plan:
    - The GOSAT and GOSAT-2 files contain only flag-0 soundings, so they arrive
      pre-filtered.
 
-### Canonical units (decided except mole fraction)
+### Canonical units (decided 2026-10-14)
 
 **δD → `1e-3`** *(decided)*.
 - TROPOMI converts x 1000.
@@ -181,7 +103,7 @@ Findings that change the plan:
 - TROPOMI, SCIAMACHY and TES (corrected label) all convert x 1e4 / N_A
   (= 1.66053907e-20), with N_A = 6.02214076e23 exact.
 
-**Mole fraction → `1e-6` (recommended).** Where it applies:
+**Mole fraction → `1e-6`** *(decided)*, dry-air basis. Where it applies (MIPAS rows kept for the record; MIPAS is excluded):
 
 | product | variables | conversion |
 | --- | --- | --- |
@@ -204,7 +126,7 @@ All conversions are a single multiplication applied once in float32. The
 verifier compares against `raw x factor` computed the same way, so the
 expected mismatch is zero, with a 1-ulp tolerance stated if it is not.
 
-## Dry-air vs total-air mole fraction (for discussion)
+## Dry-air vs total-air mole fraction (decided: one dry-air basis; option A for any future total-air product)
 
 1. **The two quantities.**
    - Dry-air mole fraction: x_dry = n_w / n_dry.
@@ -303,14 +225,14 @@ How to read it:
 
 What a shared store costs:
 - A variable store alone no longer says where its values are.
-- The join on `obs` relies on L2-4 (identical observation axes), which the
+- The join on `obs` relies on the identical-`obs`-axis rule, which the
   verifier already checks.
-- The guide must allow a geolocation store holding several coordinate arrays,
-  as an exception to one variable per store.
-- Recommended form, if chosen: one `<...>.geolocation.zarr` per product with
+- The guide allows the geolocation store as the one store per product that
+  holds several arrays.
+- Decided form: one `<...>.geolocation.zarr` per product with
   `time`, `lat`, `lon` and, for profile products, the per-observation pressure
-  grid. Every variable store keeps the orbit index, so subsetting by day or
-  orbit still works without it.
+  grid. Every variable store keeps the granule index, so subsetting by day or
+  granule still works without it.
 
 ## Cross-check against Sarkar et al. (2026), WISO-SAT data descriptor
 
@@ -337,11 +259,11 @@ gathered for (its L3 gridding is out of scope here).
 1. **MIPAS is not part of WISO-SAT.** The paper's SCIAMACHY is the SRON
    column product, not MIPAS limb profiles. `SCIAMACHY/H2O` and
    `SCIAMACHY/HDO` (MIPAS 2PE/2PS files, 2002-2012) look like a download that
-   picked up the wrong Envisat instrument. That changes decision 7: the
-   question is whether MIPAS is in scope at all, not how to name it.
+   picked up the wrong Envisat instrument. Decided 2026-10-14: MIPAS is
+   excluded.
 2. **The dry-air basis is settled by the paper** for IASI and TROPESS FS (see
    the dry-air section, point 4).
-3. **Upstream / WISO-SAT filtering guidance to record in metadata (L2-10),
+3. **Upstream / WISO-SAT filtering guidance to record in metadata (style guide),
    not apply:**
    - TROPOMI: iterations <= 10, SZA <= 70°, cloud optical thickness < 0.3,
      surface albedo >= 0.02, plus the clear-sky criteria of Schneider et al.
@@ -386,69 +308,3 @@ gathered for (its L3 gridding is out of scope here).
   MIPAS is out of scope.
 - Withdrawn: the earlier recommendation of `mipas` as `data_source`. It is
   superseded by finding 1.
-
-## TROPOMI variable candidates (decision 5)
-
-Proposed canonical names run general to specific, like the existing key.
-Conversions follow the decided units. "Geolocation" means the shared store,
-not a nomenclature row: its coordinates keep `time`/`lat`/`lon`/`pressure`,
-as the gridded stores keep theirs.
-
-**Recommended core: the retrieval itself, plus the mandatory flag.**
-
-| source | proposed canonical_name | units | conversion |
-| --- | --- | --- | --- |
-| `target_product/deltad` | `water_vapor_column_delta_d` | 1e-3 | x 1000 |
-| `target_product/deltad_precision` | `water_vapor_column_delta_d_standard_error` | 1e-3 | x 1000 |
-| `target_product/h2o_column` | `water_vapor_column` | mol m-2 | x 1e4 / N_A |
-| `target_product/h2o_column_precision` | `water_vapor_column_standard_error` | mol m-2 | x 1e4 / N_A |
-| `target_product/hdo_column` | `water_vapor_column_hdo` | mol m-2 | x 1e4 / N_A |
-| `target_product/hdo_column_precision` | `water_vapor_column_hdo_standard_error` | mol m-2 | x 1e4 / N_A |
-| `diagnostics/processing_quality_flags` | `retrieval_quality_flags` | 1 | none (int32; mandatory) |
-
-**Recommended for anyone comparing with a model: kernels and priors.** These
-are the 50-layer variables, ~5.2 TB each uncompressed.
-
-| source | proposed canonical_name | units | conversion |
-| --- | --- | --- | --- |
-| `target_product/h2o_column_averaging_kernel` | `water_vapor_column_averaging_kernel` | 1 | none |
-| `target_product/hdo_column_averaging_kernel` | `water_vapor_column_hdo_averaging_kernel` | 1 | none |
-| `target_product/h2o_profile_apriori` | `water_vapor_partial_column_apriori` | mol m-2 | x 1e4 / N_A |
-| `target_product/hdo_profile_apriori` | `water_vapor_partial_column_hdo_apriori` | mol m-2 | x 1e4 / N_A |
-| `meteo/dry_air_subcolumns` | `dry_air_partial_column` | mol m-2 | x 1e4 / N_A |
-
-**Optional: the inputs to the WISO-SAT TROPOMI filter**, so users can
-reproduce it without the raw files.
-
-| source | proposed canonical_name | units | conversion |
-| --- | --- | --- | --- |
-| `diagnostics/iterations` | `retrieval_iterations` | 1 | none (int32) |
-| `instrument/solar_zenith_angle` | `solar_zenith_angle` | degree | none |
-| `side_product/aerosol_optical_thickness` | `scattering_optical_thickness` | 1 | none (squeeze `nwin`) |
-| `side_product/surface_albedo` | `surface_albedo` | 1 | none (squeeze `nwin`) |
-
-- The clear-sky criteria of Schneider et al. (2022) Table 1 may need more
-  inputs (likely CH4-based); that table needs checking before the optional
-  set is closed.
-- SRON's `aerosol_*` variables describe the retrieval's scattering layer
-  (cloud or aerosol), which is why the paper's "cloud optical thickness"
-  filter maps to `aerosol_optical_thickness`. That mapping is an inference
-  and is to be confirmed.
-- **Geolocation store contents:**
-  - `time` (from `instrument/time`);
-  - `lat`, `lon` (pixel centre);
-  - `pressure` on `level` (`meteo/pressure_levels`, 51 interfaces, Pa, kept as
-    published);
-  - pixel corners, optional (`corner` dim, 32 B/obs extra).
-- **Left out unless asked:** the remaining `meteo/` fields (temperature, wind,
-  surface altitude), the CH4/CO side products, the other aerosol and albedo
-  parameters, and the fit diagnostics (`chi_squared*`, `rms`, `degrees_of_freedom*`).
-  `quality_flag`, `convergence` and `glintflag` are "Not implemented" upstream
-  and are never included.
-
-## Open decisions
-
-5. **Variable subset:** core only, core + kernels/priors, or + filter inputs.
-   This also decides which rows go into `nomenclature_data.md`.
-12. **Pushing the style guide:** `7bc9f72` is committed locally in
-    `style_guides`, not pushed.
