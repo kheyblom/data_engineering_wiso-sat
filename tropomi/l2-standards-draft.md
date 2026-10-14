@@ -1,7 +1,7 @@
 # Level 2 standards — draft proposal (task 3)
 
 **Status: proposal, awaiting approval.** Once agreed, the rules go into
-`style-guide_data_engineering.md` under "Level 2 satellite retrieval data", the
+`style-guide_data-engineering_raw-to-datalake.md` under "Level 2 satellite retrieval data", the
 variables into `nomenclature_data.md`, and this file is deleted.
 
 Each rule names the gridded precedent it follows. The aim is that a Level 2

@@ -20,7 +20,7 @@ day**, for a configurable subset of variables.
 ## Governing rules
 
 - Style guide and authoritative nomenclature:
-  `/glade/u/home/kheyblom/work/style_guides/` (`style-guide_data_engineering.md`,
+  `/glade/u/home/kheyblom/work/style_guides/` (`style-guide_data-engineering_raw-to-datalake.md`,
   `nomenclature_data.md`). Any deviation needs the user's approval.
 - The guide has **no Level 2 rules yet** (task 3). Do not invent them — propose
   and agree them with the user, then add them to the guide.
