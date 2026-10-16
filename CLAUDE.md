@@ -37,7 +37,7 @@ stores.
 
 | product | raw subpath | granule | status |
 | --- | --- | --- | --- |
-| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | fixture and bench pass; every file audited; scale settings next |
+| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | fixture and bench pass; every file audited; production chain planned (TESTING.md Tier 3) |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT fixture passes |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |

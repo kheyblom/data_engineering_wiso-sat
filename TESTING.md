@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-16): 38 cases, TROPOMI and GOSAT |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: scale settings to decide. GOSAT: waits on the kernel naming pass |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: planned, awaiting approval. GOSAT: waits on the kernel naming pass |
 
 ## Tier 0 and 1: the fixture test
 
@@ -205,6 +205,10 @@ bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && \
   - Scaled by commits to the full record (~1,930 at 20 granules per
     commit), that is ~14-21k chunks and ~15k manifests per store, in one
     directory each. The GLADE guidance is ~2-3k files per directory.
+  - Production uses 60 granules per commit (user decision 2026-10-16).
+    That gives ~645 commits: ~12k chunks and ~5k manifests per store.
+    ~7,800 of those chunks are the final data, and they remain at any
+    commit size.
 
 **Where the build's time goes.** The build reads the next batch in the pool
 while it writes the current one. Writing and committing the 17 stores one
@@ -233,18 +237,75 @@ observations (x94):
 Partial and shell files (finding 7) hold fewer observations, so the time
 figures lean high.
 
-## Tier 3: production (not yet planned in detail)
+## Tier 3: production
 
-The Tier 2 figures set the job size and chain length. Then, per product:
+Per product:
 1. The build, chained `afterany` if it needs more than one walltime.
 2. The verifier, over every observation, chained after the build.
 3. `finalize_wisosat_zarr.py`: `--status`, then `--attrs`, `--tag`, and `--gc`
    (dry run first).
 
+### TROPOMI (planned 2026-10-16, awaiting approval)
+
+**Scale settings,** decided with the user from Tier 2, are in
+`config/tropomi/config_zarr.yaml`:
+- 8 workers;
+- `chunks.obs` 4,194,304;
+- `granules_per_commit` 60, which gives ~645 commits rather than ~1,930;
+- the develop queue: 8 cores, 32 GB, and the 6 h walltime limit that NCAR
+  documents for develop.
+
+**Why the verify step is split.** At ~9 h it does not fit one 6 h job, and the
+verifier cannot resume. It is split into three runs by `--stores`. Each run
+also checks geolocation, the index's reference.
+- `finalize` accepts this: per store, it looks for the last passing run that
+  covered every phase and that store.
+- The runs share one log, so they are chained, never concurrent.
+- The groups are balanced by stored size from the bench.
+
+| run | stores (plus geolocation) |
+| --- | --- |
+| V1 | `water_vapor_column_delta_d`, `water_vapor_column_delta_d_standard_error`, `water_vapor_column_h2o`, `water_vapor_column_h2o_standard_error`, `quality_flags_retrieval` |
+| V2 | `water_vapor_column_hdo`, `water_vapor_column_hdo_standard_error`, `solar_zenith_angle`, `iterations_retrieval`, `spectral_point_count_retrieval` |
+| V3 | `optical_thickness_scattering_layer`, `height_scattering_layer`, `albedo_surface_2365nm`, `chi_squared_retrieval`, `chi_squared_prefit`, `spectral_point_count_prefit` |
+
+**The `VERIFY_ARGS` quoting.** `qsub -v` splits on commas, so the wrapper now
+single-quotes `VERIFY_ARGS`. A wrong split would silently verify one store.
+Step 0 proves the quoting on the bench stores before the chain relies on it.
+
+**Commands**, from the repo root, each through
+`bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && ...'`:
+
+```bash
+# 0. quoting check on the bench stores: metadata phases only, a few minutes
+CONFIG=config/tropomi/config_zarr_bench.yaml VERIFY=1 \
+  VERIFY_ARGS="--phases structure,index --stores water_vapor_column_hdo,solar_zenith_angle" \
+  QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=00:15:00 ./submit_wisosat_zarr.sh
+# pass: the job's verify log names both stores in its 'stores:' line
+
+# B1, B2: the build, and a resume in case B1 hits the walltime (a no-op if not)
+P='CONFIG=config/tropomi/config_zarr.yaml QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=06:00:00'
+env $P ./submit_wisosat_zarr.sh                                  # -> B1
+env $P AFTER=<B1> ./submit_wisosat_zarr.sh                       # -> B2
+# V1-V3: verification, chained
+env $P VERIFY=1 AFTER=<B2> VERIFY_ARGS="--stores <V1 list>" ./submit_wisosat_zarr.sh   # -> V1
+env $P VERIFY=1 AFTER=<V1> VERIFY_ARGS="--stores <V2 list>" ./submit_wisosat_zarr.sh   # -> V2
+env $P VERIFY=1 AFTER=<V2> VERIFY_ARGS="--stores <V3 list>" ./submit_wisosat_zarr.sh   # -> V3
+```
+
+**Cost estimate:** build ~42 core-hours and verify ~75-90 core-hours, ~125
+in all. The ceiling is 5 jobs x 6 h x 8 cores = 240 core-hours. Step 0 costs
+well under one core-hour.
+
+**Space:** ~1.3 TiB, to `/glade/derecho/scratch/$USER/data/wisosat/zarr/tropomi/`
+(absent before the run). Scratch is at 48.6 of 150 TiB.
+
+**After the chain:** `finalize --status`, then `--attrs`, `--tag`, `--gc`
+(dry run, then `--apply`). Scratch is purged, so the stores are moved to
+their data-lake home afterwards; where is to be decided.
+
 Blockers:
-- **TROPOMI:** no data blockers remain after the re-download, the audit and
-  the bench (findings 5, 7 and 8; Tier 2). The scale settings come first:
-  workers, chunks, queue and walltime.
+- **TROPOMI:** none. The chain above awaits approval.
 - **GOSAT:** the whole record is ~9,000 small files, so a single develop job
   covers build and verification. It waits on the cross-product naming pass,
   so that its kernel and a priori stores are built with the rest.

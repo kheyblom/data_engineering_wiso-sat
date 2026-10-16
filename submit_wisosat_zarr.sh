@@ -74,7 +74,15 @@ if [[ -z ${PBS_ENVIRONMENT:-} ]]; then
     passthrough="CONFIG=${CONFIG}"
     if [[ -n ${VERIFY:-} ]]; then
         passthrough="${passthrough},VERIFY=1"
-        [[ -n ${VERIFY_ARGS:-} ]] && passthrough="${passthrough},VERIFY_ARGS=${VERIFY_ARGS}"
+        # qsub -v splits on commas, and --stores takes a comma separated list;
+        # PBS keeps a quoted value whole
+        if [[ -n ${VERIFY_ARGS:-} ]]; then
+            if [[ ${VERIFY_ARGS} == *"'"* ]]; then
+                echo "error: VERIFY_ARGS cannot contain a single quote" >&2
+                exit 1
+            fi
+            passthrough="${passthrough},VERIFY_ARGS='${VERIFY_ARGS}'"
+        fi
         qsub_args+=(-N wisosat_verify)
     fi
     qsub_args+=(-v "${passthrough}")

@@ -26,40 +26,25 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next (in order)
 
-1. **Decide the production scale settings** with the user:
-   - **Workers.** The log timestamps say the build is write-bound: the
-     serial commit of 17 stores takes ~6 s of each ~9 s batch, and reads are
-     prefetched. More workers can cut at most ~1/3 of the build. The verifier
-     does not prefetch, and its store reads and compares run serially in
-     main. Options: keep 8; bench 16 to confirm (show the job first); or
-     prefetch raw reads in the verifier, a code change.
-   - **Chunks.** `chunks.obs` 4,194,304 gives ~11 MiB stored per float32
-     chunk, inside the guide's 5-40 MiB (uncompressed). The int stores
-     compress far more (flags ~0.6 MiB per chunk); decide whether that
-     matters.
-   - **Object counts.** At 20 granules per commit, the full record makes
-     ~1,930 commits. That means ~14-21k objects in `chunks/` and ~15k in
-     `manifests/` per store, because history is kept and every commit
-     rewrites the index chunks and the tail chunk. GLADE asks for ~2-3k files
-     per directory. The levers are: raise `granules_per_commit` (main peaks
-     at 2.93 GiB at 20, and batches are prefetched); expire old snapshots
-     before `--gc` (a finalize change, which loses the per-commit history
-     that the repository check reads); or larger chunks. Even with history
-     expired, ~7,800 final data chunks per store remain at 16 MiB.
-   - **Queue and walltime.** The estimate at 8 workers is ~5.2 h build and
-     ~9 h verify. Derecho main charges a whole node (128 cores) for up to
-     12 h, so ~5.2 h there would be ~670 core-hours, against ~42 on 8
-     develop cores. Develop's walltime limit was not visible from
-     `qstat -Qf develop` (it is a routing queue), so check it. Cost-minimise:
-     the allocation is finite.
-2. **Plan Tier 3**, the TROPOMI production run, and show the user every job
-   before submitting.
-   - Config `config/tropomi/config_zarr.yaml`. It is never run, and its
-     settings come from step 1.
-   - Build, then verify chained `afterany`, then the `finalize_wisosat_zarr.py`
-     sequence: `--status`, `--attrs`, `--tag`, and `--gc` (dry run first).
-   - The build fails loudly on anything undeclared in the raw tree, by
-     design.
+1. **Tier 3, the TROPOMI production chain, is planned and awaits the user's
+   approval.** The commands, the store groups and the costs are in
+   `TESTING.md` (Tier 3). Submit nothing until the user says so. The steps:
+   - step 0: a minutes-long check, on the bench stores, that `VERIFY_ARGS`
+     survives `qsub -v`;
+   - B1 and B2: the build, then a resume guard;
+   - V1-V3: verification split by `--stores`, all chained `afterany`;
+   - then `finalize`: `--status`, `--attrs`, `--tag`, and `--gc` (dry run
+     first).
+
+   Record each job id here as it is submitted.
+2. **Scale settings, decided with the user on 2026-10-16** and set in
+   `config/tropomi/config_zarr.yaml`:
+   - 8 workers: the build is write-bound;
+   - `chunks.obs` 4,194,304;
+   - `granules_per_commit` 60, to cut commits and objects per store; history
+     is kept;
+   - the develop queue: 8 cores, 32 GB, 6 h limit (NCAR docs), at ~125
+     core-hours estimated, against ~670+ on main.
 3. Later, not blocking TROPOMI:
    - the cross-product naming pass for kernels, priors and dry-air columns,
      which GOSAT production waits on;
