@@ -17,6 +17,8 @@ then extend to the other products (decided 2026-10-14).
   `tes`. Read only the one you need. The cross-product
   unit survey, the value checks and the WISO-SAT paper cross-check are in
   [docs/l2-survey.md](docs/l2-survey.md).
+- **Known raw-data issues**, every product, with status and evidence:
+  [docs/raw-data-issues.md](docs/raw-data-issues.md). Add to it as new ones are found.
 - Environment: uv (`pyproject.toml`, `uv.lock`, `.venv` at the repo root). Run
   with `uv run python ...`.
 - Remote: `git@github.com:kheyblom/data_engineering_wiso-sat.git` (SSH),
