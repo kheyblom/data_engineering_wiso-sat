@@ -245,8 +245,11 @@ def test_product(results, config, scratch):
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
     }
     if settings.get('expected_unreadable_granules'):
+        # only the last declared file is undeclared: a file that crashes HDF5
+        # (TROPOMI 3335) would take the build down with no message to match
         guards['an undeclared unreadable file'] = (
-            {'expected_unreadable_granules': []}, 'HDF error'
+            {'expected_unreadable_granules': settings['expected_unreadable_granules'][:-1]},
+            'HDF error',
         )
     if settings.get('expected_empty_granules'):
         guards['an undeclared empty granule directory'] = (

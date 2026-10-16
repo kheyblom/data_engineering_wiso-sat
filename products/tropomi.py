@@ -38,6 +38,8 @@ Format facts the reader depends on, measured 2026-10-13/14 (see
 - **Three files are corrupt upstream** (orbits 3335, 7821 and 7844, the same
   bytes as on the server). They are skipped only if declared in
   ``expected_unreadable_granules``, and only while they still fail to open.
+  That is probed in a child process: HDF5 segfaults on 3335 rather than
+  raising (found by the first production job, 2026-10-16).
 
 The build reads with netCDF4 and the verifier reads with h5py, so the two do
 not share a decoding path. Only ``decode_time`` and ``check_granule`` are
@@ -50,6 +52,8 @@ from __future__ import annotations
 import datetime
 import os
 import re
+import subprocess
+import sys
 
 import netCDF4
 import numpy as np
@@ -168,17 +172,22 @@ def list_granules(raw_root, expected_empty=(), expected_unreadable=()):
 def opens(path):
     """Whether netCDF4 can open a file.
 
+    Tried in a child process, because HDF5 does not always fail cleanly on a
+    corrupt file: orbit 3335 (a bad fractal heap header) segfaults it, and
+    in this process that would end the build without a traceback. Only
+    declared-unreadable files are probed, so the extra interpreter is cheap.
+
     Args:
         path (str): The file.
 
     Returns:
-        bool: True if it opens.
+        bool: True if it opens; False if opening raises or crashes.
     """
-    try:
-        with netCDF4.Dataset(path, 'r'):
-            return True
-    except OSError:
-        return False
+    probe = 'import sys, netCDF4; netCDF4.Dataset(sys.argv[1], "r").close()'
+    result = subprocess.run(
+        [sys.executable, '-c', probe, path], capture_output=True, check=False
+    )
+    return result.returncode == 0
 
 
 def is_fill(values):

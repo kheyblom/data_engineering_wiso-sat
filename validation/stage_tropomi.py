@@ -21,6 +21,8 @@ Chosen deliberately (see config/tropomi/config_zarr_fixture.yaml):
   as stand-ins; their own dates are in 2019. They are a shell, a partial
   orbit and a file truncated upstream (see the fixture config). Their orbit
   numbers sort before the 2020 orbits, so time still never decreases.
+- **One more, linked** (``LINKED_DEFECTS``): orbit 3335, whose corrupt heap
+  segfaults HDF5 on open. It is declared unreadable, so it is only probed.
 - **An empty orbit directory** (``EMPTY_ORBIT``), standing in for the 353
   orbits that are empty upstream. The fixture config declares it in
   ``expected_empty_granules``; orbit 13872 really does have a file upstream,
@@ -67,6 +69,9 @@ EMPTY_ORBIT = ('2020/06/17', '13872')
 # real defect files (source day, orbit), copied whole under DEFECT_DAY
 DEFECTS = (('2019/01/06', '6380'), ('2019/06/06', '8532'), ('2019/04/17', '7821'))
 DEFECT_DAY = '2020/06/16'
+# real defect files only ever probed, never read, so linked rather than
+# copied: 3335 is 0.8 GB, and opening it segfaults HDF5
+LINKED_DEFECTS = (('2018/06/05', '3335'),)
 
 # read for the verifier's layout check, though no store holds them
 EXTRA_SOURCES = ('instrument/scanline', 'instrument/ground_pixel')
@@ -158,6 +163,14 @@ def main():
             os.makedirs(os.path.dirname(destination), exist_ok=True)
             shutil.copyfile(os.path.join(source_dir, name), destination)
             print(f'staged  {destination}  (defect stand-in from {day})')
+    for day, orbit in LINKED_DEFECTS:
+        source_dir = os.path.join(raw, day, orbit)
+        name = [entry for entry in os.listdir(source_dir) if entry.endswith('.nc')][0]
+        destination = os.path.join(target, DEFECT_DAY, orbit, name)
+        if not os.path.lexists(destination):
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            os.symlink(os.path.join(source_dir, name), destination)
+            print(f'linked  {destination}  (defect stand-in from {day})')
 
     # the real tree has these, and the reader must walk past them
     stray = os.path.join(target, '2020', '.DS_Store')

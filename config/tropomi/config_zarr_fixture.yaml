@@ -9,7 +9,8 @@
 # - real defect files copied whole into 2020-06-16 as stand-ins: shell 6380
 #   (nothing written), partial 8532 (10 of 697,890 rows processed, flags and
 #   scanline indices unwritten), and 7821 (truncated upstream, declared
-#   unreadable);
+#   unreadable); plus 3335, linked rather than copied, whose corrupt heap
+#   segfaults HDF5 on open (declared unreadable, so only probed);
 # - windows of 23-47 scanlines give orbits of different sizes, so appends land
 #   mid-chunk at obs: 5000;
 # - granules_per_commit: 2 gives three commits per store, and so resume points;
@@ -51,7 +52,8 @@ expected_missing_days:
 expected_empty_granules:
   - '13872'
 expected_unreadable_granules:
-  - '07821'
+  - '03335'  # segfaults HDF5 on open, rather than raising
+  - '07821'  # truncated; the test's undeclared-file guard drops this, the last
 
 source_fill_values:
   target_product/deltad: [9.96921e+36]
