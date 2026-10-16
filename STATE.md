@@ -58,6 +58,18 @@ Read this first in a new session. Update it whenever work lands.
      The first B2 and V1-V3 (7841001-04) were deleted by mistake, while B1
      was running, and resubmitted unchanged.
 
+   - **B1 progress check, 13:50 MDT:** batch 277 of 645, no errors.
+     - Listing found 38,645 granules, with 77 missing days as declared.
+     - Batches started at ~20 s and are now ~26 s. Expected end ~16:30 MDT,
+       ~4.4 h in all.
+     - Memory: PBS reports ~32 GiB because it counts the file cache. The
+       processes hold ~8.3 GiB: main 7.1 GiB, workers 0.1-0.27 GiB.
+     - The whole chain should end ~02:00-03:00 MDT on 2026-10-17.
+   - **To check on resume:**
+     - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
+     - that B2 was a no-op;
+     - then each verify run's `stores verified` line and its stores.
+
    - **The audit opened every file with h5py, not netCDF4.** Another file
      could still crash a build worker. The build would then fail loudly and
      resume from its last commit.
