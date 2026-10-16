@@ -39,16 +39,25 @@ Read this first in a new session. Update it whenever work lands.
    **Submitted 2026-10-16 with the user's approval:**
    - step 0, job 7840965: **passed**. Both `--stores` names arrived whole
      through `qsub -v`.
-   - the chain, each job `afterany` the one before:
+   - **First chain (7840968-72) failed at once.** B1 segfaulted (exit 139)
+     listing granules: netCDF4/HDF5 crashes opening the declared-unreadable
+     orbit 3335 instead of raising. `afterany` then ran B2 and V1-V3
+     through, all dead within a minute (~0.3 core-hours). The open probe now
+     runs in a child process (commit `7220460`, test 38/38).
+   - **The chain was resubmitted the same day, with the same commands.** Each
+     job is `afterany` the one before:
 
      | job | id |
      | --- | --- |
-     | B1 | 7840968 |
-     | B2 | 7840969 |
-     | V1 | 7840970 |
-     | V2 | 7840971 |
-     | V3 | 7840972 |
+     | B1 | 7841000 |
+     | B2 | 7841001 |
+     | V1 | 7841002 |
+     | V2 | 7841003 |
+     | V3 | 7841004 |
 
+   - **The audit opened every file with h5py, not netCDF4.** Another file
+     could still crash a build worker. The build would then fail loudly and
+     resume from its last commit.
    - Logs: `logs/<id>.desched1.OU`, `logs/wisosat_zarr_tropomi.log` and
      `logs/verify_wisosat_zarr_tropomi.log`.
    - When V3 ends, check that each run says `stores verified` and covers its

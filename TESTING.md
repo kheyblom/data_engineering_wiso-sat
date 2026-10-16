@@ -143,6 +143,24 @@ So **an observation is a row whose time is written**:
 
 **Not affected:** the bench month, July 2020, where all 390 files are OK.
 
+### 9. HDF5 segfaults on one corrupt file rather than raising (2026-10-16)
+
+The first production build (job 7840968) died with exit 139 a second into
+listing granules, with no traceback.
+- **The cause:** netCDF4 segfaults opening orbit 3335 (bad fractal heap
+  header). The other two corrupt files raise `OSError`. The audit had used
+  h5py, which raises on 3335, so the audit never saw the crash.
+- **The fix:** the reader now probes declared-unreadable files in a child
+  process.
+- **The test:** the fixture links 3335, so it meets this case. The guard for
+  an undeclared unreadable file now undeclares only the truncated file: an
+  undeclared crashing file still stops the build, but with no message to
+  match.
+
+The chain is `afterany`, so it ran all its jobs through in a minute. That cost
+little this time, but **watch the first job of a chain until it commits**, and
+delete the rest if it dies.
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445
