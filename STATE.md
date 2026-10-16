@@ -36,7 +36,23 @@ Read this first in a new session. Update it whenever work lands.
    - then `finalize`: `--status`, `--attrs`, `--tag`, and `--gc` (dry run
      first).
 
-   Record each job id here as it is submitted.
+   **Submitted 2026-10-16 with the user's approval:**
+   - step 0, job 7840965: **passed**. Both `--stores` names arrived whole
+     through `qsub -v`.
+   - the chain, each job `afterany` the one before:
+
+     | job | id |
+     | --- | --- |
+     | B1 | 7840968 |
+     | B2 | 7840969 |
+     | V1 | 7840970 |
+     | V2 | 7840971 |
+     | V3 | 7840972 |
+
+   - Logs: `logs/<id>.desched1.OU`, `logs/wisosat_zarr_tropomi.log` and
+     `logs/verify_wisosat_zarr_tropomi.log`.
+   - When V3 ends, check that each run says `stores verified` and covers its
+     stores, then run `finalize --status`.
 2. **Scale settings, decided with the user on 2026-10-16** and set in
    `config/tropomi/config_zarr.yaml`:
    - 8 workers: the build is write-bound;
