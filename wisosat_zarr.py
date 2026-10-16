@@ -159,7 +159,11 @@ def build(settings):
 
     raw = settings['directories']['raw']
     LOG.info(f'listing granules under {raw}')
-    granules = reader.list_granules(raw, settings.get('expected_empty_granules') or [])
+    granules = reader.list_granules(
+        raw,
+        expected_empty=settings.get('expected_empty_granules') or [],
+        expected_unreadable=settings.get('expected_unreadable_granules') or [],
+    )
     check_order(granules)
     missing = check_coverage(granules, settings)
     LOG.info(

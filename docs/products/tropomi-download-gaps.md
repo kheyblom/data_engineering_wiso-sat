@@ -1,4 +1,9 @@
-# TROPOMI: gaps in the download (found 2026-10-14)
+# TROPOMI: gaps in the download (found 2026-10-14, resolved 2026-10-16)
+
+**Resolved.** The user re-downloaded on 2026-10-16. Every orbit and day below
+is now on disk. The record also extends to 2025-11-29, and its 19 new missing
+days are real upstream gaps (404). The file audit that followed is TESTING.md
+finding 7. What follows is the record as found.
 
 The raw tree was checked against the listing at
 `https://tropomi.grid.surfsara.nl/hdo/`, one request per gap.

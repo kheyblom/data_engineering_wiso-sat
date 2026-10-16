@@ -46,6 +46,7 @@ INDEX_FIELDS = (
     'granule_time_start',
     'granule_time_end',
     'granule_file',
+    'granule_source_rows',
 )
 INDEX_ATTRS = {
     'granule_id': {'long_name': 'source granule identifier (e.g. orbit number)'},
@@ -54,6 +55,15 @@ INDEX_ATTRS = {
     'granule_time_start': {'long_name': 'time of the first observation of the granule'},
     'granule_time_end': {'long_name': 'time of the last observation of the granule'},
     'granule_file': {'long_name': 'source file name(s) of the granule, separated by "; "'},
+    'granule_source_rows': {
+        'long_name': 'rows the source file(s) declare along their observation dimension',
+        'comment': (
+            'Larger than granule_obs_count where rows the producer never processed '
+            '(time unwritten, and every stored variable unwritten with it) were '
+            'left out; 0 observations means the file holds none. For a merged '
+            'granule, the sum over its files before merging.'
+        ),
+    },
 }
 
 # joins the file names of a multi-file granule in its index entry
@@ -103,10 +113,12 @@ class GranuleData(NamedTuple):
 
     Attributes:
         granule (Granule): Which granule.
-        n_obs (int): Its observation count.
+        n_obs (int): Its observation count, as stored.
         version (str): The processor version the file declares.
         attrs (dict): The file's global attributes, byte strings decoded.
         arrays (dict): Source path -> :class:`SourceArray`.
+        n_source_rows (int | None): Rows the file(s) declare, before merging or
+            leaving out unprocessed rows. None means the same as ``n_obs``.
     """
 
     granule: Granule
@@ -114,6 +126,7 @@ class GranuleData(NamedTuple):
     version: str
     attrs: dict
     arrays: dict
+    n_source_rows: int | None = None
 
 
 def decode_text(value):
@@ -240,6 +253,10 @@ def index_entries(datas, time_source, obs_start):
             [FILE_SEPARATOR.join(os.path.basename(path) for path in data.granule.paths)
              for data in datas],
             dtype=object,
+        ),
+        'granule_source_rows': np.array(
+            [data.n_obs if data.n_source_rows is None else data.n_source_rows for data in datas],
+            dtype='int64',
         ),
     }
 

@@ -46,12 +46,10 @@ variables:
   - spectral_point_count_retrieval
   - spectral_point_count_prefit
 
-# Days between the first and last orbit with no day directory upstream: each
-# returned 404 from tropomi.grid.surfsara.nl (checked 2026-10-14). The build
-# fails on any other gap. Twelve more days are absent from the download but
-# present upstream (2024-01-01..04, 2024-04-10..17); they are NOT listed, so
-# the build refuses to run until they are downloaded. See
-# docs/products/tropomi-download-gaps.md.
+# Days between the first and last orbit (2017-11-08 .. 2025-11-29) with no day
+# directory upstream: each returned 404 from tropomi.grid.surfsara.nl (58
+# checked 2026-10-14, the 19 from 2024-05-31 on checked 2026-10-16 after the
+# re-download extended the record). The build fails on any other gap.
 expected_missing_days:
   - 2017-11-18
   - 2017-11-30
@@ -111,11 +109,29 @@ expected_missing_days:
   - 2023-08-22
   - 2023-10-04
   - 2023-12-22
+  - 2024-05-31
+  - 2024-07-09
+  - 2024-07-10
+  - 2024-10-19
+  - 2024-10-20
+  - 2024-10-25
+  - 2024-10-27
+  - 2024-10-30
+  - 2024-11-01
+  - 2024-11-02
+  - 2024-11-05
+  - 2024-11-07
+  - 2024-11-09
+  - 2024-11-10
+  - 2024-11-11
+  - 2025-01-01
+  - 2025-01-03
+  - 2025-03-25
+  - 2025-04-16
 
 # Orbit directories that are empty upstream as well (each checked against the
-# server listing, 2026-10-14). 339 more are empty in the download but hold a
-# file upstream; they are NOT listed, so the build refuses to run until they are
-# downloaded. Same file as above.
+# server listing, 2026-10-14). After the re-download these are the only empty
+# ones. See docs/products/tropomi-download-gaps.md.
 expected_empty_granules:
   - '00638'  # 2017-11-27
   - '00934'  # 2017-12-18
@@ -471,12 +487,25 @@ expected_empty_granules:
   - '34100'  # 2024-05-12
   - '34337'  # 2024-05-29
 
+# Orbit files corrupt upstream: byte-identical to the server copies and
+# unreadable by HDF5 (audit of every file, 2026-10-16). Left out of every store;
+# the build confirms each still fails to open, and refuses any other unreadable
+# file.
+expected_unreadable_granules:
+  - '03335'  # 2018-06-05, wrong fractal heap header signature
+  - '07821'  # 2019-04-17, truncated (3.6 MB of 645 MB)
+  - '07844'  # 2019-04-19, truncated (18 MB of 1.2 GB)
+
 # Fill the files use without declaring it: SRON sets no _FillValue, so missing
 # values are the netCDF default fills. Declared per source, and only where they
 # occur (measured in orbit 13847): the verifier fails if a declared value never
 # occurs over the record, and if a netCDF default fill turns up in a source not
 # listed here. Floats are masked to NaN; integers keep the value and declare it
 # as _FillValue.
+#
+# processing_quality_flags: SRON wrote no flags in some partially processed
+# orbits, so 238 processed rows (all in partial files, audit 2026-10-16) read
+# the int fill. Rows never processed at all are left out, not masked.
 source_fill_values:
   target_product/deltad: [9.96921e+36]
   target_product/deltad_precision: [9.96921e+36]
@@ -484,6 +513,7 @@ source_fill_values:
   target_product/h2o_column_precision: [9.96921e+36]
   target_product/hdo_column: [9.96921e+36]
   target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/processing_quality_flags: [-2147483647]
   diagnostics/iterations: [-2147483647]
   side_product/aerosol_optical_thickness: [9.96921e+36]
   side_product/aerosol_height: [9.96921e+36]
@@ -561,10 +591,14 @@ attrs:
     its obs axis and granule index.
   granule: one orbit file; granule_id is the orbit number
   known_data_gaps: >-
-    58 days between 2017-11-08 and 2024-05-30 have no orbit files upstream,
-    and 353 orbits have an empty directory upstream; both are listed in the
-    build config (expected_missing_days, expected_empty_granules). Not every
-    orbit number has a file.
+    77 days between 2017-11-08 and 2025-11-29 have no orbit files upstream,
+    353 orbits have an empty directory upstream, and orbits 3335, 7821 and
+    7844 are corrupt upstream and left out; all are listed in the build config
+    (expected_missing_days, expected_empty_granules,
+    expected_unreadable_granules). 109 orbit files hold no observations (the
+    producer wrote nothing), and rows SRON never processed are left out;
+    granule_source_rows in the granule index records each file's own row
+    count. Not every orbit number has a file.
 
 variable_attrs:
   quality_flags_retrieval:

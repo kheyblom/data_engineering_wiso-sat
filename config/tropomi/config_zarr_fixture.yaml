@@ -6,6 +6,10 @@
 # - 2020-06-18 is a real upstream gap, so the missing-day check sees one;
 # - orbit 13872's directory is staged empty, so an empty orbit directory is
 #   declared and skipped;
+# - real defect files copied whole into 2020-06-16 as stand-ins: shell 6380
+#   (nothing written), partial 8532 (10 of 697,890 rows processed, flags and
+#   scanline indices unwritten), and 7821 (truncated upstream, declared
+#   unreadable);
 # - windows of 23-47 scanlines give orbits of different sizes, so appends land
 #   mid-chunk at obs: 5000;
 # - granules_per_commit: 2 gives three commits per store, and so resume points;
@@ -46,6 +50,8 @@ expected_missing_days:
 # staged empty, standing in for an orbit empty upstream
 expected_empty_granules:
   - '13872'
+expected_unreadable_granules:
+  - '07821'
 
 source_fill_values:
   target_product/deltad: [9.96921e+36]
@@ -54,6 +60,7 @@ source_fill_values:
   target_product/h2o_column_precision: [9.96921e+36]
   target_product/hdo_column: [9.96921e+36]
   target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/processing_quality_flags: [-2147483647]
   diagnostics/iterations: [-2147483647]
   side_product/aerosol_optical_thickness: [9.96921e+36]
   side_product/aerosol_height: [9.96921e+36]

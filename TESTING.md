@@ -9,9 +9,9 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-14): 35 cases, TROPOMI and GOSAT |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-16): 38 cases, TROPOMI and GOSAT |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **not run**: commands below, awaiting approval |
-| 3 | Production builds and verification, one product at a time | batch chain | **blocked** for TROPOMI by the download gaps; GOSAT waits on the kernel naming pass |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: after the bench. GOSAT: waits on the kernel naming pass |
 
 Nothing below is a statement about production cost until Tier 2 has run.
 
@@ -81,22 +81,69 @@ The guide asks for the coarsest unit that holds the source times exactly.
 The unit now comes from each key's coordinate table. The build fails if the
 reader decodes to any other unit.
 
-### 5. The TROPOMI download is incomplete
+### 5. The TROPOMI download was incomplete (re-downloaded 2026-10-16)
 
 Found while staging the bench. 692 orbit directories are empty, and 70 days
 have no directory. Checked one by one against the upstream server:
 - 353 empty orbits and 58 days are real upstream gaps, and are now declared;
 - **339 orbits and 12 days exist upstream but are missing here.**
 
-The production build refuses to run until they are downloaded. The lists are
-in `docs/products/tropomi-download-gaps.md`. The record has 30,800 orbit
-files, not 31,492.
+The build refused to run until they were downloaded. The user re-downloaded
+on 2026-10-16:
+- the gaps are filled;
+- the record now runs to 2025-11-29 (38,648 orbit files);
+- the 19 new missing days are all real upstream gaps (404);
+- 2025-11-30 exists upstream only as empty orbit directories.
+
+See `docs/products/tropomi-download-gaps.md`.
 
 ### 6. A source `calendar` attribute blocks the time write
 
 FOCAL's time carries `calendar: standard`, and xarray refuses to write a time
 whose attributes already hold an encoding key. It is now kept as
 `original_calendar`; the store's calendar is `proleptic_gregorian`.
+
+### 7. Every TROPOMI file audited (2026-10-16, develop job 7839486, 8 min)
+
+`tools/survey/tropomi_file_audit.py` checked all 38,648 files. For each it
+recorded whether it opens, its version, and whether every source the pipeline
+reads was written.
+
+| result | files |
+| --- | --- |
+| OK | 38,459 (99.5%) |
+| partial: time written for only some rows, or some sources never written | 77 |
+| shell: nothing written | 109 |
+| unreadable, and byte-identical upstream: orbits 3335, 7821, 7844 | 3 |
+
+Plus 353 empty orbit directories, all real upstream gaps. The defects
+cluster in 2019 (93 shells, 74 partial); 2017, 2020 and 2025 are clean.
+
+The output is in `/glade/derecho/scratch/$USER/data/wisosat/audit/`.
+
+### 8. Rows SRON never processed are left out, checked (user decision 2026-10-16)
+
+In the partial files, `time`, lat/lon and SZA are fill on the same rows: 93-100%
+of each file. Across all 48.7 million such rows, none of the 20 other sources
+the pipeline reads holds a value.
+
+So **an observation is a row whose time is written**:
+- **The rule.** Unprocessed rows are left out, but only after the reader
+  confirms that every source it read is fill on them; otherwise the build
+  fails. The verifier finds such rows from the raw time on its own and fails
+  if any carries data.
+- **What it means for the defect files.** A shell becomes a granule with no
+  observations. A new index field, `granule_source_rows`, keeps every file's
+  own row count, so nothing is left out invisibly.
+- **The three unreadable files** are declared in
+  `expected_unreadable_granules`. The build confirms each still fails to open.
+- **The fixture** carries one real shell, one real partial file and one real
+  truncated file, as stand-ins in 2020-06-16.
+- **One new fill declaration.** 238 processed rows in partial files have no
+  flags written, so -2147483647 is now declared for
+  `processing_quality_flags`.
+
+**Not affected:** the bench month, July 2020, where all 390 files are OK.
 
 ## Tier 2: the TROPOMI bench (awaiting approval)
 
@@ -144,8 +191,8 @@ The Tier 2 figures set the job size and chain length. Then, per product:
    (dry run first).
 
 Blockers:
-- **TROPOMI:** the 339 orbits and 12 days missing from the download (finding
-  5).
+- **TROPOMI:** none left after the re-download and the audit (findings 5, 7
+  and 8). The bench comes first.
 - **GOSAT:** the whole record is ~9,000 small files, so a single develop job
   covers build and verification. It waits on the cross-product naming pass,
   so that its kernel and a priori stores are built with the rest.

@@ -24,6 +24,20 @@ Format facts the reader depends on, measured 2026-10-13/14 (see
   shared code masks them. This reader returns values exactly as stored.
 - **The tree holds stray ``.DS_Store`` files**, so only all-digit directory
   names are walked.
+- **Unprocessed rows** (audit of all 38,648 files, 2026-10-16). SRON leaves
+  some rows unwritten:
+  - 109 files are shells, with nothing written at all;
+  - 77 are partial, mostly unprocessed pixels.
+
+  A row whose ``time`` is all fill was never processed, and every variable
+  the pipeline reads is fill on it too (48.7 million such rows checked). Such
+  rows are left out (user decision, 2026-10-16), but only after
+  ``read_granule`` confirms every source it read is fill there. Otherwise it
+  raises. A shell becomes a granule with no observations; the index keeps its
+  row count as ``granule_source_rows``.
+- **Three files are corrupt upstream** (orbits 3335, 7821 and 7844, the same
+  bytes as on the server). They are skipped only if declared in
+  ``expected_unreadable_granules``, and only while they still fail to open.
 
 The build reads with netCDF4 and the verifier reads with h5py, so the two do
 not share a decoding path. Only ``decode_time`` and ``check_granule`` are
@@ -71,7 +85,7 @@ def digit_entries(directory):
     return sorted((entry for entry in os.listdir(directory) if entry.isdigit()), key=int)
 
 
-def list_granules(raw_root, expected_empty=()):
+def list_granules(raw_root, expected_empty=(), expected_unreadable=()):
     """Every orbit file under the raw root, in orbit order.
 
     Orbit order is time order and is the order the style guide requires. Walks
@@ -88,6 +102,10 @@ def list_granules(raw_root, expected_empty=()):
         raw_root (str): The ``hdo`` directory.
         expected_empty (Iterable): Orbit numbers whose directories are known to
             be empty upstream (``expected_empty_granules`` in the config).
+        expected_unreadable (Iterable): Orbit numbers whose files are known to
+            be corrupt upstream (``expected_unreadable_granules``). Each is
+            opened to confirm it still fails, so a repaired file is not left
+            out silently.
 
     Returns:
         list: :class:`Granule` per orbit file, sorted by orbit number.
@@ -95,10 +113,12 @@ def list_granules(raw_root, expected_empty=()):
     Raises:
         FileNotFoundError: If the root does not exist.
         ValueError: If an orbit directory is empty and not declared, a declared
-            one holds a file, or one holds several orbit files or another
-            orbit's file.
+            one holds a file, one holds several orbit files or another orbit's
+            file, or a file declared unreadable opens or is not there.
     """
     expected_empty = {int(orbit) for orbit in expected_empty}
+    expected_unreadable = {int(orbit) for orbit in expected_unreadable}
+    found_unreadable = set()
     if not os.path.isdir(raw_root):
         raise FileNotFoundError(f'no raw data directory at {raw_root}')
 
@@ -127,14 +147,55 @@ def list_granules(raw_root, expected_empty=()):
                     if int(match['orbit']) != int(orbit):
                         problems.append(f'{orbit_dir} holds {name}, a different orbit')
                         continue
+                    if int(orbit) in expected_unreadable:
+                        found_unreadable.add(int(orbit))
+                        if opens(os.path.join(orbit_dir, name)):
+                            problems.append(f'{orbit_dir} is declared unreadable but opens')
+                        continue
                     granules.append(
                         Granule(id=match['orbit'], day=date, paths=(os.path.join(orbit_dir, name),))
                     )
+    stale = sorted(expected_unreadable - found_unreadable)
+    if stale:
+        problems.append(f'orbits declared unreadable have no file: {stale}')
     if problems:
         raise ValueError(
             f'{len(problems)} orbit directories are not as expected: {problems[:10]}'
         )
     return sorted(granules, key=lambda granule: int(granule.id))
+
+
+def opens(path):
+    """Whether netCDF4 can open a file.
+
+    Args:
+        path (str): The file.
+
+    Returns:
+        bool: True if it opens.
+    """
+    try:
+        with netCDF4.Dataset(path, 'r'):
+            return True
+    except OSError:
+        return False
+
+
+def is_fill(values):
+    """Rows of a raw array that hold only the netCDF default fill.
+
+    An unwritten HDF5 chunk reads back as the dataset's fill value, which SRON
+    leaves at the netCDF default, so this is what an unprocessed row looks like.
+
+    Args:
+        values (numpy.ndarray): A raw array, observation dimension first.
+
+    Returns:
+        numpy.ndarray: bool per row.
+    """
+    fill = np.asarray(netCDF4.default_fillvals[values.dtype.str[1:]], dtype=values.dtype)
+    flat = values.reshape(values.shape[0], -1)
+    return (flat == fill).all(axis=1)
 
 
 def decode_time(raw):
@@ -180,31 +241,50 @@ def read_granule(granule, sources, time_source):
             returned decoded.
 
     Returns:
-        GranuleData: The orbit's arrays on the store's dimensions, values
-            exactly as stored except for the decoded time.
+        GranuleData: The orbit's processed rows on the store's dimensions,
+            values exactly as stored except for the decoded time.
 
     Raises:
         KeyError: If a source is not in the file.
+        ValueError: If a row with unwritten time holds data in any source, so
+            leaving it out would lose something.
     """
     with netCDF4.Dataset(granule.paths[0], 'r') as handle:
         # masking off: the shared code masks the fill values the config
         # declares, and nothing else may decide what counts as missing
         handle.set_auto_mask(False)
         attrs = read_attrs(handle)
-        n_obs = handle.dimensions[OBSERVATION_DIM].size
+        n_rows = handle.dimensions[OBSERVATION_DIM].size
+        group, name = time_source.split('/')
+        processed = ~is_fill(np.asarray(handle[group][name][...]))
         arrays = {}
         for source in sources:
             group, name = source.split('/')
             variable = handle[group][name]
-            values = variable[...]
+            values = np.asarray(variable[...])
+            if not processed.all():
+                leaked = int((~is_fill(values[~processed])).sum())
+                if leaked:
+                    raise ValueError(
+                        f'orbit {granule.id}: {source} holds data on {leaked} rows '
+                        f'whose time is unwritten; they cannot be left out'
+                    )
+                values = values[processed]
             dims, values, note = squeeze_dims(
                 values, variable.dimensions, OBSERVATION_DIM, DIMENSION_RENAMES
             )
+            if not processed.all():
+                note = (
+                    f'{note}; {int((~processed).sum())} of {n_rows} rows left out as '
+                    f'unprocessed (time and every stored variable unwritten)'
+                )
             if source == time_source:
                 # the decoded time loses the trailing field dimension
                 values = decode_time(np.asarray(values))
                 dims = ('obs',)
-                note = f'{OBSERVATION_DIM} -> obs; ntime (year .. millisecond) decoded to one timestamp'
+                note = note.replace(
+                    'ntime -> time', 'ntime (year .. millisecond) decoded to one timestamp'
+                )
             arrays[source] = SourceArray(
                 dims=dims,
                 values=np.asarray(values),
@@ -213,10 +293,11 @@ def read_granule(granule, sources, time_source):
             )
     return GranuleData(
         granule=granule,
-        n_obs=n_obs,
+        n_obs=int(processed.sum()),
         version=str(attrs.get(VERSION_ATTR, '')),
         attrs=attrs,
         arrays=arrays,
+        n_source_rows=n_rows,
     )
 
 
@@ -225,7 +306,9 @@ def check_granule(handle):
 
     ``nobs`` is documented as the L1B swath flattened scanline-major. If that
     ever fails, an observation index no longer says where in the swath it was,
-    and the layout note in the store metadata would be false.
+    and the layout note in the store metadata would be false. The check runs on
+    the rows where the indices were written: in a partial file they are often
+    unwritten, and there is nothing to check.
 
     Args:
         handle (h5py.File): The open orbit file.
@@ -239,10 +322,13 @@ def check_granule(handle):
     position = np.arange(scanline.size)
     if scanline.size % PIXELS_PER_SCANLINE:
         problems.append(f'nobs {scanline.size} is not a whole number of {PIXELS_PER_SCANLINE}-pixel scanlines')
-    if scanline.size and not np.array_equal(
-        scanline - scanline[0], position // PIXELS_PER_SCANLINE
-    ):
-        problems.append('scanline is not position // 215 from the first scanline')
-    if not np.array_equal(pixel, position % PIXELS_PER_SCANLINE):
+    written = ~is_fill(scanline)
+    if written.any():
+        first = int(np.argmax(written))
+        base = int(scanline[first]) - first // PIXELS_PER_SCANLINE
+        if not np.array_equal(scanline[written], base + position[written] // PIXELS_PER_SCANLINE):
+            problems.append('scanline is not position // 215 from the first scanline')
+    written = ~is_fill(pixel)
+    if not np.array_equal(pixel[written], position[written] % PIXELS_PER_SCANLINE):
         problems.append('ground_pixel is not position % 215')
     return problems

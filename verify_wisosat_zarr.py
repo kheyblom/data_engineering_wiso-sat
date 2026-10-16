@@ -84,6 +84,7 @@ from utils.zarr_utils import (
     COMMIT_PREFIX,
     TIME_CALENDAR,
     TIME_EPOCH,
+    TIME_FILL,
     absent_fill,
     declared_fill,
     open_existing_repository,
@@ -178,6 +179,22 @@ def parse_args():
     return parser.parse_args()
 
 
+def default_fill_rows(values):
+    """Rows of a raw array that hold only the netCDF default fill for its dtype.
+
+    Args:
+        values (numpy.ndarray): Observation dimension first.
+
+    Returns:
+        numpy.ndarray: bool per row; all False for a dtype with no default.
+    """
+    default = netCDF4.default_fillvals.get(values.dtype.str[1:])
+    if default is None:
+        return np.zeros(values.shape[0], dtype=bool)
+    flat = values.reshape(values.shape[0], -1)
+    return (flat == np.asarray(default, dtype=values.dtype)).all(axis=1)
+
+
 def to_epoch(values, unit):
     """datetime64 values as the int64 count the stores hold.
 
@@ -222,13 +239,23 @@ def read_expected(granule, reader_name, items, time, unit):
         out = {'path': path, 'sources': {}}
         with h5py.File(path, 'r') as handle:
             out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
-            out['n_obs'] = int(handle[time].shape[0])
             out['problems'] = reader.check_granule(handle)
+            # rows whose time is all netCDF default fill were never processed
+            # and are not stored, as long as nothing else is written on them.
+            # Worked out here from the raw time, not taken from the build
+            raw_time = handle[time][...]
+            processed = ~default_fill_rows(raw_time)
+            out['n_rows'] = int(raw_time.shape[0])
+            out['n_obs'] = int(processed.sum())
+            out['leaked'] = 0
             for source, fill, factor, absent in items:
                 if source not in handle:
                     continue
                 dataset = handle[source]
                 raw = dataset[...]
+                if not processed.all():
+                    out['leaked'] += int((~default_fill_rows(raw[~processed])).sum())
+                    raw = raw[processed]
                 # the style guide's squeeze, done here without the build's helper
                 raw = raw.reshape(
                     [size for axis, size in enumerate(raw.shape) if axis == 0 or size != 1]
@@ -511,7 +538,12 @@ class Pass:
         self.absent = {}
         self.missing = {}
         self.problems = []
-        self.index = {'granule_obs_count': 0, 'granule_time_start': 0, 'granule_time_end': 0}
+        self.index = {
+            'granule_obs_count': 0, 'granule_source_rows': 0,
+            'granule_time_start': 0, 'granule_time_end': 0,
+        }
+        self.leaked = 0
+        self.unprocessed = 0
         self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
         self.bounds = [np.inf, -np.inf, np.inf, -np.inf]
@@ -617,6 +649,7 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
     counts = index['granule_obs_count']
     stored_start = index['granule_time_start']
     stored_end = index['granule_time_end']
+    source_rows = index['granule_source_rows']
 
     seen = Pass()
     previous = None
@@ -645,6 +678,10 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
                 for entry in files:
                     seen.versions.add(entry['version'])
                     seen.problems += [(granule.id, problem) for problem in entry['problems']]
+                    seen.leaked += entry['leaked']
+                    seen.unprocessed += entry['n_rows'] - entry['n_obs']
+                if sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
+                    seen.index['granule_source_rows'] += 1
 
                 # how many observations the granule should hold: every
                 # distinct one across its files, found from raw alone
@@ -660,7 +697,11 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
                     continue
 
                 stored_time = stored[(GEOLOCATION, 'time')][lo:hi]
-                if stored_time.size:
+                if not stored_time.size:
+                    # a granule with no observations has no time span
+                    seen.index['granule_time_start'] += int(stored_start[position] != TIME_FILL)
+                    seen.index['granule_time_end'] += int(stored_end[position] != TIME_FILL)
+                else:
                     times = [entry['sources'][time]['expected'] for entry in files]
                     seen.index['granule_time_start'] += int(
                         min(t.min() for t in times if t.size) != stored_start[position]
@@ -746,6 +787,10 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
     )
     report.check(
         'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
+    )
+    report.check(
+        'rows left out as unprocessed hold no data in any source',
+        seen.leaked == 0, f'{seen.unprocessed} rows left out, {seen.leaked} values on them',
     )
     report.check(
         'every file has the documented layout', not seen.problems,
@@ -855,7 +900,9 @@ def main(settings, args):
         reader = load_reader(settings)
         LOG.info(f'listing granules under {settings["directories"]["raw"]}')
         granules = reader.list_granules(
-            settings['directories']['raw'], settings.get('expected_empty_granules') or []
+            settings['directories']['raw'],
+            expected_empty=settings.get('expected_empty_granules') or [],
+            expected_unreadable=settings.get('expected_unreadable_granules') or [],
         )
     if 'index' in phases or 'values' in phases:
         LOG.info('--- index')

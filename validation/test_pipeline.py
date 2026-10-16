@@ -18,7 +18,7 @@ Per product:
 4. the verifier must fail on a tampered value, naming the store;
 5. guards: an undeclared missing day, a wrong processor version, a run that
    omits the quality flags, an unknown variable, and (where the product has
-   them) an undeclared empty granule directory;
+   them) an undeclared empty granule directory or unreadable file;
 6. finalize: ``--attrs`` refuses without verification evidence; the full
    ``--attrs``, ``--tag``, ``--gc`` sequence; then the verifier still passes.
 
@@ -42,6 +42,7 @@ import sys
 import tempfile
 
 import icechunk
+import xarray as xr
 import numpy as np
 import yaml # type: ignore
 import zarr
@@ -184,6 +185,20 @@ def test_product(results, config, scratch):
     results.check(f'{product}: clean build verifies', status == 0 and 'stores verified' in output,
                   last_line(output, 'checks,'))
 
+    # the index accounts for every source row: stored, or left out as never
+    # processed, and never more stored than the files hold
+    index = xr.open_zarr(
+        repository(settings, GEOLOCATION).readonly_session(BRANCH).store, consolidated=False
+    )
+    counts = index['granule_obs_count'].values
+    rows = index['granule_source_rows'].values
+    results.check(
+        f'{product}: granule_source_rows covers every stored observation',
+        bool((rows >= counts).all()),
+        f'{int(counts.sum())} stored of {int(rows.sum())} source rows, '
+        f'{int((counts == 0).sum())} granules with none',
+    )
+
     # 2. a re-run writes nothing
     status, output = run('wisosat_zarr.py', '--config', base)
     results.check(f'{product}: re-run is a no-op', status == 0 and 'already complete' in output)
@@ -229,20 +244,33 @@ def test_product(results, config, scratch):
         ),
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
     }
+    if settings.get('expected_unreadable_granules'):
+        guards['an undeclared unreadable file'] = (
+            {'expected_unreadable_granules': []}, 'HDF error'
+        )
     if settings.get('expected_empty_granules'):
         guards['an undeclared empty granule directory'] = (
             {'expected_empty_granules': []}, 'holds 0 orbit files'
         )
+    # each guard builds into an empty zarr directory of its own, so it meets
+    # the check it is aimed at rather than the resume check against the
+    # stores built above
     for name, (changes, message) in guards.items():
-        path = write_config(settings, scratch, f'{product}_guard.yaml', **changes)
+        guard_zarr = os.path.join(scratch, 'guard_zarr')
+        shutil.rmtree(guard_zarr, ignore_errors=True)
+        directories = dict(settings['directories'], zarr=guard_zarr)
+        path = write_config(
+            settings, scratch, f'{product}_guard.yaml', directories=directories, **changes
+        )
         status, output = run('wisosat_zarr.py', '--config', path)
         results.check(f'{product}: build refuses {name}', status != 0 and message in output,
                       last_line(output, message) or last_line(output, 'Error'))
-    wrong = dict(settings, version='0.0')
-    results.check(
-        f'{product}: a refused version created no store',
-        not os.path.exists(store_path(wrong, GEOLOCATION)),
-    )
+        if 'version' in changes:
+            wrong = dict(settings, version=changes['version'], directories=directories)
+            results.check(
+                f'{product}: a refused version created no store',
+                not os.path.exists(store_path(wrong, GEOLOCATION)),
+            )
 
     # 6. finalize refuses without evidence, then the full sequence
     empty = dict(settings['directories'], logs=os.path.join(scratch, 'empty_logs'))
