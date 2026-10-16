@@ -12,9 +12,10 @@ Read this first in a new session. Update it whenever work lands.
   findings 1-8.
   - Tiers 0-1 pass: `validation/test_pipeline.py`, 38 cases over TROPOMI and
     GOSAT (~75 s, login node).
-  - **Tier 2, the TROPOMI bench, ran and passed on 2026-10-16. Its results
-    are below and are NOT yet written into `TESTING.md`.** That is the next
-    step.
+  - **Tier 2, the TROPOMI bench, passed on 2026-10-16.** Build 189 s and
+    verify 328 s for July 2020 (390 files, 8 workers); 529 checks, 0
+    failures. The results, timing breakdown and full-record extrapolation
+    are in `TESTING.md` (Tier 2).
 - **The TROPOMI raw tree is final and fully audited (2026-10-16).**
   - 38,648 files, 2017-11-08 to 2025-11-29.
   - Every gap and defect is declared in `config/tropomi/config_zarr.yaml`.
@@ -23,76 +24,34 @@ Read this first in a new session. Update it whenever work lands.
   - Each sensor's doc carries its own **Known data issues** table; add new
     findings there.
 
-## Tier 2 bench: results (to record in TESTING.md)
-
-**Setup:**
-- Config `config/tropomi/config_zarr_bench.yaml`: production settings, with
-  `chunks.obs` 4,194,304, `granules_per_commit` 20 and `num_workers` 8.
-- Data: July 2020, symlinked by `validation/stage_bench_tropomi.py`. That is
-  390 orbit files and 346,391,445 obs, ~1.06% of the record's ~3.27e10 obs.
-  The month has no defects.
-- Jobs: develop queue, 8 cores and 32 GB each. Submitted with
-  `submit_wisosat_zarr.sh`: build **7840626**, then verify **7840628**
-  (`afterany`).
-
-| | wall | per orbit | peak memory | result |
-| --- | --- | --- | --- | --- |
-| build | 189 s (11:29:57-11:33:06) | 0.48 s | 2.93 GiB main, 0.31 GiB per worker | 17 stores, 20 commits each |
-| verify | 328 s (11:33:40-11:39:08) | 0.84 s | 4.24 GiB main, 0.31 GiB per worker | **529 checks, 0 failures**, 0 mismatches over 346,391,445 obs |
-
-**Compressed sizes** (`du`, MiB), 14.2 GiB in all:
-
-| store | MiB |
-| --- | --- |
-| float32 retrieval, aerosol, albedo and chi-squared stores | ~925-990 each |
-| `solar_zenith_angle` | 1,219 |
-| `height_scattering_layer` | 764 |
-| `iterations_retrieval` | 135 |
-| `spectral_point_count_retrieval` | 61 |
-| `quality_flags_retrieval` | 55 |
-| `spectral_point_count_prefit` | 49 |
-| `geolocation` (time int64, lat, lon) | 2,493 |
-
-- Uncompressed float32 is ~1,321 MiB per store, so the zstd default
-  compresses to ~0.70 of that.
-- At `chunks.obs` 4,194,304, a float32 chunk is 16 MiB uncompressed (~11 MiB
-  stored); a store has ~83 chunks for the month.
-
-**Extrapolated to the full record** (x ~94), at the same 8 workers. Both are
-estimates:
-- **Build:** ~5.2 h wall, which fits one 12 h main-queue job or several
-  chained develop jobs. **Verify:** ~9 h wall.
-- **Storage:** ~1.3 TiB for the 17 stores.
-
 ## Next (in order)
 
-1. **Write the Tier 2 outcome into `TESTING.md`**, from the results above.
-   The bench stores and logs are:
-   - stores: `/glade/derecho/scratch/kheyblom/data/wisosat_bench/zarr/tropomi/`;
-   - logs: `logs/wisosat_zarr_tropomi_bench.log` and
-     `logs/verify_wisosat_zarr_tropomi_bench.log`, plus the PBS output
-     `logs/7840626.desched1.OU` and `logs/7840628.desched1.OU` (`logs/` is
-     gitignored).
-2. **Decide the production scale settings** with the user:
-   - **Workers.** It is not yet known whether build and verify are read-bound
-     (Lustre latency) and would scale with more workers. A second bench at
-     `num_workers` 16 or 32 would answer it. Show the user the job before
-     submitting.
+1. **Decide the production scale settings** with the user:
+   - **Workers.** The log timestamps say the build is write-bound: the
+     serial commit of 17 stores takes ~6 s of each ~9 s batch, and reads are
+     prefetched. More workers can cut at most ~1/3 of the build. The verifier
+     does not prefetch, and its store reads and compares run serially in
+     main. Options: keep 8; bench 16 to confirm (show the job first); or
+     prefetch raw reads in the verifier, a code change.
    - **Chunks.** `chunks.obs` 4,194,304 gives ~11 MiB stored per float32
      chunk, inside the guide's 5-40 MiB (uncompressed). The int stores
      compress far more (flags ~0.6 MiB per chunk); decide whether that
      matters.
-   - **Queue and walltime.** Derecho main is a whole node (128 cores) for up
-     to 12 h; develop is shared. Cost-minimise: the allocation is finite.
-3. **Plan Tier 3**, the TROPOMI production run, and show the user every job
+   - **Queue and walltime.** The estimate at 8 workers is ~5.2 h build and
+     ~9 h verify. Derecho main charges a whole node (128 cores) for up to
+     12 h, so ~5.2 h there would be ~670 core-hours, against ~42 on 8
+     develop cores. Develop's walltime limit was not visible from
+     `qstat -Qf develop` (it is a routing queue), so check it. Cost-minimise:
+     the allocation is finite.
+2. **Plan Tier 3**, the TROPOMI production run, and show the user every job
    before submitting.
    - Config `config/tropomi/config_zarr.yaml`. It is never run, and its
-     settings come from step 2.
+     settings come from step 1.
    - Build, then verify chained `afterany`, then the `finalize_wisosat_zarr.py`
      sequence: `--status`, `--attrs`, `--tag`, and `--gc` (dry run first).
    - The build fails loudly on anything undeclared in the raw tree, by
      design.
-4. Later, not blocking TROPOMI:
+3. Later, not blocking TROPOMI:
    - the cross-product naming pass for kernels, priors and dry-air columns,
      which GOSAT production waits on;
    - GOSAT-2 configs (`product: gosat2`), which need a small shared change so

@@ -35,7 +35,7 @@ Progress: Shared pipeline, TROPOMI reader, key, configs and fixture built 2026-1
 # 5. Create a testing plan for the codebase
 Develop a plan to test this codebase so that we know that it works before we move to production runs.
 
-Progress: TESTING.md written 2026-10-14. Tiers 0-1 pass (fixtures for TROPOMI and GOSAT). The Tier 2 TROPOMI bench is staged; its job commands await approval. Found the TROPOMI download incomplete (339 orbits, 12 days); see docs/products/tropomi.md (T7). Re-downloaded and fully audited 2026-10-16.
+Progress: TESTING.md written 2026-10-14. Tiers 0-1 pass (fixtures for TROPOMI and GOSAT). The Tier 2 TROPOMI bench is staged; its job commands await approval. Found the TROPOMI download incomplete (339 orbits, 12 days); see docs/products/tropomi.md (T7). Re-downloaded and fully audited 2026-10-16. Tier 2 bench passed 2026-10-16 (build 189 s, verify 328 s, 0 failures); see TESTING.md.
 
 # 6. Production runs: create the final prooduct zarr stores.
 One product at a time, starting with TROPOMI.

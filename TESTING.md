@@ -3,17 +3,15 @@
 How the pipeline is tested before anything runs at production scale, what has
 been found, and how to reproduce it. It is tiered like `data_engineering_mswep`
 and `_gleam`, for the same reason: a bug found on a fixture costs seconds, and
-the same bug found on the full TROPOMI record (30,800 orbits) costs
+the same bug found on the full TROPOMI record (38,648 orbit files) costs
 core-hours against a finite allocation.
 
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-16): 38 cases, TROPOMI and GOSAT |
-| 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **not run**: commands below, awaiting approval |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: after the bench. GOSAT: waits on the kernel naming pass |
-
-Nothing below is a statement about production cost until Tier 2 has run.
+| 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: scale settings to decide. GOSAT: waits on the kernel naming pass |
 
 ## Tier 0 and 1: the fixture test
 
@@ -145,42 +143,87 @@ So **an observation is a row whose time is written**:
 
 **Not affected:** the bench month, July 2020, where all 390 files are OK.
 
-## Tier 2: the TROPOMI bench (awaiting approval)
+## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
-**What it is:** one real month, 2020-07: 395 orbits, ~1.25% of the record, no
-missing days and five empty orbits, all real upstream gaps. It runs with the
-production config's variables, chunks and settings
-(`config/tropomi/config_zarr_bench.yaml`), into throwaway stores under
+**What it is:** one real month, 2020-07: 390 orbit files and 346,391,445
+observations, ~1.06% of the record's ~3.27e10. The month has no missing days
+and no defect files; its five empty orbit directories are real upstream gaps.
+It runs with the production config's variables, chunks and settings
+(`config/tropomi/config_zarr_bench.yaml`: `chunks.obs` 4,194,304,
+`granules_per_commit` 20, `num_workers` 8) into throwaway stores under
 `/glade/derecho/scratch/$USER/data/wisosat_bench/`. The raw tree is 31
 symlinks, made by `validation/stage_bench_tropomi.py`.
 
-**What it measures,** and what each figure decides:
-
-| measure | from | decides |
-|---|---|---|
-| wall time per orbit, build and verify | job logs (batch lines) | walltime and job chain length for 30,800 orbits |
-| peak memory, main process and largest worker | `peak memory:` log line | `MEM`, and whether 8 workers fit a shared node |
-| compressed bytes per store and per chunk | `du` of each bench store (17 small directories) | whether `chunks.obs` (16 MiB uncompressed) stays inside 5-40 MiB usefully once compressed, and the production footprint |
-| read scaling | a second build at `num_workers: 16`, only if the first is I/O-bound | `num_workers` |
-
-**Commands.** These are shown for approval and have **not been submitted**.
-The build and its verification are chained `afterany`, so they never overlap.
+**Commands.** Build job 7840626, then verify job 7840628 chained `afterany`.
+Each ran on the develop queue with 8 cores and 32 GB, under a 1 h limit.
 
 ```bash
-# build: develop queue (shared node, charged per core), 8 cores, 1 hour
 bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && \
   CONFIG=config/tropomi/config_zarr_bench.yaml QUEUE=develop NCPUS=8 MEM=32GB \
   WALLTIME=01:00:00 ./submit_wisosat_zarr.sh'
-# verify, after the build: same shape
 bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && \
   CONFIG=config/tropomi/config_zarr_bench.yaml VERIFY=1 QUEUE=develop NCPUS=8 \
   MEM=32GB WALLTIME=01:00:00 AFTER=<build job id> ./submit_wisosat_zarr.sh'
 ```
 
-**Ceiling:** 2 jobs x 8 cores x 1 hour = 16 core-hours. The one-orbit read
-measured on the login node (19 variables in 2.6 s, cold) suggests ~20 min per
-job if reads scale across 8 processes. They may not, since the reads are
-Lustre-bound; finding out is what the bench is for.
+### Results
+
+| | wall | per orbit | peak memory | result |
+| --- | --- | --- | --- | --- |
+| build | 189 s | 0.48 s | 2.93 GiB main, 0.31 GiB per worker | 17 stores, 20 commits each |
+| verify | 328 s | 0.84 s | 4.24 GiB main, 0.31 GiB per worker | **529 checks, 0 failures** over every observation |
+
+- **Cost:** ~1.1 core-hours for both jobs, against the 16 allowed.
+- **Fill:** each retrieval store holds 108,028,576 fill values (31% of the
+  observations); the prefit stores hold 94,493,960 (27%). SZA and the flags
+  hold none.
+- **Geospatial bounds:** lat -83.0 to 90.0, lon -180 to 180.
+
+**Compressed size** (`du`), 14.2 GiB for the 17 stores:
+
+| store | MiB |
+| --- | --- |
+| each float32 retrieval, aerosol, albedo and chi-squared store | ~925-990 |
+| `solar_zenith_angle` | 1,219 |
+| `height_scattering_layer` | 764 |
+| `iterations_retrieval` | 135 |
+| `spectral_point_count_retrieval` | 61 |
+| `quality_flags_retrieval` | 55 |
+| `spectral_point_count_prefit` | 49 |
+| `geolocation` (int64 time, lat, lon) | 2,493 |
+
+- **Float32 stores** compress to ~0.70 of their uncompressed ~1,321 MiB under
+  the zstd default.
+- **Chunks:** a float32 chunk is 16 MiB uncompressed and ~11 MiB stored, at
+  ~83 chunks per store for the month. The integer stores compress much
+  further, to ~0.6 MiB per chunk for the flags.
+
+**Where the build's time goes.** The build reads the next batch in the pool
+while it writes the current one. Writing and committing the 17 stores one
+after another in the main process takes ~6 s of each ~9 s batch: 115 s of the
+181 s loop. The rest is time spent waiting on reads that the write did not
+cover. So the build is write-bound in the main process, not read-bound:
+- more workers can shrink only the ~66 s of read wait, so at most about a
+  third of the build;
+- beyond ~16 workers they should buy nothing.
+
+This is inferred from log timestamps, not measured at another worker count.
+
+**The verifier does not prefetch.** Each batch of 20 granules takes ~16 s:
+- the raw reads run in the pool;
+- the main process then reads the stores and compares them, serially.
+
+More workers shorten only the raw-read part.
+
+**Extrapolated to the full TROPOMI record** at the same 8 workers. These are
+estimates. Times scale by file count (38,648 / 390, x99) and size by
+observations (x94):
+- **build:** ~5.2 h wall;
+- **verify:** ~9 h wall;
+- **storage:** ~1.3 TiB for the 17 stores.
+
+Partial and shell files (finding 7) hold fewer observations, so the time
+figures lean high.
 
 ## Tier 3: production (not yet planned in detail)
 
@@ -191,8 +234,9 @@ The Tier 2 figures set the job size and chain length. Then, per product:
    (dry run first).
 
 Blockers:
-- **TROPOMI:** none left after the re-download and the audit (findings 5, 7
-  and 8). The bench comes first.
+- **TROPOMI:** no data blockers remain after the re-download, the audit and
+  the bench (findings 5, 7 and 8; Tier 2). The scale settings come first:
+  workers, chunks, queue and walltime.
 - **GOSAT:** the whole record is ~9,000 small files, so a single develop job
   covers build and verification. It waits on the cross-product naming pass,
   so that its kernel and a priori stores are built with the rest.
