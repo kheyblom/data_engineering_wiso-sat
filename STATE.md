@@ -65,6 +65,14 @@ Read this first in a new session. Update it whenever work lands.
      - Memory: PBS reports ~32 GiB because it counts the file cache. The
        processes hold ~8.3 GiB: main 7.1 GiB, workers 0.1-0.27 GiB.
      - The whole chain should end ~02:00-03:00 MDT on 2026-10-17.
+   - **The build is done.**
+     - B1 ran 4 h 24 min, exit 0, all 645 batches. Peak memory was 11.04 GiB
+       main and 0.40 GiB per worker.
+     - B2 was a no-op ("every store is already complete"), exit 0.
+     - The stores hold 32,657,526,240 obs and 1.3 TiB on disk.
+   - **V1 started 16:27.** Its structure and index phases pass: 38,645
+     granules match the raw listing, and every store's obs length agrees. The
+     values phase runs at ~16 s per 60 granules, so V1 should end ~19:30-20:00.
    - **To check on resume:**
      - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
      - that B2 was a no-op;
