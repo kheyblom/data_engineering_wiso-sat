@@ -50,10 +50,13 @@ Read this first in a new session. Update it whenever work lands.
      | job | id |
      | --- | --- |
      | B1 | 7841000 |
-     | B2 | 7841001 |
-     | V1 | 7841002 |
-     | V2 | 7841003 |
-     | V3 | 7841004 |
+     | B2 | 7841009 |
+     | V1 | 7841010 |
+     | V2 | 7841011 |
+     | V3 | 7841012 |
+
+     The first B2 and V1-V3 (7841001-04) were deleted by mistake, while B1
+     was running, and resubmitted unchanged.
 
    - **The audit opened every file with h5py, not netCDF4.** Another file
      could still crash a build worker. The build would then fail loudly and
@@ -79,6 +82,10 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Things the next session needs to know
 
+- **PBS writes a job's `.OU` file while it runs** (`Keep_Files = od`).
+  The file's existence does not mean the job ended. Check `job_state` with
+  `qstat -f <id>.desched1`, and `Exit_status` with `qstat -xf`. Plain
+  `qstat -u $USER` may not list held jobs.
 - **Commands.** Run from the repo root:
   - test: `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`;
   - batch: `bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=... [VERIFY=1] [AFTER=<jobid>] QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=01:00:00 ./submit_wisosat_zarr.sh'`.
