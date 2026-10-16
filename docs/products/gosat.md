@@ -94,3 +94,18 @@ raw/GOSAT-2/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYY>-v3.0.1/v3.0.1/<YYYY>/IUP-GHG
 - **The subset at fixture level:** δD and XH2O, their uncertainties, both
   flags, and SZA. The kernel, a priori, dry column and pressure grid wait for
   the cross-product naming pass.
+
+## Known data issues
+
+Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
+
+| # | issue | status |
+| --- | --- | --- |
+| G1 | **DED and H2O are separate, separately filtered files** with only partly overlapping soundings. Over 13 sampled days, 44% of DED soundings were in the H2O file. Where both hold a sounding, all 16 shared fields are identical. | handled (user decision 2026-10-14): merged per day onto one axis of distinct soundings. A variable is absent where its file lacks the sounding. |
+| G2 | **Pre-filtered upstream**: the files hold only soundings that passed IUP's quality control, and every flag sampled is 0. | record only: stated in `filtering_guidance` |
+| G3 | **Time has no decimal grid coarser than a nanosecond.** It is float64 seconds since 1970. In an exact round trip of 38,003 sampled times, ms failed 99% and us 76%. | handled: stored as int64 ns since 1900 |
+| G4 | **The time variable carries `calendar: standard`**, which blocks xarray's time encoding. | handled: kept as `original_calendar`; stored as proleptic_gregorian |
+| G5 | **GOSAT: 138 days have no files, GOSAT-2: 51**, identical for DED and H2O. Not yet checked against upstream. | handled for GOSAT (`expected_missing_days`); GOSAT-2 not configured |
+| G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly |
+| G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit. | open: value-check it before storing |
+| G8 | `xh2o` holds negative values (minimum -116.6 ppm in one sampled day). | record only |

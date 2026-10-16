@@ -70,3 +70,19 @@ products share one file format, so they will most likely share one reader:
 
 - FS: DOF >= 1 and COD <= 0.5 (Sarkar et al. 2026).
 - RS: already filtered upstream.
+
+## Known data issues
+
+Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
+
+| # | issue | status |
+| --- | --- | --- |
+| R1 | **AIRS has no data 2020-04 .. 2021-01**, between the RS and FS streams. CrIS SNPP RS and JPSS1 FS overlap by two months. | record only |
+| R2 | **Two fill conventions**: `_FillValue` -999 throughout, but `missing_value` is -9999 on `dd_col_p` and `dd_004`. | open: declare and mask both |
+| R3 | **Time may be TAI93** (seconds since 1993-01-01, ~10 s of leap seconds by 2017). | open: check against `datetime_utc` |
+| R4 | **FS processor versions drift** (R1p11..R1p19, F0p1..F0p6). Units are stable, but `long_name` wording changes, and `retrieval/x_raw`/`x_h2o_raw` are absent from the oldest files. | open: restrict to variables present throughout, or tolerate absence |
+| R5 | **51 AIRS FS files end `_F0p3_target.nc`**, possibly duplicating plain files' dates. | open: check before building |
+| R6 | **The AIRS FS folder holds L3 files** (`AIRS_TROPESS_gridded_*`). | open: glob `TROPESS_*` |
+| R7 | **`x_h2o` reaches 0.44 mol mol-1**, which is unphysical. | record only |
+| R8 | **`observation_error_h2o` is a ln-space relative error** with units `1`, sitting next to mole-fraction variables. | open: must never be scaled x 1e6 (project rule) |
+| R9 | **RS (Summary) files are pre-filtered**; FS files are not. | record only |

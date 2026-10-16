@@ -95,7 +95,7 @@ on 2026-10-16:
 - the 19 new missing days are all real upstream gaps (404);
 - 2025-11-30 exists upstream only as empty orbit directories.
 
-See `docs/products/tropomi-download-gaps.md`.
+See `docs/products/tropomi.md` (T7).
 
 ### 6. A source `calendar` attribute blocks the time write
 

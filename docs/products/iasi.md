@@ -51,3 +51,15 @@ raw/IASI/IASI_L2/<YYYY>/IASIAB_MUSICA_030201_L2pp_H2Oiso_v2_<YYYYMMDD>_{morning,
 - The L3 that WISO-SAT used was MUSICA-filtered.
 - Record the MUSICA L2pp flag guidance from Diekmann et al. (2021). This has
   not been read yet.
+
+## Known data issues
+
+Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
+
+| # | issue | status |
+| --- | --- | --- |
+| I1 | **The H2O basis is not stated in the file**; it is dry-air per Sarkar et al. (2026). | record only |
+| I2 | **`musica_wvp` and its family are log-space states** with units `1`. | open: never scale (project rule) |
+| I3 | **Averaging kernels are stored as a truncated SVD** (rank <= 13). | open: store the components as published; reconstructing is a derivation |
+| I4 | **`IASIAB`** presumably combines MetOp-A and -B; not confirmed. `raw/IASI/trash` and the L3 data bag sit beside the L2 files. | open: confirm from metadata; exclude both folders |
+| I5 | **WISO-SAT itself gridded the MUSICA L3**, not these L2pp files. | record only |

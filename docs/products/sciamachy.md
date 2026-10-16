@@ -52,3 +52,14 @@ raw/SCIAMACHY/HDO_SICORv10/<YYYYMM>/sci_l2_h2o_hdo_0110_<orbit:05d>.nc   (~4 MB)
 - Granule: an orbit file.
 - Geolocation store: ~1.25 GB (lat/lon/time) plus 19 GB for the pressure grid
   (61 levels), uncompressed.
+
+## Known data issues
+
+Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
+
+| # | issue | status |
+| --- | --- | --- |
+| S1 | **`raw/SCIAMACHY/H2O` and `raw/SCIAMACHY/HDO` hold ESA MIPAS files**, a different Envisat instrument that is not in WISO-SAT. | handled: excluded |
+| S2 | **Same SRON format as TROPOMI**, so TROPOMI's T1-T17 (`tropomi.md`) likely apply. No 9.96921e36 was seen in the one file sampled. | open: check the fill convention, and audit for shells and partial files as for TROPOMI |
+| S3 | **Negative retrieved columns** (e.g. `hdo_column` -9.3e16) are real retrieval output, not fill. | record only |
+| S4 | **No δD is published**; WISO-SAT derives it. | record only: deriving it would be a new quantity and needs approval |

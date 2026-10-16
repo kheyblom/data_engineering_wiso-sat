@@ -131,7 +131,7 @@ expected_missing_days:
 
 # Orbit directories that are empty upstream as well (each checked against the
 # server listing, 2026-10-14). After the re-download these are the only empty
-# ones. See docs/products/tropomi-download-gaps.md.
+# ones. See docs/products/tropomi.md (T2).
 expected_empty_granules:
   - '00638'  # 2017-11-27
   - '00934'  # 2017-12-18

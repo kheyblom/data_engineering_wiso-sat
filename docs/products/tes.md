@@ -71,3 +71,17 @@ raw/TES/TL2HDOLN_6-20241006_030112/TES-Aura_L2-HDO-Nadir_<YYYY-MM>_v006_Litev01.
 
 - Strict: COD <= 0.5 and DOF >= 1.
 - Relaxed: COD <= 3.6 and DOF >= 0.5.
+
+## Known data issues
+
+Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
+
+(2026-10-14).
+
+| # | issue | status |
+| --- | --- | --- |
+| E1 | **`Species` stacks two profiles**: levels 0-16 are HDO and 17-33 are H2O, on the same 17 pressures repeated. `Retrieval/HDO_H2O` is an identical array, not a ratio. `AveragingKernel`, `ObservationErrorCovariance` and the `Characterization/*ErrorCovariance` stack the same way into 2 x 2 blocks. | open: split into one store per quantity and the matrices into blocks, cross blocks kept (style guide) |
+| E2 | **`TotalColumnDensity` is mislabelled `molecules/m2`; the values are the HDO column in molec cm-2.** Integrating the HDO profile gives exactly 1e4 times the stored value for every target. | open: declare the corrected source unit and its evidence in the key; convert x 1e4 / N_A |
+| E3 | **Non-CF attributes**: `Units`, `FillValue`, `MissingValue` (capitalised), so xarray does not mask fill. Fill values seen: -999, -999.0 and -99. | open: declare per variable |
+| E4 | **Time is "seconds since 1993-01-01"** with calendar `julian`; likely TAI93, which counts leap seconds. | open: check against `YYYYMMDD` and `UT_Hour` |
+| E5 | **2011-2015 is absent from disk** (Sarkar et al. 2026 use TES through 2015). | record only: flagged, not chased |
