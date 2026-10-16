@@ -37,6 +37,15 @@ Read this first in a new session. Update it whenever work lands.
      chunk, inside the guide's 5-40 MiB (uncompressed). The int stores
      compress far more (flags ~0.6 MiB per chunk); decide whether that
      matters.
+   - **Object counts.** At 20 granules per commit, the full record makes
+     ~1,930 commits. That means ~14-21k objects in `chunks/` and ~15k in
+     `manifests/` per store, because history is kept and every commit
+     rewrites the index chunks and the tail chunk. GLADE asks for ~2-3k files
+     per directory. The levers are: raise `granules_per_commit` (main peaks
+     at 2.93 GiB at 20, and batches are prefetched); expire old snapshots
+     before `--gc` (a finalize change, which loses the per-commit history
+     that the repository check reads); or larger chunks. Even with history
+     expired, ~7,800 final data chunks per store remain at 16 MiB.
    - **Queue and walltime.** The estimate at 8 workers is ~5.2 h build and
      ~9 h verify. Derecho main charges a whole node (128 cores) for up to
      12 h, so ~5.2 h there would be ~670 core-hours, against ~42 on 8

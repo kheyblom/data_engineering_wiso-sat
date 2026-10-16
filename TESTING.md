@@ -197,6 +197,14 @@ bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && \
 - **Chunks:** a float32 chunk is 16 MiB uncompressed and ~11 MiB stored, at
   ~83 chunks per store for the month. The integer stores compress much
   further, to ~0.6 MiB per chunk for the flags.
+- **Objects on disk.** One float32 store holds 144 objects in `chunks/`, 160
+  in `manifests/`, and 21 each in `snapshots/` and `transactions/`. Every
+  commit rewrites the six granule-index chunks and the trailing partial data
+  chunk, and writes one manifest per array. `--gc` never expires history, so
+  all of these stay reachable.
+  - Scaled by commits to the full record (~1,930 at 20 granules per
+    commit), that is ~14-21k chunks and ~15k manifests per store, in one
+    directory each. The GLADE guidance is ~2-3k files per directory.
 
 **Where the build's time goes.** The build reads the next batch in the pool
 while it writes the current one. Writing and committing the 17 stores one
