@@ -59,6 +59,7 @@ from utils.granules import (
     FILE_SEPARATOR,
     GRANULE_DIM,
     INDEX_FIELDS,
+    LOCATION_COORDINATES,
     check_coverage,
     check_order,
     decode_text,
@@ -179,20 +180,26 @@ def parse_args():
     return parser.parse_args()
 
 
-def default_fill_rows(values):
-    """Rows of a raw array that hold only the netCDF default fill for its dtype.
+def missing_rows(values, fill=()):
+    """Rows of a raw array that hold no value at all.
+
+    Missing is the netCDF default fill for the dtype, a declared fill, or NaN.
+    Written apart from the build's ``utils.granules.unwritten``, so that the
+    two sides cannot agree by construction on which rows are observations.
 
     Args:
         values (numpy.ndarray): Observation dimension first.
+        fill (Iterable): The source's declared fill values.
 
     Returns:
-        numpy.ndarray: bool per row; all False for a dtype with no default.
+        numpy.ndarray: bool per row.
     """
-    default = netCDF4.default_fillvals.get(values.dtype.str[1:])
-    if default is None:
-        return np.zeros(values.shape[0], dtype=bool)
     flat = values.reshape(values.shape[0], -1)
-    return (flat == np.asarray(default, dtype=values.dtype)).all(axis=1)
+    empty = np.isnan(flat) if flat.dtype.kind == 'f' else np.zeros(flat.shape, dtype=bool)
+    default = netCDF4.default_fillvals.get(values.dtype.str[1:])
+    for value in [*fill, *([] if default is None else [default])]:
+        empty |= flat == np.asarray(value, dtype=flat.dtype)
+    return empty.all(axis=1)
 
 
 def to_epoch(values, unit):
@@ -208,7 +215,7 @@ def to_epoch(values, unit):
     return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
-def read_expected(granule, reader_name, items, time, unit):
+def read_expected(granule, reader_name, items, time, unit, location, allowed):
     """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
@@ -224,9 +231,16 @@ def read_expected(granule, reader_name, items, time, unit):
         items (list): ``(source, fill, factor, absent)`` per source to read.
         time (str): The time coordinate's source path.
         unit (str): The datetime64 unit the key stores time in.
+        location (tuple): Source paths of time, lat and lon: a row is an
+            observation only if all three are written (user decision
+            2026-10-17).
+        allowed (tuple): Sources that may hold values on a row left out.
 
     Returns:
-        list: Per file, a dict with ``path``, ``n_obs``, ``version``,
+        list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
+            ``timed`` (rows left out although their time is written),
+            ``leaked`` (values on rows left out that may not be lost),
+            ``version``,
             ``problems`` (layout), and ``sources``: per source present in the
             file, the ``expected`` stored values, the ``dtype`` as published,
             its ``attrs``, how many values matched a declared ``fill``, how many
@@ -240,21 +254,29 @@ def read_expected(granule, reader_name, items, time, unit):
         with h5py.File(path, 'r') as handle:
             out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
             out['problems'] = reader.check_granule(handle)
-            # rows whose time is all netCDF default fill were never processed
-            # and are not stored, as long as nothing else is written on them.
-            # Worked out here from the raw time, not taken from the build
-            raw_time = handle[time][...]
-            processed = ~default_fill_rows(raw_time)
-            out['n_rows'] = int(raw_time.shape[0])
+            # a row is an observation only if its time, lat and lon are all
+            # written; the rest are not stored, as long as nothing else that
+            # may not be lost is written on them. Worked out here from raw,
+            # not taken from the build
+            fills = {source: fill for source, fill, _, _ in items}
+            raw_location = {source: handle[source][...] for source in location}
+            processed = np.ones(raw_location[time].shape[0], dtype=bool)
+            for source, values in raw_location.items():
+                processed &= ~missing_rows(values, fills.get(source, ()))
+            out['n_rows'] = int(processed.size)
             out['n_obs'] = int(processed.sum())
+            out['timed'] = int(
+                (~processed & ~missing_rows(raw_location[time], fills.get(time, ()))).sum()
+            )
             out['leaked'] = 0
             for source, fill, factor, absent in items:
                 if source not in handle:
                     continue
                 dataset = handle[source]
-                raw = dataset[...]
+                raw = raw_location[source] if source in raw_location else dataset[...]
                 if not processed.all():
-                    out['leaked'] += int((~default_fill_rows(raw[~processed])).sum())
+                    if source not in location and source not in allowed:
+                        out['leaked'] += int((~missing_rows(raw[~processed], fill)).sum())
                     raw = raw[processed]
                 # the style guide's squeeze, done here without the build's helper
                 raw = raw.reshape(
@@ -544,6 +566,7 @@ class Pass:
         }
         self.leaked = 0
         self.unprocessed = 0
+        self.timed = 0
         self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
         self.bounds = [np.inf, -np.inf, np.inf, -np.inf]
@@ -631,6 +654,8 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
     time = time_source(product)
     _, unit = time_units(product)
     coordinate_names = {entry.original: name for name, entry in coordinates(product).items()}
+    location = tuple(coordinates(product)[name].original for name in LOCATION_COORDINATES)
+    allowed = tuple(settings.get('allowed_on_rows_left_out') or [])
     targets = []
     for store in groups:
         for name, source in store_sources(product, store).items():
@@ -663,7 +688,8 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
             end = min(begin + batch, len(granules))
             chunk = granules[begin:end]
             arguments = (chunk, [product] * len(chunk), [items] * len(chunk),
-                         [time] * len(chunk), [unit] * len(chunk))
+                         [time] * len(chunk), [unit] * len(chunk),
+                         [location] * len(chunk), [allowed] * len(chunk))
             results = list((pool.map if pool else map)(read_expected, *arguments))
             obs0 = int(starts[begin])
             obs1 = int(starts[end - 1] + counts[end - 1])
@@ -680,6 +706,7 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
                     seen.problems += [(granule.id, problem) for problem in entry['problems']]
                     seen.leaked += entry['leaked']
                     seen.unprocessed += entry['n_rows'] - entry['n_obs']
+                    seen.timed += entry['timed']
                 if sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
                     seen.index['granule_source_rows'] += 1
 
@@ -789,8 +816,10 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
         'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
     )
     report.check(
-        'rows left out as unprocessed hold no data in any source',
-        seen.leaked == 0, f'{seen.unprocessed} rows left out, {seen.leaked} values on them',
+        'rows left out (no time, lat or lon) hold no data beyond what the config allows',
+        seen.leaked == 0,
+        f'{seen.unprocessed} rows left out, {seen.timed} of them with a time; '
+        f'{seen.leaked} values on them',
     )
     report.check(
         'every file has the documented layout', not seen.problems,

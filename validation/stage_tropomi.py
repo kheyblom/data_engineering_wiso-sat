@@ -21,8 +21,10 @@ Chosen deliberately (see config/tropomi/config_zarr_fixture.yaml):
   as stand-ins; their own dates are in 2019. They are a shell, a partial
   orbit and a file truncated upstream (see the fixture config). Their orbit
   numbers sort before the 2020 orbits, so time still never decreases.
-- **One more, linked** (``LINKED_DEFECTS``): orbit 3335, whose corrupt heap
-  segfaults HDF5 on open. It is declared unreadable, so it is only probed.
+- **Two more, linked** (``LINKED_DEFECTS``): orbit 3335, whose corrupt heap
+  segfaults HDF5 on open (declared unreadable, so only probed), and orbit 8480,
+  whose only row with a time has no latitude or longitude, so the build must
+  leave it out and the orbit holds no observations.
 - **An empty orbit directory** (``EMPTY_ORBIT``), standing in for the 353
   orbits that are empty upstream. The fixture config declares it in
   ``expected_empty_granules``; orbit 13872 really does have a file upstream,
@@ -69,9 +71,10 @@ EMPTY_ORBIT = ('2020/06/17', '13872')
 # real defect files (source day, orbit), copied whole under DEFECT_DAY
 DEFECTS = (('2019/01/06', '6380'), ('2019/06/06', '8532'), ('2019/04/17', '7821'))
 DEFECT_DAY = '2020/06/16'
-# real defect files only ever probed, never read, so linked rather than
-# copied: 3335 is 0.8 GB, and opening it segfaults HDF5
-LINKED_DEFECTS = (('2018/06/05', '3335'),)
+# real defect files linked rather than copied, since each is a whole ~0.8 GB
+# orbit: 3335, whose open segfaults HDF5 (declared unreadable, only probed),
+# and 8480, whose one row with a time has no position (left out, by the rule)
+LINKED_DEFECTS = (('2018/06/05', '3335'), ('2019/06/03', '8480'))
 
 # read for the verifier's layout check, though no store holds them
 EXTRA_SOURCES = ('instrument/scanline', 'instrument/ground_pixel')

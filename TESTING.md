@@ -161,6 +161,29 @@ The chain is `afterany`, so it ran all its jobs through in a minute. That cost
 little this time, but **watch the first job of a chain until it commits**, and
 delete the rest if it dies.
 
+### 10. Six rows with a time but no position (2026-10-17)
+
+The first production verification (V1-V3, jobs 7841010-12, ~97 core-hours)
+failed. Every value matched raw, but `instrument/latitude_center` and
+`longitude_center` held 6 netCDF default fills on stored rows.
+- **The rows:** orbit 8480 (1 row), 8674 (2) and 8726 (3), all June 2019 (see
+  `docs/products/tropomi.md`, T8).
+  - Each is the only row with a time in its file.
+  - SRON wrote time, SZA (~101 deg, night) and other viewing angles, and
+    nothing else: no position, retrieval or flags.
+- **Why they were stored:** under finding 8 a row with a time was an
+  observation. The geolocation store held 9.97e36 for their lat/lon; the
+  other stores held fill, except SZA.
+- **The fix (user decision):** an observation needs time, lat and lon all
+  written, and the rule is now shared code for every product (`RowRule` in
+  `utils/granules.py`). A row left out may hold values only in the config's
+  `allowed_on_rows_left_out`. TROPOMI allows SZA, so these rows' SZA goes
+  with them.
+- **The test:** the fixture links orbit 8480, and a guard checks that the
+  build refuses when SZA is not allowed. 39 cases pass.
+- **Why the audit missed it:** it checked whether each dataset was written at
+  all, not row by row.
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445

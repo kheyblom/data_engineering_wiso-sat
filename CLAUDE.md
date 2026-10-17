@@ -37,7 +37,7 @@ stores.
 
 | product | raw subpath | granule | status |
 | --- | --- | --- | --- |
-| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | fixture and bench pass; every file audited; production chain planned (TESTING.md Tier 3) |
+| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production built 2026-10-16; verification failed on 6 unlocated rows (finding 10); rebuild pending |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT fixture passes |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
@@ -60,7 +60,7 @@ wisosat_zarr.py               # build: one pass over the granules writes every s
 verify_wisosat_zarr.py        # read-only; every observation, h5py vs the build's netCDF4
 finalize_wisosat_zarr.py      # --status, then --attrs, --tag, --gc (dry run without --apply)
 submit_wisosat_zarr.sh        # CONFIG=... [VERIFY=1] ./submit_wisosat_zarr.sh; show the user first
-products/<product>.py         # reader: list_granules, read_granule, decode_time, check_granule
+products/<product>.py         # reader: list_granules, read_granule(granule, sources, time, rule), decode_time, check_granule
 utils/                        # granules (shared types), nomenclature, path_utils, zarr_utils
 config/<product>/config_zarr*.yaml
 nomenclature-key_<product>.md # machine read: variable, coordinate and frequency tables
@@ -89,11 +89,16 @@ validation/stage_<product>.py, validation/test_pipeline.py
     days must be (`expected_missing_days`);
   - check a gap against the upstream listing before declaring it: half of
     TROPOMI's first empty orbits were download failures.
-- **Unprocessed rows are left out, checked** (user decision 2026-10-16;
-  TESTING.md finding 8):
-  - an observation is a row whose time is written;
-  - rows with unwritten time are dropped only if every source is fill on
-    them;
+- **Rows that are not observations are left out, checked**, for every
+  product (user decisions 2026-10-16 and 2026-10-17; TESTING.md findings 8
+  and 10):
+  - an observation is a row whose time, lat and lon are all written (not
+    netCDF default fill, declared fill or NaN);
+  - a row left out may hold values only in the sources the config lists in
+    `allowed_on_rows_left_out` (TROPOMI: SZA); anything else fails the build;
+  - every reader applies this through `RowRule`, `observed_rows` and
+    `leaked_rows` in `utils/granules.py`. The verifier repeats it on its own
+    from raw;
   - `granule_source_rows` in the index keeps each file's own row count.
 - **Testing tiers and findings:** [TESTING.md](TESTING.md).
 - **Test after any shared change** (condition 2), from the repo root:

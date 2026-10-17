@@ -23,6 +23,10 @@ file, in time order:
 - **Absent values.** A variable from one file is absent at the soundings only
   the other file has. The reader marks those, and shared code fills them (NaN,
   or the config's ``absent_fill_values`` for an integer).
+- **Rows that are not observations** (no time, latitude or longitude written)
+  are left out of each file before the merge, by the shared rule (``RowRule``
+  in ``utils/granules.py``, 2026-10-17). None is known in FOCAL; the rule
+  applies so that one would be caught rather than stored.
 
 Format facts:
 - **Flat files.** A source is named by its variable name.
@@ -48,7 +52,9 @@ import re
 import netCDF4
 import numpy as np
 
-from utils.granules import Granule, GranuleData, SourceArray, decode_text, squeeze_dims
+from utils.granules import (
+    Granule, GranuleData, SourceArray, decode_text, leaked_rows, observed_rows, squeeze_dims,
+)
 
 YEAR_DIR_RE = re.compile(
     r'^IUP-GHG-L2-(?P<kind>DED|H2O)-GOSAT-FOCAL-(?P<year>\d{4})-v(?P<version>[\d.]+)$'
@@ -172,11 +178,12 @@ def read_attrs(item):
     return {name: decode_text(item.getncattr(name)) for name in item.ncattrs()}
 
 
-def merge_positions(handles):
+def merge_positions(handles, keeps):
     """Where each file's soundings sit on the day's merged obs axis.
 
     Args:
         handles (list): Open netCDF4 datasets, in ``KINDS`` order.
+        keeps (list): Per file, the rows that are observations.
 
     Returns:
         tuple: The merged observation count, and per file an int array of
@@ -187,15 +194,15 @@ def merge_positions(handles):
             file's own order.
     """
     keys = []
-    for handle in handles:
+    for handle, keep in zip(handles, keeps):
         record = np.empty(
-            handle.dimensions[OBSERVATION_DIM].size,
+            int(keep.sum()),
             dtype=[('time', 'f8'), ('latitude', 'u4'), ('longitude', 'u4')],
         )
-        record['time'] = handle['time'][...]
+        record['time'] = handle['time'][...][keep]
         # bit patterns, so a sounding matches only the identical position
-        record['latitude'] = handle['latitude'][...].view('u4')
-        record['longitude'] = handle['longitude'][...].view('u4')
+        record['latitude'] = handle['latitude'][...][keep].view('u4')
+        record['longitude'] = handle['longitude'][...][keep].view('u4')
         if np.unique(record).size != record.size:
             raise ValueError(f'{handle.filepath()} repeats a sounding')
         keys.append(record)
@@ -212,13 +219,14 @@ def merge_positions(handles):
     return merged.size, positions
 
 
-def read_granule(granule, sources, time_source):
+def read_granule(granule, sources, time_source, rule):
     """Read one day's files and merge them onto one obs axis, raw.
 
     Args:
         granule (Granule): The day, from ``list_granules``.
         sources (Sequence): Variable names to read.
         time_source (str): The time variable, returned decoded.
+        rule (RowRule): Which rows are observations.
 
     Returns:
         GranuleData: The day's arrays on the merged obs axis. A variable is
@@ -226,8 +234,9 @@ def read_granule(granule, sources, time_source):
 
     Raises:
         KeyError: If no file of the day holds a source.
-        ValueError: If the files declare different versions, or disagree on a
-            variable they share at a shared sounding.
+        ValueError: If the files declare different versions, disagree on a
+            variable they share at a shared sounding, or a row left out holds
+            data the rule does not allow.
     """
     handles = [netCDF4.Dataset(path, 'r') for path in granule.paths]
     try:
@@ -237,7 +246,11 @@ def read_granule(granule, sources, time_source):
         versions = {str(handle.getncattr(VERSION_ATTR)) for handle in handles}
         if len(versions) != 1:
             raise ValueError(f'the files of {granule.id} declare versions {sorted(versions)}')
-        n_obs, positions = merge_positions(handles)
+        keeps = [
+            observed_rows({source: handle[source][...] for source in rule.location}, rule)
+            for handle in handles
+        ]
+        n_obs, positions = merge_positions(handles, keeps)
 
         arrays = {}
         for source in sources:
@@ -247,8 +260,17 @@ def read_granule(granule, sources, time_source):
             values, absent, attrs, dims, note = None, np.ones(n_obs, dtype=bool), None, None, None
             for i in holders:
                 variable = handles[i][source]
+                raw_all = variable[...]
+                keep = keeps[i]
+                if not keep.all():
+                    leaked = leaked_rows(source, raw_all, keep, rule)
+                    if leaked:
+                        raise ValueError(
+                            f'{handles[i].filepath()}: {source} holds data on {leaked} rows '
+                            f'with no time, latitude or longitude; they cannot be left out'
+                        )
                 dims_i, raw, note_i = squeeze_dims(
-                    variable[...], variable.dimensions, OBSERVATION_DIM, DIMENSION_RENAMES
+                    raw_all[keep], variable.dimensions, OBSERVATION_DIM, DIMENSION_RENAMES
                 )
                 if source == time_source:
                     raw = decode_time(raw)

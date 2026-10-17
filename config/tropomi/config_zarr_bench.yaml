@@ -54,6 +54,16 @@ expected_empty_granules:
   - '14399'  # 2020-07-24
   - '14493'  # 2020-07-30
 
+# Rows that are not observations are left out of every store (RowRule in
+# utils/granules.py): a row needs its time, latitude and longitude all written
+# (user decisions 2026-10-16 and 2026-10-17). A row left out may hold values
+# only in the sources listed here; anything else written on it fails the build
+# and the verification. Six rows (orbits 8480, 8674 and 8726, June 2019) carry
+# a time and SRON's viewing geometry but no position or retrieval; solar
+# zenith angle is the only stored source they hold (TESTING.md finding 10).
+allowed_on_rows_left_out:
+  - instrument/solar_zenith_angle
+
 # Fill the files use without declaring it: SRON sets no _FillValue, so missing
 # values are the netCDF default fills. Declared per source, and only where they
 # occur (measured in orbit 13847): the verifier fails if a declared value never

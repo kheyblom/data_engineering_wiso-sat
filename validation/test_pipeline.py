@@ -251,6 +251,10 @@ def test_product(results, config, scratch):
             {'expected_unreadable_granules': settings['expected_unreadable_granules'][:-1]},
             'HDF error',
         )
+    if settings.get('allowed_on_rows_left_out'):
+        guards['a value on a row left out that is not allowed'] = (
+            {'allowed_on_rows_left_out': []}, 'cannot be left out'
+        )
     if settings.get('expected_empty_granules'):
         guards['an undeclared empty granule directory'] = (
             {'expected_empty_granules': []}, 'holds 0 orbit files'

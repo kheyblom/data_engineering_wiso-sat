@@ -18,6 +18,14 @@ shared, so this module is the interface between the two halves:
   dimensions are squeezed. Masking and conversion are shared code, because they
   are driven by the config and the nomenclature key rather than the format.
 - ``GranuleData`` is everything one read returns.
+- ``RowRule`` says which source rows are observations, for every product
+  (user decision 2026-10-17, extending 2026-10-16). **An observation is a row
+  whose time, latitude and longitude are all written.** Every reader keeps
+  only those rows, through ``observed_rows`` and ``leaked_rows``. A row left
+  out may hold nothing but missing values, except in the sources the config
+  names in ``allowed_on_rows_left_out``; anything else written on it fails
+  the read, because leaving it out would lose data. The verifier works the
+  same rows out from raw on its own.
 
 The granule index every store carries is derived from these: one entry per
 granule with its identifier, first observation, observation count, start and
@@ -32,6 +40,7 @@ import datetime
 import os
 from typing import NamedTuple
 
+import netCDF4
 import numpy as np
 import pandas as pd
 
@@ -58,10 +67,10 @@ INDEX_ATTRS = {
     'granule_source_rows': {
         'long_name': 'rows the source file(s) declare along their observation dimension',
         'comment': (
-            'Larger than granule_obs_count where rows the producer never processed '
-            '(time unwritten, and every stored variable unwritten with it) were '
-            'left out; 0 observations means the file holds none. For a merged '
-            'granule, the sum over its files before merging.'
+            'Larger than granule_obs_count where rows that are not observations '
+            '(no time, latitude or longitude written, and no retrieval) were left '
+            'out; 0 observations means the file holds none. For a merged granule, '
+            'the sum over its files before merging.'
         ),
     },
 }
@@ -118,7 +127,8 @@ class GranuleData(NamedTuple):
         attrs (dict): The file's global attributes, byte strings decoded.
         arrays (dict): Source path -> :class:`SourceArray`.
         n_source_rows (int | None): Rows the file(s) declare, before merging or
-            leaving out unprocessed rows. None means the same as ``n_obs``.
+            leaving out rows that are not observations. None means the same as
+            ``n_obs``.
     """
 
     granule: Granule
@@ -127,6 +137,92 @@ class GranuleData(NamedTuple):
     attrs: dict
     arrays: dict
     n_source_rows: int | None = None
+
+
+# the coordinates a row needs to be an observation: where and when
+LOCATION_COORDINATES = ('time', 'lat', 'lon')
+
+
+class RowRule(NamedTuple):
+    """Which rows of a source file are observations; see the module docstring.
+
+    Attributes:
+        location (tuple): Source paths of time, lat and lon, from the key's
+            coordinate table.
+        fills (dict): Source path -> the fill values the config declares for
+            it (``source_fill_values``), which count as missing here too.
+        allowed (tuple): Source paths that may hold values on a row left out
+            (``allowed_on_rows_left_out``), e.g. viewing geometry the producer
+            computes before it geolocates.
+    """
+
+    location: tuple
+    fills: dict
+    allowed: tuple = ()
+
+
+def unwritten(values, fill=()):
+    """Rows of a raw array that hold no value at all.
+
+    A value is missing if it is the netCDF default fill for its dtype (what an
+    unwritten HDF5 chunk reads back as), a declared fill, or NaN.
+
+    Args:
+        values (numpy.ndarray): A raw array, observation dimension first.
+        fill (Iterable): The source's declared fill values.
+
+    Returns:
+        numpy.ndarray: bool per row, True where every element is missing.
+    """
+    flat = values.reshape(values.shape[0], -1)
+    missing = np.zeros(flat.shape, dtype=bool)
+    candidates = list(fill)
+    default = netCDF4.default_fillvals.get(values.dtype.str[1:])
+    if default is not None:
+        candidates.append(default)
+    for value in candidates:
+        missing |= flat == np.asarray(value, dtype=values.dtype)
+    if values.dtype.kind == 'f':
+        missing |= np.isnan(flat)
+    return missing.all(axis=1)
+
+
+def observed_rows(location, rule):
+    """The rows that are observations: time, lat and lon all written.
+
+    Args:
+        location (dict): Source path -> raw array, for every source in
+            ``rule.location``.
+        rule (RowRule): The rule.
+
+    Returns:
+        numpy.ndarray: bool per row.
+    """
+    keep = None
+    for source in rule.location:
+        located = ~unwritten(location[source], rule.fills.get(source, ()))
+        keep = located if keep is None else keep & located
+    return keep
+
+
+def leaked_rows(source, values, keep, rule):
+    """How many rows left out hold a value in this source that may not be lost.
+
+    The location sources are exempt (a row can have a time but no position),
+    and so are the sources the config allows.
+
+    Args:
+        source (str): The source path.
+        values (numpy.ndarray): Its raw array, every row.
+        keep (numpy.ndarray): From ``observed_rows``.
+        rule (RowRule): The rule.
+
+    Returns:
+        int: Rows left out on which this source holds a value.
+    """
+    if keep.all() or source in rule.location or source in rule.allowed:
+        return 0
+    return int((~unwritten(values[~keep], rule.fills.get(source, ()))).sum())
 
 
 def decode_text(value):

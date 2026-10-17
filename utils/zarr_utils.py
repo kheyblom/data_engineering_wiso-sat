@@ -35,7 +35,9 @@ import xarray as xr
 import zarr
 from icechunk.xarray import to_icechunk
 
-from .granules import GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, index_entries
+from .granules import (
+    GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, LOCATION_COORDINATES, RowRule, index_entries,
+)
 from .nomenclature import (
     conversion_factor,
     coordinates,
@@ -193,7 +195,7 @@ def declared_fill(settings, source):
 
 
 def check_fill_config(settings, sources):
-    """Fail if ``source_fill_values`` names a source this product does not use.
+    """Fail if a per-source config setting names a source this product does not use.
 
     Args:
         settings (dict): The loaded configuration.
@@ -203,8 +205,8 @@ def check_fill_config(settings, sources):
         ValueError: On an unknown source, or more than one value for a source.
     """
     declared = settings.get('source_fill_values') or {}
-    for key in ('source_fill_values', 'absent_fill_values'):
-        unknown = sorted(set(settings.get(key) or {}) - set(sources))
+    for key in ('source_fill_values', 'absent_fill_values', 'allowed_on_rows_left_out'):
+        unknown = sorted(set(settings.get(key) or []) - set(sources))
         if unknown:
             raise ValueError(f'{key} names sources the key does not: {unknown}')
     for source, values in declared.items():
@@ -395,6 +397,29 @@ def coordinate_attrs(product, name, array, settings, fill):
     if fill:
         attrs['source_fill_values_masked'] = ', '.join(repr(value) for value in fill)
     return attrs
+
+
+def row_rule(settings):
+    """The rule for which source rows are observations (``utils/granules.py``).
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        RowRule: Location sources from the key, fills and allowed sources from
+            the config.
+    """
+    key = coordinates(settings['product'])
+    location = tuple(key[name].original for name in LOCATION_COORDINATES)
+    fills = {
+        source: tuple(values or [])
+        for source, values in (settings.get('source_fill_values') or {}).items()
+    }
+    return RowRule(
+        location=location,
+        fills=fills,
+        allowed=tuple(settings.get('allowed_on_rows_left_out') or []),
+    )
 
 
 def store_sources(product, store):

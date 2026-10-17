@@ -9,8 +9,10 @@
 # - real defect files copied whole into 2020-06-16 as stand-ins: shell 6380
 #   (nothing written), partial 8532 (10 of 697,890 rows processed, flags and
 #   scanline indices unwritten), and 7821 (truncated upstream, declared
-#   unreadable); plus 3335, linked rather than copied, whose corrupt heap
-#   segfaults HDF5 on open (declared unreadable, so only probed);
+#   unreadable); plus, linked rather than copied, 3335, whose corrupt heap
+#   segfaults HDF5 on open (declared unreadable, so only probed), and 8480,
+#   whose one row with a time has no position (left out by the row rule, its
+#   solar zenith angle allowed to go with it);
 # - windows of 23-47 scanlines give orbits of different sizes, so appends land
 #   mid-chunk at obs: 5000;
 # - granules_per_commit: 2 gives three commits per store, and so resume points;
@@ -54,6 +56,16 @@ expected_empty_granules:
 expected_unreadable_granules:
   - '03335'  # segfaults HDF5 on open, rather than raising
   - '07821'  # truncated; the test's undeclared-file guard drops this, the last
+
+# Rows that are not observations are left out of every store (RowRule in
+# utils/granules.py): a row needs its time, latitude and longitude all written
+# (user decisions 2026-10-16 and 2026-10-17). A row left out may hold values
+# only in the sources listed here; anything else written on it fails the build
+# and the verification. Six rows (orbits 8480, 8674 and 8726, June 2019) carry
+# a time and SRON's viewing geometry but no position or retrieval; solar
+# zenith angle is the only stored source they hold (TESTING.md finding 10).
+allowed_on_rows_left_out:
+  - instrument/solar_zenith_angle
 
 source_fill_values:
   target_product/deltad: [9.96921e+36]

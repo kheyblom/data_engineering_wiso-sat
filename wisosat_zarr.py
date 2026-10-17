@@ -10,7 +10,9 @@ is derived from another.
 The pass, per batch of ``granules_per_commit`` granules:
 
 1. read the granules in a pool of ``num_workers`` processes (HDF5 is not
-   thread safe), prefetching the next batch while this one is written;
+   thread safe), prefetching the next batch while this one is written. The
+   reader keeps only rows that are observations, with time, latitude and
+   longitude all written (``RowRule`` in ``utils/granules.py``);
 2. check that every granule declares the configured processor version and
    that time never decreases, within or across granules;
 3. append each store's slice, data and granule index together, as one commit
@@ -49,6 +51,7 @@ from utils.zarr_utils import (
     log_key,
     open_repository,
     resolve_chunks,
+    row_rule,
     store_sources,
     time_source,
     write_append,
@@ -86,12 +89,14 @@ class Reader:
         reader (module): The product's reader.
         sources (list): Source paths every read returns.
         time (str): The time coordinate's source path.
+        rule (RowRule): Which rows are observations.
     """
 
-    def __init__(self, reader, sources, time, num_workers):
+    def __init__(self, reader, sources, time, rule, num_workers):
         self.reader = reader
         self.sources = sources
         self.time = time
+        self.rule = rule
         # spawn rather than fork: by the time the pool starts, icechunk's own
         # threads are running in this process, and forking a threaded process
         # can deadlock the child
@@ -112,9 +117,11 @@ class Reader:
             list: One future per granule, or the results directly without a pool.
         """
         if self.pool is None:
-            return [self.reader.read_granule(g, self.sources, self.time) for g in granules]
+            return [
+                self.reader.read_granule(g, self.sources, self.time, self.rule) for g in granules
+            ]
         return [
-            self.pool.submit(self.reader.read_granule, g, self.sources, self.time)
+            self.pool.submit(self.reader.read_granule, g, self.sources, self.time, self.rule)
             for g in granules
         ]
 
@@ -174,7 +181,8 @@ def build(settings):
     # the version names every store, so it is checked on the first granule
     # before any repository is created under a name that may be wrong
     time = time_source(product)
-    check_versions([reader.read_granule(granules[0], [time], time)], settings)
+    rule = row_rule(settings)
+    check_versions([reader.read_granule(granules[0], [time], time, rule)], settings)
 
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
     repositories, states = {}, {}
@@ -216,7 +224,7 @@ def build(settings):
     written = {store: 0 for store in stores}
     masked = {store: {} for store in stores}
     versions = None
-    source_reader = Reader(reader, sources, time, num_workers)
+    source_reader = Reader(reader, sources, time, rule, num_workers)
     try:
         pending = source_reader.submit(granules[batches[0][0]:batches[0][1]])
         for position, (begin, end) in enumerate(batches):

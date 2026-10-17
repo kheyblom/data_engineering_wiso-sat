@@ -170,6 +170,11 @@ expected_missing_days:
   - 2021-11-24
   - 2021-11-25
 
+# Rows that are not observations (no time, latitude or longitude written) are
+# left out by the shared rule (RowRule in utils/granules.py, 2026-10-17). None
+# is known in FOCAL, so nothing may be written on one.
+allowed_on_rows_left_out: []
+
 # FOCAL declares no fill and the sampled files hold none: they publish only
 # soundings that passed quality control. The verifier fails if a netCDF default
 # fill turns up anywhere.

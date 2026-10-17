@@ -30,10 +30,18 @@ Format facts the reader depends on, measured 2026-10-13/14 (see
   - 77 are partial, mostly unprocessed pixels.
 
   A row whose ``time`` is all fill was never processed, and every variable
-  the pipeline reads is fill on it too (48.7 million such rows checked). Such
-  rows are left out (user decision, 2026-10-16), but only after
-  ``read_granule`` confirms every source it read is fill there. Otherwise it
-  raises. A shell becomes a granule with no observations; the index keeps its
+  the pipeline reads is fill on it too (48.7 million such rows checked).
+- **Six rows have a time but no position** (orbits 8480, 8674 and 8726, June
+  2019, found by the first production verification, 2026-10-17). SRON wrote
+  their time and viewing geometry (SZA ~100.5-101 deg, night) and nothing
+  else: no latitude, longitude or retrieval.
+
+  Both kinds are left out by the shared rule (``RowRule`` in
+  ``utils/granules.py``; user decisions 2026-10-16 and 2026-10-17): a row is
+  an observation only if time, latitude and longitude are all written. The
+  production config allows ``instrument/solar_zenith_angle`` to hold values
+  on a row left out; anything else written there makes ``read_granule``
+  raise. A shell becomes a granule with no observations; the index keeps its
   row count as ``granule_source_rows``.
 - **Three files are corrupt upstream** (orbits 3335, 7821 and 7844, the same
   bytes as on the server). They are skipped only if declared in
@@ -59,7 +67,9 @@ import netCDF4
 import numpy as np
 import pandas as pd
 
-from utils.granules import Granule, GranuleData, SourceArray, decode_text, squeeze_dims
+from utils.granules import (
+    Granule, GranuleData, SourceArray, decode_text, leaked_rows, observed_rows, squeeze_dims,
+)
 
 FILE_RE = re.compile(r'^s5p_l2_hdo_(?P<product_version>\d{4})_(?P<orbit>\d{5})\.nc$')
 
@@ -237,7 +247,7 @@ def read_attrs(item):
     return {name: decode_text(item.getncattr(name)) for name in item.ncattrs()}
 
 
-def read_granule(granule, sources, time_source):
+def read_granule(granule, sources, time_source, rule):
     """Read the named variables of one orbit file, raw.
 
     A top-level function of picklable arguments, so the build can run it in a
@@ -248,14 +258,15 @@ def read_granule(granule, sources, time_source):
         sources (Sequence): Source paths to read, ``<group>/<variable>``.
         time_source (str): The source path of the time coordinate, which is
             returned decoded.
+        rule (RowRule): Which rows are observations.
 
     Returns:
-        GranuleData: The orbit's processed rows on the store's dimensions,
+        GranuleData: The orbit's observations on the store's dimensions,
             values exactly as stored except for the decoded time.
 
     Raises:
         KeyError: If a source is not in the file.
-        ValueError: If a row with unwritten time holds data in any source, so
+        ValueError: If a row left out holds data the rule does not allow, so
             leaving it out would lose something.
     """
     with netCDF4.Dataset(granule.paths[0], 'r') as handle:
@@ -264,28 +275,32 @@ def read_granule(granule, sources, time_source):
         handle.set_auto_mask(False)
         attrs = read_attrs(handle)
         n_rows = handle.dimensions[OBSERVATION_DIM].size
-        group, name = time_source.split('/')
-        processed = ~is_fill(np.asarray(handle[group][name][...]))
+        # read even when no store being built needs them: they decide the rows
+        location = {}
+        for source in rule.location:
+            group, name = source.split('/')
+            location[source] = np.asarray(handle[group][name][...])
+        keep = observed_rows(location, rule)
         arrays = {}
         for source in sources:
             group, name = source.split('/')
             variable = handle[group][name]
-            values = np.asarray(variable[...])
-            if not processed.all():
-                leaked = int((~is_fill(values[~processed])).sum())
+            values = location[source] if source in location else np.asarray(variable[...])
+            if not keep.all():
+                leaked = leaked_rows(source, values, keep, rule)
                 if leaked:
                     raise ValueError(
-                        f'orbit {granule.id}: {source} holds data on {leaked} rows '
-                        f'whose time is unwritten; they cannot be left out'
+                        f'orbit {granule.id}: {source} holds data on {leaked} rows with no '
+                        f'time, latitude or longitude; they cannot be left out'
                     )
-                values = values[processed]
+                values = values[keep]
             dims, values, note = squeeze_dims(
                 values, variable.dimensions, OBSERVATION_DIM, DIMENSION_RENAMES
             )
-            if not processed.all():
+            if not keep.all():
                 note = (
-                    f'{note}; {int((~processed).sum())} of {n_rows} rows left out as '
-                    f'unprocessed (time and every stored variable unwritten)'
+                    f'{note}; {int((~keep).sum())} of {n_rows} rows left out as not '
+                    f'observations (no time, latitude or longitude written)'
                 )
             if source == time_source:
                 # the decoded time loses the trailing field dimension
@@ -302,7 +317,7 @@ def read_granule(granule, sources, time_source):
             )
     return GranuleData(
         granule=granule,
-        n_obs=int(processed.sum()),
+        n_obs=int(keep.sum()),
         version=str(attrs.get(VERSION_ATTR, '')),
         attrs=attrs,
         arrays=arrays,

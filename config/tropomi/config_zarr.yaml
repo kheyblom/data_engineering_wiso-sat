@@ -494,6 +494,16 @@ expected_unreadable_granules:
   - '07821'  # 2019-04-17, truncated (3.6 MB of 645 MB)
   - '07844'  # 2019-04-19, truncated (18 MB of 1.2 GB)
 
+# Rows that are not observations are left out of every store (RowRule in
+# utils/granules.py): a row needs its time, latitude and longitude all written
+# (user decisions 2026-10-16 and 2026-10-17). A row left out may hold values
+# only in the sources listed here; anything else written on it fails the build
+# and the verification. Six rows (orbits 8480, 8674 and 8726, June 2019) carry
+# a time and SRON's viewing geometry but no position or retrieval; solar
+# zenith angle is the only stored source they hold (TESTING.md finding 10).
+allowed_on_rows_left_out:
+  - instrument/solar_zenith_angle
+
 # Fill the files use without declaring it: SRON sets no _FillValue, so missing
 # values are the netCDF default fills. Declared per source, and only where they
 # occur (measured in orbit 13847): the verifier fails if a declared value never
@@ -503,7 +513,7 @@ expected_unreadable_granules:
 #
 # processing_quality_flags: SRON wrote no flags in some partially processed
 # orbits, so 238 processed rows (all in partial files, audit 2026-10-16) read
-# the int fill. Rows never processed at all are left out, not masked.
+# the int fill. Rows that are not observations are left out, not masked.
 source_fill_values:
   target_product/deltad: [9.96921e+36]
   target_product/deltad_precision: [9.96921e+36]
@@ -600,9 +610,12 @@ attrs:
     7844 are corrupt upstream and left out; all are listed in the build config
     (expected_missing_days, expected_empty_granules,
     expected_unreadable_granules). 109 orbit files hold no observations (the
-    producer wrote nothing), and rows SRON never processed are left out;
-    granule_source_rows in the granule index records each file's own row
-    count. Not every orbit number has a file.
+    producer wrote nothing). Rows that are not observations, with no time,
+    latitude or longitude written, are left out: the rows SRON never
+    processed, and six rows in orbits 8480, 8674 and 8726 that carry a time
+    and viewing geometry but no position or retrieval, so those three orbits
+    hold no observations either. granule_source_rows in the granule index
+    records each file's own row count. Not every orbit number has a file.
 
 variable_attrs:
   quality_flags_retrieval:
