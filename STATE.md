@@ -99,9 +99,21 @@ Read this first in a new session. Update it whenever work lands.
        - The old tips are saved in `logs/rewind_wisosat_zarr_tropomi.json`
          (geolocation's was `TR6CN4DWVX26F3CV4RM0`). They are recoverable
          with `reset_branch` until `finalize --gc`.
-     - **Next:** resume the build from granule 7020 (B1 plus a B2 guard), then
-       V1-V3 over the whole record, then finalize. Show the user the jobs
-       first.
+     - **Resumed chain, submitted 2026-10-17 with the user's approval.** It
+       uses the same commands as before, each job `afterany` the one before:
+
+       | job | id |
+       | --- | --- |
+       | B1, resume from granule 7020 | 7855751 |
+       | B2 | 7855752 |
+       | V1 | 7855753 |
+       | V2 | 7855754 |
+       | V3 | 7855755 |
+
+       Expect B1 ~3.7 h and V1-V3 ~12 h.
+     - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
+       `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
+       it only after verification has passed.
    - **To check on resume:**
      - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
      - that B2 was a no-op;
