@@ -73,6 +73,28 @@ Read this first in a new session. Update it whenever work lands.
    - **V1 started 16:27.** Its structure and index phases pass: 38,645
      granules match the raw listing, and every store's obs length agrees. The
      values phase runs at ~16 s per 60 granules, so V1 should end ~19:30-20:00.
+   - **V1-V3 all ended with exit 1 (2026-10-17).** In each, only the same 2
+     checks failed (`instrument/latitude_center` and `longitude_center`: no
+     undeclared netCDF default fill, 6 values); every value comparison
+     passed.
+     - Run times were 3.4, 4.1 and 4.6 h, ~97 core-hours in all.
+     - **The cause:** 6 rows in three nearly empty partial files, orbits 8480
+       (row 0), 8674 (rows 0 and 3) and 8726 (rows 0-2), all June 2019.
+       They have time, SZA (~100.5-101 deg, night), solar azimuth and
+       viewing zenith written, and nothing else. Lat/lon are fill, and so are
+       the corners, every retrieval source and the flags.
+     - They count as observations under finding 8 (time written). No fill is
+       declared for lat/lon, so the geolocation store holds 9.97e36 for them,
+       and the bounds read lat max 9.97e36.
+     - The 16 variable stores are correct: fill or NaN on these rows, except
+       SZA, which holds SRON's value.
+     - **Proposed fix:**
+       - declare 9.96921e36 for both lat/lon sources;
+       - delete and rebuild the geolocation store only, which reads only
+         time, lat and lon;
+       - re-run V1-V3.
+
+       **Awaiting the user's decision.**
    - **To check on resume:**
      - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
      - that B2 was a no-op;
