@@ -88,13 +88,20 @@ Read this first in a new session. Update it whenever work lands.
        and the bounds read lat max 9.97e36.
      - The 16 variable stores are correct: fill or NaN on these rows, except
        SZA, which holds SRON's value.
-     - **Proposed fix:**
-       - declare 9.96921e36 for both lat/lon sources;
-       - delete and rebuild the geolocation store only, which reads only
-         time, lat and lon;
-       - re-run V1-V3.
-
-       **Awaiting the user's decision.**
+     - **Decided (user, 2026-10-17):** a row with no position is not an
+       observation. The rule is now shared code for every product (commit
+       `5c88bf0`; TESTING.md finding 10).
+     - **The stores were rewound, not deleted (2026-10-17).**
+       - `tools/rewind_stores.py` reset all 17 stores to their commit holding
+         granules 0-7019 (through orbit 08457): 4,824,553,284 obs, checked
+         consistent across stores.
+       - Orbit 8480, the first affected, is granule 7042.
+       - The old tips are saved in `logs/rewind_wisosat_zarr_tropomi.json`
+         (geolocation's was `TR6CN4DWVX26F3CV4RM0`). They are recoverable
+         with `reset_branch` until `finalize --gc`.
+     - **Next:** resume the build from granule 7020 (B1 plus a B2 guard), then
+       V1-V3 over the whole record, then finalize. Show the user the jobs
+       first.
    - **To check on resume:**
      - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
      - that B2 was a no-op;
