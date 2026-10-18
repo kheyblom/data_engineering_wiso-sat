@@ -124,6 +124,20 @@ Read this first in a new session. Update it whenever work lands.
        - the rewind's old commits are unreachable: ~1.04 TiB over 17 stores
          (geolocation 182 GiB);
        - next are `--attrs`, then `--tag`, then `--gc`.
+     - **Provenance fix (user decision 2026-10-18; commit `5bfc662`).**
+       - Build commits now carry their code revision.
+       - `finalize` writes `history` per revision run.
+       - The `verification` text now states the scope of the split runs.
+     - **These stores' commits predate the stamp**, so `--attrs` takes the
+       revisions checked out when each B1 started. Use exactly:
+       `--build-revisions 7220460@0,24186fe@7020`
+       - 7840968's B1 ran at 7220460: granules 0-7019, 2026-10-16.
+       - 7855751's B1 ran at 24186fe: granules 7020 on, 2026-10-17. Its
+         build code equals 5c88bf0.
+       - Both checked with `git diff`.
+       - Approved, but not yet applied: `--attrs`, then `--tag
+         v8.1-verified-20261018`. Then the `--gc` dry run, for the user to
+         read.
      - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
        `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
        it only after verification has passed.
