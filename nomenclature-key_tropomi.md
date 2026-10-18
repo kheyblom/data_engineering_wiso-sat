@@ -29,8 +29,8 @@ Columns are matched by header name: reorder them freely, but do not rename them.
 | `target_product/hdo_column_precision` | `molec. cm-2` | `water_vapor_column_hdo_standard_error` | `mol m-2` | standard error of the total column of HDO water vapor | x 1e4 / N_A | molec cm-2 to mol m-2 |
 | `diagnostics/processing_quality_flags` | (none) | `quality_flags_retrieval` | `unitless` | retrieval quality flags | none | int32; mandatory in every run; CF flag attributes carried |
 | `diagnostics/iterations` | `1` | `iterations_retrieval` | `unitless` | number of retrieval iterations | none | int32 |
-| `instrument/scanline` | `1` | `scanline_index` | `unitless` | zero-based along-track scanline index of the observation in its Level 1B file | none | int32; with `ground_pixel_index`, the pixel's address on the L1B grid (decided 2026-10-18) |
-| `instrument/ground_pixel` | `1` | `ground_pixel_index` | `unitless` | zero-based across-track ground pixel index of the observation in its Level 1B file | none | int32; 0..214 across the swath (decided 2026-10-18) |
+| `instrument/scanline` | `1` | `scanline_index` | `unitless` | zero-based along-track scanline index | none | int32; with `ground_pixel_index`, the pixel's address on the L1B grid (decided 2026-10-18) |
+| `instrument/ground_pixel` | `1` | `ground_pixel_index` | `unitless` | zero-based across-track ground pixel index | none | int32; 0..214 across the swath (decided 2026-10-18) |
 | `instrument/solar_zenith_angle` | `degrees` | `solar_zenith_angle` | `degree` | solar zenith angle | none | respelled only |
 | `side_product/aerosol_optical_thickness` | `1` | `optical_thickness_scattering_layer` | `unitless` | optical thickness of the retrieval's effective scattering layer | none | `nwin` squeezed; Table 1 "cloud optical thickness" |
 | `side_product/aerosol_height` | `m` | `height_scattering_layer` | `m` | height of the centre of the retrieval's effective scattering layer above the surface | none | Table 1 "cloud height" |
