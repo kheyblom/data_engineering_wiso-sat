@@ -49,6 +49,26 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 Next: GOSAT, which waits on the cross-product naming pass.
 
 
+# 7. Model-comparison stores: kernels, priors, dry-air columns, pressure grid
+Added 2026-10-18 at the user's request, so these are not forgotten. They are
+needed eventually; all were deferred from the first production subset.
+- **What:** each product's column averaging kernels, a priori profiles,
+  dry-air partial columns and pressure grid. For TROPOMI that is six sources,
+  each 50 or 51 layers, ~29 TiB estimated.
+- **First:** name them in one cross-product naming pass, before GOSAT
+  production, which waits on it. The layouts differ by product: column
+  kernels, block matrices, log-space ratio kernels, SVD components, priors as
+  partial columns or mole fractions.
+- **Then:** add the nomenclature rows (user review), and the stores.
+  - For TROPOMI they go on the existing obs axis as new stores; the existing
+    17 are not rebuilt.
+  - Measure the compression first, and settle the 2-D chunking (the obs
+    chunk must shrink for 50 layers).
+- **Other possible stores** are listed with size estimates in
+  `docs/products/tropomi.md` (Variable inventory). The user is deciding on
+  scanline/ground_pixel and the pixel corners; build any of them only when
+  asked.
+
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).
 - the git remote is: https://github.com/kheyblom/data_engineering_wiso-sat.git

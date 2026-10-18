@@ -253,11 +253,208 @@ uncompressed. With the pressure grid they total ~31 TB.
 | `target_product/hdo_profile_apriori` | mol m-2 | x 1e4 / N_A |
 | `meteo/dry_air_subcolumns` | mol m-2 | x 1e4 / N_A |
 
-- **Left out unless asked:**
-  - the other `meteo/` fields;
-  - the CH4/CO side products;
-  - the other aerosol and albedo parameters;
-  - the remaining fit diagnostics.
+- **Left out unless asked:** every other variable. They are listed, with
+  reasons and size estimates, under Variable inventory below.
+
+## Variable inventory (2026-10-18)
+
+Every variable in an orbit file is listed here, with what was done with it and
+why. Any of the variables left out can be built later as a new store on the
+same `obs` axis and granule index, without rebuilding the existing stores.
+Each file holds 69 variables:
+- 19 are stored, in the 16 variable stores and the geolocation store;
+- 50 are not.
+
+**Size estimates.** Each variable of orbit 14069 (2020-07-01, complete,
+803,025 obs) was compressed with the stores' own codec, the zarr v3 default
+zstd. Floats had fill masked to NaN, as the build does. The result was scaled
+to the record's 32,657,526,234 obs.
+- *raw GiB* is the uncompressed full-record size; *est. store GiB* is the
+  compressed estimate.
+- **Calibration:** against the bench's measured July 2020 stores, the method
+  is within -3% to +12%, and float stores come out 5-10% low. Over all the
+  stored variables it predicts 1.2 TiB against 1.3 TiB on disk.
+- Treat the estimates as **±15%**. Where fill varies across the record they
+  move with it: shells and partial files hold less, and night pixels hold no
+  retrieval.
+- Script: a scratch script, rerunnable on any orbit. It writes each variable
+  to an in-memory zarr array and sums the chunk bytes.
+
+**Totals by group (est. store size):**
+
+| group | variables | est. store size |
+| --- | --- | --- |
+| stored | 19 | ~1.2 TiB (1.3 TiB on disk) |
+| 1. deferred, model comparison | 6 | ~29 TiB |
+| 2. not implemented | 3 | ~8 GiB |
+| 3. redundant | 1 | ~82 GiB |
+| 4. file bookkeeping | 4 | ~82 GiB (`pixel_id`); scanline and ground_pixel ~0 |
+| 5. pixel corners | 2 | ~490 GiB |
+| 6a-6e. left out unless asked | 34 | ~18.2 TiB, of which ~16.5 TiB is four 50-layer variables: meteo temperature and altitudes, and the CH4 and CO priors |
+
+**Swath position: scanline and ground_pixel** (group 4).
+- SRON's definitions:
+  - `scanline`: "Zero-based scanline index of pixel in Level 1B file";
+  - `ground_pixel`: "Zero-based ground-pixel index of pixel in Level 1B file".
+  - Both are int32 with `units` 1. `pixel_id` is "One-based pixel index in
+    Level 1B file".
+- **The layout:** a file's row r is scanline r // 215, ground pixel r % 215.
+  The verifier confirms this on every file.
+- **From the granule index**, r = obs index - `granule_obs_start` for
+  **38,450 granules (99.5%)**, those whose `granule_obs_count` equals
+  `granule_source_rows` (nothing left out). So the swath position needs no
+  store there.
+- **This fails for 83 granules** that hold 8,690,054 obs (0.03%). There, rows
+  that are not observations were left out, so an obs's position no longer
+  gives its source row. Another 112 granules hold no obs at all.
+- **In those 83 files SRON's indices fit the layout on every row that has
+  both** (8,689,897). `scanline` is unwritten on 111 kept rows and
+  `ground_pixel` on 157.
+- **Cost:** both compress to ~0 (runs of 215, and a repeating 0-214), so
+  storing them as is costs well under 1 GiB. A build-derived source-row index
+  would cover all rows, including those 157, but compresses badly without a
+  delta filter (~82 GiB).
+
+**Pixel corners: not redundant** (group 5; tested on orbits 3700, 14069 and
+32414, from 2018, 2020 and 2024).
+- **Across track**, neighbouring pixels share their edge corners exactly.
+- **Along track** they do not: consecutive scanlines' corners are ~11 m apart
+  (at most 23 m).
+- **Rebuilt from the centres** (each corner as the mean of the four
+  surrounding centres, extrapolated at the swath edges):
+  - interior corners are off by a median of 14 m, p99 ~211 m and at most
+    ~280 m, against pixels of ~5.6-7 x 9.7 km;
+  - edge pixels are off by up to ~0.86 km;
+  - pixel width is not constant: it grows from ~7 km at nadir to ~40 km at
+    the swath edges.
+- **Rebuilding also needs the neighbouring pixels**, which a left-out row or
+  a partial file removes.
+- So corners are only approximately recoverable. Storing them costs ~490 GiB
+  for the two stores, (obs, 4) float32.
+
+**Stored (19 sources, 17 stores).**
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `target_product/deltad` | obs float32 | 122 | 79 | stored as `water_vapor_column_delta_d` |
+| `target_product/deltad_precision` | obs float32 | 122 | 79 | stored as `water_vapor_column_delta_d_standard_error` |
+| `target_product/h2o_column` | obs float32 | 122 | 79 | stored as `water_vapor_column_h2o` |
+| `target_product/h2o_column_precision` | obs float32 | 122 | 80 | stored as `water_vapor_column_h2o_standard_error` |
+| `target_product/hdo_column` | obs float32 | 122 | 79 | stored as `water_vapor_column_hdo` |
+| `target_product/hdo_column_precision` | obs float32 | 122 | 80 | stored as `water_vapor_column_hdo_standard_error` |
+| `diagnostics/processing_quality_flags` | obs int32 | 122 | 5 | stored as `quality_flags_retrieval` |
+| `diagnostics/iterations` | obs int32 | 122 | 12 | stored as `iterations_retrieval` |
+| `instrument/solar_zenith_angle` | obs float32 | 122 | 100 | stored as `solar_zenith_angle` |
+| `side_product/aerosol_optical_thickness` | obs float32 | 122 | 81 | stored as `optical_thickness_scattering_layer` |
+| `side_product/aerosol_height` | obs float32 | 122 | 66 | stored as `height_scattering_layer` |
+| `side_product/surface_albedo` | obs float32 | 122 | 84 | stored as `albedo_surface_2365nm` |
+| `diagnostics/chi_squared` | obs float32 | 122 | 82 | stored as `chi_squared_retrieval` |
+| `diagnostics/chi_squared_prefit` | obs float32 | 122 | 84 | stored as `chi_squared_prefit` |
+| `diagnostics/number_of_spectral_points_in_retrieval` | obs int32 | 122 | 6 | stored as `spectral_point_count_retrieval` |
+| `diagnostics/number_of_spectral_points_in_prefit` | obs int32 | 122 | 4 | stored as `spectral_point_count_prefit` |
+| `instrument/latitude_center` | obs float32 | 122 | 101 | stored as geolocation `lat` |
+| `instrument/longitude_center` | obs float32 | 122 | 101 | stored as geolocation `lon` |
+| `instrument/time` | obs x 7 int32 | 852 | (in geolocation) | int64 ms in the store |
+
+**1. Deferred: model comparison (cross-product naming pass, TASKS.md task 7).** Why: needed for model comparison; named across products before GOSAT production.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `target_product/h2o_column_averaging_kernel` | obs x 50 float32 | 5.9 TiB | 3.8 TiB |  |
+| `target_product/hdo_column_averaging_kernel` | obs x 50 float32 | 5.9 TiB | 3.7 TiB |  |
+| `target_product/h2o_profile_apriori` | obs x 50 float32 | 5.9 TiB | 5.5 TiB |  |
+| `target_product/hdo_profile_apriori` | obs x 50 float32 | 5.9 TiB | 5.5 TiB |  |
+| `meteo/dry_air_subcolumns` | obs x 50 float32 | 5.9 TiB | 5.4 TiB |  |
+| `meteo/pressure_levels` | obs x 51 float32 | 6.1 TiB | 5.4 TiB |  |
+
+**2. Not implemented by SRON (T11).** Why: the file says "Not implemented"; the information is in `processing_quality_flags`.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `diagnostics/quality_flag` | obs int32 | 122 | 4 | constant 93 |
+| `diagnostics/convergence` | obs int32 | 122 | 4 | constant 0 |
+| `instrument/glintflag` | obs int32 | 122 | <1 | all fill in orbit 14069 |
+
+**3. Redundant.** Why: SRON: "No added information compared to chi_squared".
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `diagnostics/chi_squared_band` | obs float32 | 122 | 82 |  |
+
+**4. File bookkeeping.** Why: see "Swath position" above.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `instrument/scanline` | obs int32 | 122 | <1 | compresses to ~0 |
+| `instrument/ground_pixel` | obs int32 | 122 | <1 | compresses to ~0 |
+| `instrument/pixel_id` | obs int32 | 122 | 82 | row + 1 |
+| `instrument/l1b_file` | 1 string per file | - | - | one string per file, not per obs |
+
+**5. Pixel corners (not chosen; see "Pixel corners" above).** Why: not derivable exactly from the centres.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `instrument/latitude_corners` | obs x 4 float32 | 487 | 248 |  |
+| `instrument/longitude_corners` | obs x 4 float32 | 487 | 245 |  |
+
+**6a. Viewing geometry.** Why: not a Table 1 filter input (only SZA is).
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `instrument/solar_azimuth_angle` | obs float32 | 122 | 105 |  |
+| `instrument/viewing_azimuth_angle` | obs float32 | 122 | 104 |  |
+| `instrument/viewing_zenith_angle` | obs float32 | 122 | 103 |  |
+
+**6b. Meteorology.** Why: not a retrieval output or filter input.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `meteo/altitude_levels` | obs x 51 float32 | 6.1 TiB | 618 |  |
+| `meteo/landflag` | obs int32 | 122 | <1 | all fill in orbit 14069 |
+| `meteo/skin_temperature` | obs float32 | 122 | 87 |  |
+| `meteo/surface_altitude` | obs float32 | 122 | 13 |  |
+| `meteo/surface_altitude_stdv` | obs float32 | 122 | 13 |  |
+| `meteo/surface_pressure` | obs float32 | 122 | 85 |  |
+| `meteo/temperature` | obs x 50 float32 | 5.9 TiB | 4.9 TiB |  |
+| `meteo/u10` | obs float32 | 122 | 109 |  |
+| `meteo/v10` | obs float32 | 122 | 111 |  |
+
+**6c. CH4 and CO side products.** Why: CH4 only drives the cloud pre-fit; no Table 1 filter uses CH4 or CO.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `side_product/ch4_column` | obs float32 | 122 | 75 |  |
+| `side_product/ch4_column_apriori` | obs float32 | 122 | 85 |  |
+| `side_product/ch4_column_prefit` | obs float32 | 122 | 67 |  |
+| `side_product/ch4_profile_apriori` | obs x 50 float32 | 5.9 TiB | 5.5 TiB |  |
+| `side_product/co_column` | obs float32 | 122 | 78 |  |
+| `side_product/co_column_precision` | obs float32 | 122 | 78 |  |
+| `side_product/co_profile_apriori` | obs x 50 float32 | 5.9 TiB | 5.5 TiB |  |
+
+**6d. Other scattering-layer, albedo and fit parameters.** Why: only the retrieved optical thickness, height and 2365 nm albedo are filter inputs.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `side_product/aerosol_geometric_thickness` | obs float32 | 122 | 4 | constant 2500 m |
+| `side_product/aerosol_geometric_thickness_precision` | obs float32 | 122 | <1 | all fill in orbit 14069 |
+| `side_product/aerosol_height_apriori` | obs float32 | 122 | 68 |  |
+| `side_product/aerosol_height_precision` | obs float32 | 122 | <1 | all fill in orbit 14069 |
+| `side_product/aerosol_optical_thickness_apriori` | obs float32 | 122 | 81 |  |
+| `side_product/aerosol_optical_thickness_precision` | obs float32 | 122 | <1 | all fill in orbit 14069 |
+| `side_product/surface_albedo_apriori` | obs float32 | 122 | 14 |  |
+| `side_product/surface_albedo_precision` | obs float32 | 122 | 80 |  |
+| `side_product/surface_albedo_prefit` | obs float32 | 122 | 87 |  |
+| `side_product/surface_albedo_prefit_apriori` | obs float32 | 122 | 14 |  |
+| `side_product/multiplicative_offset` | obs float32 | 122 | 4 | constant 1.0 |
+| `side_product/spectral_shift` | obs float32 | 122 | 76 |  |
+
+**6e. Remaining fit diagnostics.** Why: not filter inputs.
+
+| source | shape | raw GiB | est. store GiB | notes |
+| --- | --- | --- | --- | --- |
+| `diagnostics/degrees_of_freedom_total` | obs float32 | 122 | 58 |  |
+| `diagnostics/degrees_of_freedom_total_prefit` | obs float32 | 122 | 67 |  |
+| `diagnostics/rms` | obs float32 | 122 | 81 |  |
 
 ## Appendix: defect files (audit of 2026-10-16)
 
