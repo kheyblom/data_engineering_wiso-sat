@@ -43,6 +43,9 @@ variables:
   - chi_squared_prefit
   - spectral_point_count_retrieval
   - spectral_point_count_prefit
+  # the pixel's address on the Level 1B grid (user decision 2026-10-18)
+  - scanline_index
+  - ground_pixel_index
 
 # 2020-07 has an orbit directory on every day
 expected_missing_days: []

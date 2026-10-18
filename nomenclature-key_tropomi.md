@@ -29,6 +29,8 @@ Columns are matched by header name: reorder them freely, but do not rename them.
 | `target_product/hdo_column_precision` | `molec. cm-2` | `water_vapor_column_hdo_standard_error` | `mol m-2` | standard error of the total column of HDO water vapor | x 1e4 / N_A | molec cm-2 to mol m-2 |
 | `diagnostics/processing_quality_flags` | (none) | `quality_flags_retrieval` | `unitless` | retrieval quality flags | none | int32; mandatory in every run; CF flag attributes carried |
 | `diagnostics/iterations` | `1` | `iterations_retrieval` | `unitless` | number of retrieval iterations | none | int32 |
+| `instrument/scanline` | `1` | `scanline_index` | `unitless` | zero-based along-track scanline index of the observation in its Level 1B file | none | int32; with `ground_pixel_index`, the pixel's address on the L1B grid (decided 2026-10-18) |
+| `instrument/ground_pixel` | `1` | `ground_pixel_index` | `unitless` | zero-based across-track ground pixel index of the observation in its Level 1B file | none | int32; 0..214 across the swath (decided 2026-10-18) |
 | `instrument/solar_zenith_angle` | `degrees` | `solar_zenith_angle` | `degree` | solar zenith angle | none | respelled only |
 | `side_product/aerosol_optical_thickness` | `1` | `optical_thickness_scattering_layer` | `unitless` | optical thickness of the retrieval's effective scattering layer | none | `nwin` squeezed; Table 1 "cloud optical thickness" |
 | `side_product/aerosol_height` | `m` | `height_scattering_layer` | `m` | height of the centre of the retrieval's effective scattering layer above the surface | none | Table 1 "cloud height" |
@@ -59,6 +61,8 @@ does this product.
 | `instrument/time` | `year month day hour minute second millisecond` | `time` | `milliseconds since 1900-01-01` | decoded | broken-down int32 (obs, 7) decoded to a timestamp; int64, proleptic_gregorian |
 | `instrument/latitude_center` | `degrees north` | `lat` | `degrees_north` | none | pixel centre; respelled only |
 | `instrument/longitude_center` | `degrees east` | `lon` | `degrees_east` | none | pixel centre; respelled only |
+| `instrument/latitude_corners` | `degrees north` | `lat_corners` | `degrees_north` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
+| `instrument/longitude_corners` | `degrees east` | `lon_corners` | `degrees_east` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
 
 ## Temporal Frequency Key
 
@@ -75,7 +79,8 @@ so `observation` is this project's own word for it, used in the configs.
 | --- | --- | --- |
 | `nobs` | `obs` | the L1B swath flattened scanline then ground pixel; concatenated over orbits in orbit order |
 | `nwin` | (squeezed) | length 1 |
-| `nlayer`, `nlevel`, `ncorner` | `layer`, `level`, `corner` | none in the current subset |
+| `ncorner` | `corner` | the 4 pixel corners, in the geolocation store's `lat_corners` and `lon_corners`. Corners 0-1 are the back edge (toward the previous scanline) and 2-3 the front; a pixel's corners 1 and 2 are exactly the next ground pixel's corners 0 and 3 (measured 2026-10-18) |
+| `nlayer`, `nlevel` | `layer`, `level` | none in the current subset |
 
 ## Store naming (decided 2026-10-14)
 

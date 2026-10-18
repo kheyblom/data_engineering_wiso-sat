@@ -88,6 +88,7 @@ from utils.zarr_utils import (
     TIME_FILL,
     absent_fill,
     declared_fill,
+    obs_chunk,
     open_existing_repository,
     resolve_chunks,
     store_sources,
@@ -390,11 +391,14 @@ def check_structure(report, settings, store, group, chunks):
         array = group[name]
         dims = array.metadata.dimension_names or ()
         leading = 'obs' if name in expected_vars else GRANULE_DIM
+        length = chunks[leading]
+        if leading == 'obs':
+            length = obs_chunk(length, array.dtype.itemsize, tuple(array.shape[1:]))
         report.check(
-            f'{store}/{name}: leading dimension {leading}, chunked {chunks[leading]}, '
+            f'{store}/{name}: leading dimension {leading}, chunked {length}, '
             f'secondary dimensions whole',
             bool(dims) and dims[0] == leading
-            and array.chunks == (chunks[leading],) + tuple(array.shape[1:]),
+            and array.chunks == (length,) + tuple(array.shape[1:]),
             f'{dims} {array.chunks}',
         )
 

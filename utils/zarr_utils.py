@@ -196,6 +196,34 @@ def resolve_chunks(settings):
     return {'obs': int(chunks['obs']), GRANULE_DIM: int(chunks[GRANULE_DIM])}
 
 
+# the style guide's ceiling on one uncompressed chunk
+MAX_CHUNK_BYTES = 40 * 2**20
+
+
+def obs_chunk(length, itemsize, secondary=()):
+    """An array's chunk length along ``obs``.
+
+    The configured length, halved until one chunk fits the style guide's
+    40 MiB. Halving keeps every array aligned with the others (user decision
+    2026-10-18): each configured chunk boundary is also a boundary of every
+    halved array, so one read of a range of observations meets the same
+    boundaries in every store. A 1-D float32 or int64 array keeps the full
+    length; TROPOMI's (obs, 4) corners take half.
+
+    Args:
+        length (int): The configured ``chunks.obs``.
+        itemsize (int): Bytes per element as stored.
+        secondary (tuple): The array's other dimension lengths, never split.
+
+    Returns:
+        int: The obs chunk length.
+    """
+    width = int(np.prod(secondary)) if len(secondary) else 1
+    while length > 1 and length * itemsize * width > MAX_CHUNK_BYTES:
+        length //= 2
+    return length
+
+
 def absent_fill(settings, source):
     """The value an integer source holds where its file lacks the observation.
 
@@ -614,8 +642,13 @@ def build_encoding(observations, index, chunks, fills, product):
     for dataset in (observations, index):
         for name, variable in dataset.variables.items():
             # only the leading dimension is chunked; secondary dimensions stay
-            # whole, per the style guide
-            shape = (chunks[variable.dims[0]],) + tuple(variable.shape[1:])
+            # whole, per the style guide. Along obs, a wide array takes a
+            # halved length so its chunks stay within the guide's size
+            leading = chunks[variable.dims[0]]
+            if variable.dims[0] == 'obs':
+                itemsize = 8 if np.issubdtype(variable.dtype, np.datetime64) else variable.dtype.itemsize
+                leading = obs_chunk(leading, itemsize, tuple(variable.shape[1:]))
+            shape = (leading,) + tuple(variable.shape[1:])
             encoding[name] = {'chunks': shape}
             if np.issubdtype(variable.dtype, np.datetime64):
                 encoding[name].update(

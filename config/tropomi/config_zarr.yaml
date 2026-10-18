@@ -43,6 +43,9 @@ variables:
   - chi_squared_prefit
   - spectral_point_count_retrieval
   - spectral_point_count_prefit
+  # the pixel's address on the Level 1B grid (user decision 2026-10-18)
+  - scanline_index
+  - ground_pixel_index
 
 # Days between the first and last orbit (2017-11-08 .. 2025-11-29) with no day
 # directory upstream: each returned 404 from tropomi.grid.surfsara.nl (58
@@ -530,6 +533,13 @@ source_fill_values:
   diagnostics/chi_squared_prefit: [9.96921e+36]
   diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
   diagnostics/number_of_spectral_points_in_prefit: [-2147483647]
+  # unwritten on a few kept rows of partial files: scanline 111, ground pixel
+  # 157, corners 7 (lat) and 9 (lon), all among the 83 granules with rows left
+  # out (checked 2026-10-18)
+  instrument/scanline: [-2147483647]
+  instrument/ground_pixel: [-2147483647]
+  instrument/latitude_corners: [9.96921e+36]
+  instrument/longitude_corners: [9.96921e+36]
 
 # Scale settings (design condition 3: per product, never in code). Set with the
 # user 2026-10-16 from the Tier 2 bench (TESTING.md), which ran at 20 granules
