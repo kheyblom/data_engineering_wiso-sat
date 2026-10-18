@@ -150,6 +150,32 @@ Read this first in a new session. Update it whenever work lands.
          `v8.1-verified-20261018`, 1.3 TiB in all.
      - **Open:** the stores sit on scratch, which is purged. Where they live
        in the data lake is undecided; ask the user before moving them.
+     - **Additions decided 2026-10-18 (user):**
+       - `lat_corners` and `lon_corners` go in the geolocation store, on
+         `corner`;
+       - `scanline_index` and `ground_pixel_index` become variable stores,
+         SRON's values as written;
+       - an array's obs chunk is halved until it fits 40 MiB, so corners
+         take 2,097,152;
+       - nomenclature rows: style_guides `81fef95` (the commit message of
+         `3dbf1d2` misnames it `57d22cd`);
+       - code: `d18e440`. Fixture: 41 cases, 0 failures.
+     - **Bench for the additions, submitted 2026-10-18:** build 7861696, then
+       verify 7861698 (`--stores scanline_index,ground_pixel_index`). The bench
+       geolocation store was deleted first, with approval. The bench measures
+       the verify time: geolocation with corners may approach the 6 h develop
+       limit in production.
+     - **Production plan, approved in outline; show the jobs first:**
+       1. Move the current geolocation store aside as a renamed backup; do
+          not delete it.
+       2. Build geolocation, scanline_index and ground_pixel_index from
+          granule 0. The 16 variable stores are untouched.
+       3. Verify the three new stores, split by the bench's timing.
+       4. Run `--phases structure,index` over all 19 stores, to check the old
+          stores' index against the new geolocation.
+       5. Finalize the three new stores (no `--build-revisions` needed), tag
+          `v8.1-verified-<date>`.
+       6. Delete the backup only with the user's approval.
      - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
        `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
        it only after verification has passed.
