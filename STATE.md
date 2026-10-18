@@ -165,7 +165,21 @@ Read this first in a new session. Update it whenever work lands.
        geolocation store was deleted first, with approval. The bench measures
        the verify time: geolocation with corners may approach the 6 h develop
        limit in production.
-     - **Production plan, approved in outline; show the jobs first:**
+     - **Bench passed (2026-10-18).**
+       - Build: 140 s, exit 0.
+       - Verify: 118 s, 125 checks, 0 failures.
+       - Geolocation grew from 2,493 to 8,162 MiB for the month; the two
+         index stores are 8 MiB.
+       - Scaled to the record: build ~3.9 h, verify ~3.3 h. One verify run
+         fits the 6 h limit.
+     - **Production, submitted 2026-10-18 with the user's approval:**
+       - the old geolocation store was moved to
+         `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi_backup_20261018/`;
+       - B1 7861748, B2 7861749, V 7861750 (`--stores
+         scanline_index,ground_pixel_index`), each `afterany`.
+       - The user agreed that only the new stores need value verification;
+         the 16 old ones get the structure,index check.
+     - **Production plan:**
        1. Move the current geolocation store aside as a renamed backup; do
           not delete it.
        2. Build geolocation, scanline_index and ground_pixel_index from
