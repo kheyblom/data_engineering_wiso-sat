@@ -2,7 +2,7 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-16)
+## Where we are (2026-10-18)
 
 - **Tasks 1-4 are done.**
   - The shared pipeline is built: TROPOMI reader, GOSAT second reader at
@@ -140,8 +140,16 @@ Read this first in a new session. Update it whenever work lands.
        `0JYYG54RB35JDY4R5PH0`).
      - **The `--gc` dry run would delete ~1.04 TiB**, all of it the 528 commits
        per store that the rewind orphaned (geolocation 182 GiB).
-       **`--gc --apply` awaits the user's approval;** it ends the rewind's
-       undo window.
+     - **`--gc --apply` ran 2026-10-18 08:38-08:40 MDT**, approved by the user
+       and run detached (`setsid nohup`). Output:
+       `logs/finalize_gc_apply_tropomi_20261018.out`.
+       - It deleted ~1.04 TiB over the 17 stores, exit 0. The rewind can no
+         longer be undone.
+       - The final `--status` reports every store **"remaining nothing,
+         finalized"**: 647 reachable snapshots, 0 unreachable, tag
+         `v8.1-verified-20261018`, 1.3 TiB in all.
+     - **Open:** the stores sit on scratch, which is purged. Where they live
+       in the data lake is undecided; ask the user before moving them.
      - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
        `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
        it only after verification has passed.

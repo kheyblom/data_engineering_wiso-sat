@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-16): 38 cases, TROPOMI and GOSAT |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: planned, awaiting approval. GOSAT: waits on the kernel naming pass |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: waits on the kernel naming pass |
 
 ## Tier 0 and 1: the fixture test
 
@@ -286,7 +286,7 @@ Per product:
 3. `finalize_wisosat_zarr.py`: `--status`, then `--attrs`, `--tag`, and `--gc`
    (dry run first).
 
-### TROPOMI (planned 2026-10-16, awaiting approval)
+### TROPOMI (planned 2026-10-16; done 2026-10-18)
 
 **Scale settings,** decided with the user from Tier 2, are in
 `config/tropomi/config_zarr.yaml`:

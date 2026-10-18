@@ -40,6 +40,14 @@ Progress: TESTING.md written 2026-10-14. Tiers 0-1 pass (fixtures for TROPOMI an
 # 6. Production runs: create the final prooduct zarr stores.
 One product at a time, starting with TROPOMI.
 
+Progress: TROPOMI production built, verified and finalized on 2026-10-18.
+- 17 stores, 32,657,526,234 observations, 1.3 TiB.
+- Tag `v8.1-verified-20261018`.
+- See STATE.md and TESTING.md (Tier 3, findings 9-10).
+- Their data-lake location is still to be decided.
+
+Next: GOSAT, which waits on the cross-product naming pass.
+
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).
