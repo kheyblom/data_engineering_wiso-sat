@@ -111,6 +111,19 @@ Read this first in a new session. Update it whenever work lands.
        | V3 | 7855755 |
 
        Expect B1 ~3.7 h and V1-V3 ~12 h.
+     - **The resumed chain passed (2026-10-18).**
+       - B1: 3 h 41 min, exit 0, peak 11.05 GiB main. B2 was a no-op.
+       - V1-V3: 3.5, 3.8 and 4.1 h. They ran 201, 200 and 231 checks with
+         0 failures, and each says `stores verified`.
+       - 129,562,471 rows were left out, 6 of them with a time, with 0
+         values on them.
+       - Bounds: lat -89.9997 to 89.9997, lon -180 to 180.
+     - **`finalize --status`:**
+       - every store is verified 2026-10-18, has 11 attributes pending, no
+         tags, and 646 reachable snapshots;
+       - the rewind's old commits are unreachable: ~1.04 TiB over 17 stores
+         (geolocation 182 GiB);
+       - next are `--attrs`, then `--tag`, then `--gc`.
      - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
        `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
        it only after verification has passed.
