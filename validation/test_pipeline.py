@@ -48,7 +48,7 @@ import yaml # type: ignore
 import zarr
 
 from utils.path_utils import GEOLOCATION, load_config, run_stores, store_path
-from utils.zarr_utils import BRANCH
+from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -296,6 +296,16 @@ def test_product(results, config, scratch):
         f'{product}: finalized stores carry coverage and provenance',
         all(key in attrs for key in ('verification', 'history', 'date_created',
                                      'time_coverage_start', 'geospatial_lat_min')),
+    )
+    built = [snapshot.message for snapshot in history(settings, stores[-1])
+             if snapshot.message.startswith(COMMIT_PREFIX)]
+    revisions = {COMMIT_RE.match(message)['revision'] for message in built}
+    results.check(
+        f'{product}: every build commit names its code revision, and the history too',
+        None not in revisions
+        and all(f'data_engineering_wiso-sat @ {revision}' in attrs['history']
+                for revision in revisions),
+        f'{sorted(map(str, revisions))}; {attrs.get("history", "")[:160]}',
     )
     status, output = run('verify_wisosat_zarr.py', '--config', base)
     results.check(f'{product}: finalized stores still verify',

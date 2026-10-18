@@ -28,6 +28,9 @@ only ever one writer per branch.
 from __future__ import annotations
 
 import logging
+import os
+import re
+import subprocess
 
 import icechunk
 import numpy as np
@@ -51,11 +54,17 @@ LOG = logging.getLogger(__name__)
 # branch every commit is written to
 BRANCH = 'main'
 
-# Every build commit says which granules it holds. Resume does not parse these
-# (it reads the index back from the store), but finalize tells build commits
-# from its own by them, and a person reading the history can see the progress
-COMMIT_MESSAGE = 'write granules {first}..{last} ({count})'
+# Every build commit says which granules it holds and which revision of this
+# code wrote them. Resume does not parse these (it reads the index back from
+# the store), but finalize tells build commits from its own by them and builds
+# the history attribute from their revisions, and a person reading the history
+# can see the progress. Commits written before 2026-10-18 carry no revision
+COMMIT_MESSAGE = 'write granules {first}..{last} ({count}) @ {revision}'
 COMMIT_PREFIX = 'write granules '
+COMMIT_RE = re.compile(
+    r'^write granules (?P<first>\S+)\.\.(?P<last>\S+) \((?P<count>\d+)\)'
+    r'(?: @ (?P<revision>\S+))?$'
+)
 
 # time is int64 since 1900-01-01, proleptic_gregorian, in the coarsest unit
 # that holds the source times exactly (style guide). The unit is per product,
@@ -90,6 +99,29 @@ LAYOUT_NOTE = (
     'are appended in source granule order and keep their source order within a '
     'granule; time never decreases along obs.'
 )
+
+
+def code_revision():
+    """The git revision of this working tree, for provenance.
+
+    Returns:
+        str: The short revision, '-dirty' if the tree has uncommitted changes,
+            or 'unknown' if git cannot answer.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        revision = subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, check=True, cwd=here,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            capture_output=True, text=True, check=True, cwd=here,
+        ).stdout.strip()
+        return f'{revision}-dirty' if dirty else revision
+    except Exception:
+        # provenance is worth recording but not worth failing a run for
+        return 'unknown'
 
 
 def time_units(product):

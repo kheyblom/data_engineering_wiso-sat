@@ -29,6 +29,16 @@ unless the config's verifier log holds a passing run over every default phase
 that covered this store. ``verification``, ``history`` and ``date_created`` are
 derived from that log and the repository, never taken from the config.
 
+**``history`` names the code that wrote each part of the store.** Every build
+commit carries the git revision that wrote it (since 2026-10-18), and the
+history lists each run of commits with one revision: its granules, dates and
+revision. A store whose commits predate that (the first TROPOMI production
+stores) needs ``--build-revisions REV@INDEX,...``, each revision with the
+granule index it started writing at. Each must be a commit of this repository
+older than the build commits it is given for, must start at a commit
+boundary, and is marked in the history as supplied at finalization. The
+history is written once and then kept.
+
 ``--gc --apply`` is irreversible: icechunk only collects unreachable objects,
 and this script checks reachable bytes and history length either side, but a
 store with no second copy has nothing to restore from.
@@ -49,7 +59,9 @@ import zarr
 
 from utils.log_utils import setup_logging
 from utils.path_utils import load_config, log_path, run_stores, store_path
-from utils.zarr_utils import BRANCH, open_existing_repository, open_store
+from utils.zarr_utils import (
+    BRANCH, COMMIT_RE, code_revision, open_existing_repository, open_store,
+)
 # imported rather than restated, so the bar for 'verified' cannot drift from
 # what the verifier runs by default
 from verify_wisosat_zarr import DEFAULT_PHASES, KNOWN_MESSAGES
@@ -109,30 +121,151 @@ def parse_args():
         '--apply', action='store_true',
         help='Actually make the change. Without it every action only reports.',
     )
+    parser.add_argument(
+        '--build-revisions', type=str, default=None,
+        help='For build commits that name no code revision: REV@GRANULE_INDEX,... '
+        'giving each revision with the granule index it started writing at.',
+    )
     return parser.parse_args()
 
 
-def repository_revision():
-    """The git revision of this working tree, for the history attribute.
+class MissingRevisions(ValueError):
+    """Build commits that name no code revision, with none supplied for them."""
+
+
+def parse_build_revisions(text):
+    """Parse ``--build-revisions``.
+
+    Args:
+        text (str | None): ``REV@GRANULE_INDEX,...``.
 
     Returns:
-        str: The short revision, '-dirty' if the tree has uncommitted changes,
-            or 'unknown' if git cannot answer.
+        list | None: ``(granule index, revision)`` pairs, sorted by index.
+
+    Raises:
+        ValueError: If an item is malformed or an index repeats.
+    """
+    if not text:
+        return None
+    entries = []
+    for item in text.split(','):
+        revision, separator, index = item.strip().partition('@')
+        if not separator or not revision or not index.isdigit():
+            raise ValueError(f'--build-revisions takes REV@GRANULE_INDEX,...; got {item!r}')
+        entries.append((int(index), revision))
+    if len({index for index, _ in entries}) != len(entries):
+        raise ValueError('--build-revisions names a granule index twice')
+    return sorted(entries)
+
+
+def resolve_revision(revision):
+    """A supplied revision as this repository knows it.
+
+    Args:
+        revision (str): Any git revision.
+
+    Returns:
+        tuple: Its short hash and its commit time (UTC).
+
+    Raises:
+        ValueError: If it is not a commit of this repository.
     """
     here = os.path.dirname(os.path.abspath(__file__))
     try:
-        revision = subprocess.run(
-            ['git', 'rev-parse', '--short', 'HEAD'],
+        short, stamp = subprocess.run(
+            ['git', 'show', '-s', '--format=%h %ct', f'{revision}^{{commit}}'],
             capture_output=True, text=True, check=True, cwd=here,
-        ).stdout.strip()
-        dirty = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            capture_output=True, text=True, check=True, cwd=here,
-        ).stdout.strip()
-        return f'{revision}-dirty' if dirty else revision
-    except Exception:
-        # provenance is worth recording but not worth failing a finalization for
-        return 'unknown'
+        ).stdout.split()
+    except (subprocess.CalledProcessError, ValueError) as error:
+        raise ValueError(f'{revision!r} is not a commit of this repository') from error
+    return short, datetime.datetime.fromtimestamp(int(stamp), datetime.timezone.utc)
+
+
+def build_segments(repository, ids, supplied):
+    """A store's build commits, grouped into runs written by one code revision.
+
+    Args:
+        repository (icechunk.Repository): The store's repository.
+        ids (numpy.ndarray): The store's ``granule_id``, in order.
+        supplied (list | None): From ``parse_build_revisions``.
+
+    Returns:
+        list: Per run, a dict with ``first`` and ``last`` granule ids,
+            ``start`` and ``end`` (UTC), ``revision``, ``supplied`` and
+            ``commits``; oldest first.
+
+    Raises:
+        MissingRevisions: If a build commit names no revision and none was
+            supplied for it.
+        ValueError: If a commit message is not the build's, or a supplied
+            revision is unused, off a commit boundary, unknown, or newer than
+            the commits it is given for.
+    """
+    position = {str(granule): index for index, granule in enumerate(ids)}
+    commits = []
+    for snapshot in reversed(list(repository.ancestry(branch=BRANCH))):
+        if snapshot.message in NON_BUILD_MESSAGES:
+            continue
+        match = COMMIT_RE.match(snapshot.message)
+        if not match:
+            raise ValueError(f'not a build commit: {snapshot.id} {snapshot.message!r}')
+        commits.append({
+            'first': match['first'], 'last': match['last'],
+            'index': position[match['first']],
+            'when': snapshot.written_at.astimezone(datetime.timezone.utc),
+            'revision': match['revision'], 'supplied': False,
+        })
+
+    bare = [commit for commit in commits if commit['revision'] is None]
+    if bare and not supplied:
+        raise MissingRevisions(
+            f'{len(bare)} build commits name no code revision; give them with '
+            f'--build-revisions REV@GRANULE_INDEX,...'
+        )
+    if supplied and not bare:
+        raise ValueError('--build-revisions given, but every build commit names its revision')
+    if supplied:
+        starts = {commit['index'] for commit in bare}
+        resolved = []
+        for index, revision in supplied:
+            if index not in starts:
+                raise ValueError(
+                    f'--build-revisions: granule {index} does not start a build commit '
+                    f'that names no revision'
+                )
+            resolved.append((index, *resolve_revision(revision)))
+        for commit in bare:
+            covering = [entry for entry in resolved if entry[0] <= commit['index']]
+            if not covering:
+                raise MissingRevisions(f'no supplied revision covers granule {commit["first"]}')
+            _, short, committed = covering[-1]
+            # the code has to exist before it can write anything
+            if committed > commit['when']:
+                raise ValueError(
+                    f'revision {short} was committed {committed:%Y-%m-%d %H:%M:%S}Z, after '
+                    f'the commit of granule {commit["first"]} at '
+                    f'{commit["when"]:%Y-%m-%d %H:%M:%S}Z'
+                )
+            commit['revision'], commit['supplied'] = short, True
+
+    segments = []
+    for commit in commits:
+        last = segments[-1] if segments else None
+        if last and (last['revision'], last['supplied']) == (commit['revision'], commit['supplied']):
+            last.update(last=commit['last'], end=commit['when'], commits=last['commits'] + 1)
+        else:
+            segments.append({
+                'first': commit['first'], 'last': commit['last'],
+                'start': commit['when'], 'end': commit['when'],
+                'revision': commit['revision'], 'supplied': commit['supplied'], 'commits': 1,
+            })
+    return segments
+
+
+def date_span(start, end):
+    """``YYYY-MM-DD``, or ``start/end`` when the two dates differ."""
+    first, last = start.date().isoformat(), end.date().isoformat()
+    return first if first == last else f'{first}/{last}'
 
 
 def verification_evidence(settings, store):
@@ -211,7 +344,7 @@ def coverage_attrs(dataset, evidence):
     }
 
 
-def build_history(repository, settings, evidence, current):
+def build_history(repository, settings, evidence, current, ids, supplied):
     """How the store was built and audited, from the repository itself.
 
     Args:
@@ -219,9 +352,15 @@ def build_history(repository, settings, evidence, current):
         settings (dict): The loaded configuration.
         evidence (dict): From ``verification_evidence``.
         current (dict): The store's attributes as they stand.
+        ids (numpy.ndarray): The store's ``granule_id``.
+        supplied (list | None): From ``parse_build_revisions``.
 
     Returns:
         tuple: The history string and the ISO 8601 UTC creation timestamp.
+
+    Raises:
+        MissingRevisions: From ``build_segments``, when a history is to be
+            written.
     """
     snapshots = list(repository.ancestry(branch=BRANCH))
     built = [s for s in snapshots if s.message not in NON_BUILD_MESSAGES]
@@ -229,23 +368,31 @@ def build_history(repository, settings, evidence, current):
     started = built[-1].written_at.astimezone(datetime.timezone.utc)
     created = finished.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    # once written, the history is kept: it names the revision that built the
+    # once written, the history is kept: it names the revisions that built the
     # store, and regenerating it would churn on every unrelated commit here
     existing = current.get('history', '')
     if OUR_HISTORY_MARKER in existing:
         return existing, created
+    parts = []
+    for segment in build_segments(repository, ids, supplied):
+        note = ', supplied at finalization' if segment['supplied'] else ''
+        parts.append(
+            f'granules {segment["first"]}..{segment["last"]} on '
+            f'{date_span(segment["start"], segment["end"])} '
+            f'(data_engineering_wiso-sat @ {segment["revision"]}{note})'
+        )
     history = (
-        f'{started.date().isoformat()}/{finished.date().isoformat()}: written from '
-        f'the {settings["product"]} {settings["version"]} source files by '
-        f'wisosat_zarr.py (data_engineering_wiso-sat @ {repository_revision()}) '
-        f'in {len(built)} commits, appending granules in source order. '
+        f'{date_span(started, finished)}: written from the {settings["product"]} '
+        f'{settings["version"]} source files by wisosat_zarr.py in {len(built)} '
+        f'commits, appending granules in source order: {"; ".join(parts)}. '
         f'{evidence["when"][:10]}: verified against those same files by '
-        f'verify_wisosat_zarr.py, then finalized by finalize_wisosat_zarr.py.'
+        f'verify_wisosat_zarr.py, then finalized by finalize_wisosat_zarr.py '
+        f'(@ {code_revision()}).'
     )
     return history, created
 
 
-def resolve_attrs(repository, settings, store, evidence):
+def resolve_attrs(repository, settings, store, evidence, supplied=None, strict=True):
     """The global attributes a store should carry.
 
     The store's own attributes are the base; derived coverage goes on top, and
@@ -257,30 +404,51 @@ def resolve_attrs(repository, settings, store, evidence):
         settings (dict): The loaded configuration.
         store (str): The store's variable slot.
         evidence (dict | None): From ``verification_evidence``.
+        supplied (list | None): From ``parse_build_revisions``.
+        strict (bool): Raise if the history cannot be written; otherwise
+            leave it out (``--status`` reports, it does not refuse).
 
     Returns:
-        tuple: The merged attributes and the current ones.
+        tuple: The merged attributes, the current ones, and the reason the
+            history was left out (None if it was not).
+
+    Raises:
+        MissingRevisions: If ``strict`` and the build revisions are unknown.
     """
     dataset = open_store(repository)
     current = dict(dataset.attrs)
     current.pop('coordinates', None)
     merged = dict(current)
+    missing = None
     if evidence:
-        history, created = build_history(repository, settings, evidence, current)
-        merged |= coverage_attrs(dataset, evidence) | {
-            'history': history,
-            'date_created': created,
+        ids = dataset['granule_id'].values
+        try:
+            history, created = build_history(
+                repository, settings, evidence, current, ids, supplied
+            )
+            provenance = {'history': history, 'date_created': created}
+        except MissingRevisions as error:
+            if strict:
+                raise
+            provenance, missing = {}, str(error)
+        total = len(run_stores(settings))
+        covered = len(evidence['stores'])
+        scope = (
+            f'over all {total} stores of this product' if covered == total else
+            f'in a run over {covered} of the {total} stores of this product, '
+            f'this one included'
+        )
+        merged |= coverage_attrs(dataset, evidence) | provenance | {
             'verification': (
                 f'Verified {evidence["when"][:10]} against the source files by '
                 f'verify_wisosat_zarr.py: {evidence["checks"]} checks, '
                 f'{evidence["failures"]} failures across '
-                f'{", ".join(evidence["phases"])}, over the {len(evidence["stores"])} '
-                f'stores of this product. Every observation was compared, not a '
-                f'sample, bit for bit, with the raw side read through h5py with no '
-                f'masking so the two sides cannot agree by construction.'
+                f'{", ".join(evidence["phases"])}, {scope}. Every observation was '
+                f'compared, not a sample, bit for bit, with the raw side read through '
+                f'h5py with no masking so the two sides cannot agree by construction.'
             ),
         }
-    return merged, current
+    return merged, current, missing
 
 
 def object_counts(path):
@@ -315,7 +483,7 @@ def summarize(summary):
     )
 
 
-def run_status(repository, settings, store, path):
+def run_status(repository, settings, store, path, supplied=None):
     """Report where one store stands.
 
     Args:
@@ -323,12 +491,17 @@ def run_status(repository, settings, store, path):
         settings (dict): The loaded configuration.
         store (str): The store's variable slot.
         path (str): Directory holding the store.
+        supplied (list | None): From ``parse_build_revisions``.
 
     Returns:
         int: 0.
     """
     evidence = verification_evidence(settings, store)
-    merged, current = resolve_attrs(repository, settings, store, evidence)
+    merged, current, missing = resolve_attrs(
+        repository, settings, store, evidence, supplied, strict=False
+    )
+    if missing:
+        LOG.warning(f'{store}: history cannot be written yet: {missing}')
     pending = [key for key in merged if current.get(key) != merged[key]]
     tags = repository.list_tags()
     reachable = len(list(repository.ancestry(branch=BRANCH)))
@@ -353,7 +526,7 @@ def run_status(repository, settings, store, path):
     return 0
 
 
-def run_attrs(repository, settings, store, apply_changes):
+def run_attrs(repository, settings, store, apply_changes, supplied=None):
     """Write one store's global attributes.
 
     Args:
@@ -361,9 +534,11 @@ def run_attrs(repository, settings, store, apply_changes):
         settings (dict): The loaded configuration.
         store (str): The store's variable slot.
         apply_changes (bool): Whether to commit.
+        supplied (list | None): From ``parse_build_revisions``.
 
     Returns:
-        int: 0 on success, 1 if the store has not been verified.
+        int: 0 on success, 1 if the store has not been verified or its build
+            revisions are unknown.
     """
     evidence = verification_evidence(settings, store)
     if not evidence:
@@ -372,7 +547,11 @@ def run_attrs(repository, settings, store, apply_changes):
             f'verifier run covering this store in {log_path(settings, "verify_")}'
         )
         return 1
-    merged, current = resolve_attrs(repository, settings, store, evidence)
+    try:
+        merged, current, _ = resolve_attrs(repository, settings, store, evidence, supplied)
+    except MissingRevisions as error:
+        LOG.error(f'{store}: refusing to write attributes: {error}')
+        return 1
     changed = [key for key in merged if current.get(key) != merged[key]]
     for key in changed:
         LOG.info(f'{store}:   set {key} = {merged[key]!r}')
@@ -459,6 +638,9 @@ def main(settings, args):
         if bad:
             raise ValueError(f'{bad} are not stores of this config; choose from {stores}')
         stores = chosen
+    supplied = parse_build_revisions(args.build_revisions)
+    if supplied and not (args.attrs or args.status):
+        raise ValueError('--build-revisions applies to --attrs and --status only')
     if not args.apply and not args.status:
         LOG.info('--apply not given: reporting only, nothing will be written')
 
@@ -469,9 +651,9 @@ def main(settings, args):
         # instead of producing an empty repository that every step agrees with
         repository = open_existing_repository(path)
         if args.status:
-            result = run_status(repository, settings, store, path)
+            result = run_status(repository, settings, store, path, supplied)
         elif args.attrs:
-            result = run_attrs(repository, settings, store, args.apply)
+            result = run_attrs(repository, settings, store, args.apply, supplied)
         elif args.tag:
             result = run_tag(repository, store, args.tag, args.apply)
         else:

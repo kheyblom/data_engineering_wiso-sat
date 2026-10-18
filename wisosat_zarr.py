@@ -45,6 +45,7 @@ from utils.zarr_utils import (
     assemble,
     build_encoding,
     check_fill_config,
+    code_revision,
     committed_state,
     configure_runtime,
     global_attrs,
@@ -159,6 +160,9 @@ def build(settings):
     chunks = resolve_chunks(settings)
     stores = run_stores(settings)
     log_key(product)
+    # stamped on every commit, so finalize can say which code wrote what
+    revision = code_revision()
+    LOG.info(f'code revision {revision}')
 
     known = [entry.original for entry in variables(product).values()]
     known += [entry.original for entry in coordinates(product).values()]
@@ -252,7 +256,8 @@ def build(settings):
                     observations.attrs = global_attrs(settings, store, versions)
                     encoding = build_encoding(observations, index, chunks, fills, product)
                 message = COMMIT_MESSAGE.format(
-                    first=subset[0].granule.id, last=subset[-1].granule.id, count=len(subset)
+                    first=subset[0].granule.id, last=subset[-1].granule.id,
+                    count=len(subset), revision=revision,
                 )
                 snapshot = write_append(
                     repositories[store], observations, index, encoding, message
