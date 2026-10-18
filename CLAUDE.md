@@ -37,7 +37,7 @@ stores.
 
 | product | raw subpath | granule | status |
 | --- | --- | --- | --- |
-| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production built 2026-10-16; verification failed on 6 unlocated rows (finding 10); rebuild pending |
+| TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production built and verified 2026-10-18 (findings 9-10); finalize next |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT fixture passes |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
@@ -60,6 +60,8 @@ wisosat_zarr.py               # build: one pass over the granules writes every s
 verify_wisosat_zarr.py        # read-only; every observation, h5py vs the build's netCDF4
 finalize_wisosat_zarr.py      # --status, then --attrs, --tag, --gc (dry run without --apply)
 submit_wisosat_zarr.sh        # CONFIG=... [VERIFY=1] ./submit_wisosat_zarr.sh; show the user first
+finalize_wisosat_zarr.sh      # CONFIG=... TAG=... [APPLY=1 [GC_APPLY=1]]: the whole finalize sequence, dry run by default
+tools/rewind_stores.py        # reset every store of a config to its first N granules (dry run without --apply)
 products/<product>.py         # reader: list_granules, read_granule(granule, sources, time, rule), decode_time, check_granule
 utils/                        # granules (shared types), nomenclature, path_utils, zarr_utils
 config/<product>/config_zarr*.yaml
