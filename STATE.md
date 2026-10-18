@@ -135,9 +135,13 @@ Read this first in a new session. Update it whenever work lands.
        - 7855751's B1 ran at 24186fe: granules 7020 on, 2026-10-17. Its
          build code equals 5c88bf0.
        - Both checked with `git diff`.
-       - Approved, but not yet applied: `--attrs`, then `--tag
-         v8.1-verified-20261018`. Then the `--gc` dry run, for the user to
-         read.
+     - **Applied 2026-10-18 08:34 MDT:** `--attrs` (one commit per store),
+       then `--tag v8.1-verified-20261018` on all 17 stores (geolocation tip
+       `0JYYG54RB35JDY4R5PH0`).
+     - **The `--gc` dry run would delete ~1.04 TiB**, all of it the 528 commits
+       per store that the rewind orphaned (geolocation 182 GiB).
+       **`--gc --apply` awaits the user's approval;** it ends the rewind's
+       undo window.
      - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
        `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
        it only after verification has passed.
