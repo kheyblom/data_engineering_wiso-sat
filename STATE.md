@@ -25,6 +25,10 @@ Read this first in a new session. Update it whenever work lands.
   - 11 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`:
     the geolocation store, with `pressure`, and 10 variable stores, including
     the kernel, the a priori and the pressure weight.
+  - **To be reworked (user decision 2026-10-19):** `pressure` moves out of
+    the geolocation store into its own store, in every product. GOSAT's
+    geolocation store is rebuilt without it, and a `pressure` store is
+    built (step 4 below).
   - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
   - **Finalized 2026-10-19** with the user's sign-off, tag
     `v3.0.1-verified-20261019`. Every store reports "remaining nothing,
@@ -42,12 +46,14 @@ Read this first in a new session. Update it whenever work lands.
   rebuild, the precedent for this task's geolocation step.
 
 **What to build** (names, units and conversions in `tropomi.md`):
-- 5 variable stores on `layer` (50), all float32:
-  - the H2O and HDO column kernels;
-  - the H2O and HDO a priori partial columns (x 1e4 / N_A);
-  - `dry_air_partial_column` (x 1e4 / N_A).
-- `pressure` on `level` (51) in the geolocation store, in Pa as published
-  (no conversion).
+- 6 variable stores, all float32:
+  - on `layer` (50): the H2O and HDO column kernels, the H2O and HDO a priori
+    partial columns (x 1e4 / N_A), and `dry_air_partial_column`
+    (x 1e4 / N_A);
+  - on `level` (51): `pressure`, in Pa as published. **Its own store, not in
+    the geolocation store** (user decision 2026-10-19): it would have made
+    that store ~6x larger (0.68 to ~4 TiB) for users who need only position
+    and time. So the finalized geolocation store is not rebuilt.
 - **~19 TiB estimated** with the chosen codec (~20-21 TiB on disk), against
   1.8 TiB for the 19 existing stores.
 
@@ -76,16 +82,21 @@ Read this first in a new session. Update it whenever work lands.
    an unknown array, for each product).
 
 **Next steps, in order:**
-4. **Decide with the user how `pressure` reaches the geolocation store.**
-   A finalized store's index is complete, so a normal build writes nothing
-   to it, and the verifier would fail it for a missing array.
-   - **The precedent** (corners, 2026-10-18): move the geolocation store
-     aside as a backup, and rebuild it from granule 0 in the same pass as
-     the new stores. The 16 old variable stores are no-ops. Then verify the
-     new stores, run `--phases structure,index` over all of them, finalize
-     the new ones, and delete the backup only with approval.
-   - **The alternative:** a shared path that writes one new array onto a
-     complete store. That is new code, so the user decides.
+4. **Done in code (2026-10-19): `pressure` is a variable store in every
+   product.** The style guide's Level 2 rule changes, and `nomenclature_data.md`
+   gains a `pressure` row (style_guides, **awaiting the user's review**, not
+   yet committed). Both keys moved `pressure` from the coordinate key to the
+   variable key; every config lists it. The test passes 50 cases.
+   - **TROPOMI:** no geolocation rebuild. The bench and production build
+     the 6 new stores; the 19 finalized stores are no-ops.
+   - **GOSAT rework, before or alongside the TROPOMI bench:** its finalized
+     geolocation store holds `pressure`, so the structure phase now fails it
+     ("holds exactly its variables"). Move it aside as a backup, rebuild it
+     and build the `pressure` store from granule 0 (the 10 other stores are
+     no-ops), verify both, run `--phases structure,index` over all 12,
+     finalize the two with a new tag `v3.0.1-verified-<date>`, and delete the
+     backup only with approval. Show the job first (the whole GOSAT build
+     was ~0.2 core-hours).
 5. **Bench** (`config_zarr_bench.yaml`, 2020-07, 390 orbits), then production.
    Show every job and its cost first.
    - **Memory is the main risk.** At 60 granules per commit, the new arrays
@@ -98,12 +109,15 @@ Read this first in a new session. Update it whenever work lands.
      ~1000-1400 for the default. The bench measures what it adds to the
      build.
    - **Time:** the corner rebuild was ~3.7 h to build and ~3.3 h to verify
-     on develop. ~29 TiB of new data will take several times longer. Builds
+     on develop. ~19 TiB of new data will take several times longer. Builds
      resume, so chain them `afterany`. The verifier does not resume, and
-     cannot split one store. A geolocation verify that includes `pressure`
-     may not fit develop's 6 h, so the bench must measure it.
-   - **Finalize:** the new stores, and the rebuilt geolocation store, get
-     the tag `v8.1-verified-<date>`.
+     cannot split one store. A `pressure` or kernel store verify (~3.3 TiB
+     each) may not fit develop's 6 h, so the bench must measure it.
+   - **Finalize:** the 6 new stores get the tag `v8.1-verified-<date>`.
+   - **File count:** each new store holds ~250,000 chunk files in one flat
+     directory (131,072 obs per chunk), against 62,204 in the geolocation
+     store now. Sharding would cut it to ~7,800 per array; it is new code,
+     and the user has not decided on it.
 
 **Later:** multi-array variable stores for TES and IASI (N18), and the
 per-product open issues under Other open items.
@@ -246,6 +260,9 @@ per-product open issues under Other open items.
 - **Compression (2026-10-19):** blosc zstd 5 + byte shuffle for TROPOMI's six
   model-comparison arrays, set per array in config. Everything else keeps
   zarr's default zstd; the finalized stores are not rebuilt to match.
+- **Pressure (2026-10-19, revises N3):** a profile product's pressure grid
+  is a variable store named `pressure`, not part of the geolocation store,
+  in every product. GOSAT is reworked to match.
 - **Filtering guidance** in the metadata is Table 1 in full, plus the
   inferred reduced chi-squared.
 - **Naming rule:** the quantity first, then qualifiers general to specific.
@@ -253,7 +270,7 @@ per-product open issues under Other open items.
 
 ## Open questions
 
-- **TROPOMI `pressure`:** rebuild the geolocation store, as with the corners,
-  or write one new array onto the complete store (step 4 above).
+- **Chunk file count of the 2-D stores:** ~250,000 files per store, or
+  sharding (step 5 above).
 - **TROPOMI scale for the 2-D stores:** `granules_per_commit` and the queue,
   from the bench (step 5).

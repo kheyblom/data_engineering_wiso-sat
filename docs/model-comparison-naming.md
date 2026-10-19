@@ -63,9 +63,11 @@ readers are built:
 
 ## Layout
 
-**Pressure (N3, N4).** `pressure` is a coordinate in the geolocation store, in
-Pa, with no nomenclature row (as `time`, `lat`, `lon`). GOSAT, TES and TROPESS
-convert x 100 from hPa.
+**Pressure (N3, N4).** `pressure` is a variable store of its own, on `level`,
+in Pa, with its own nomenclature row. It is not in the geolocation store
+(revised by the user 2026-10-19: a 51-level grid would make TROPOMI's
+geolocation store ~6x larger, and a user who needs only position and time
+should not carry it). GOSAT, TES and TROPESS convert x 100 from hPa.
 
 **Vertical dims (N5).**
 - `level`: the points where pressure is given.
@@ -125,7 +127,7 @@ xr_sim = xa + (A * (xm - xa).rename(level='level_2')).sum('level_2')   # ln spac
 | --- | --- | --- |
 | N1 | the grammar above | one pattern for every product's kernels, priors and errors |
 | N2 | no `profile` token | the dims carry the shape; it causes no conflict in any product |
-| N3 | `pressure` is a geolocation coordinate, with no row | the vertical grid is a coordinate, like `time`/`lat`/`lon` |
+| N3 | `pressure` is a variable store, with a row (revised 2026-10-19; first decided as a geolocation coordinate) | the geolocation store stays position and time only; TROPOMI's grid alone is ~3 TiB |
 | N4 | `pressure` in Pa | SI, and native in TROPOMI, SCIAMACHY and IASI (~99% of the volume) |
 | N5 | `level` / `layer` in every product | a common join name across products |
 | N6 | matrix rows on `level`, columns on `level_2` | an array cannot repeat a dim; neutral for covariances |

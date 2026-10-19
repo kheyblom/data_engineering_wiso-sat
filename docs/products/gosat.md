@@ -94,8 +94,8 @@ raw/GOSAT-2/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYY>-v3.0.1/v3.0.1/<YYYY>/IUP-GHG
     product, from the key's coordinate table.
 - **The subset at fixture level:** δD and XH2O, their uncertainties, both
   flags, and SZA. Since 2026-10-19 it also has the XH2O kernel, the a priori,
-  the pressure weight, and `pressure` in the geolocation store (below): 10
-  variable stores and the geolocation store.
+  the pressure weight, and `pressure` (below): 11 variable stores and the
+  geolocation store.
 
 ## Model-comparison variables (named 2026-10-19)
 
@@ -115,7 +115,7 @@ reader. The test passes 46 cases over both products.
 | `xh2o_averaging_kernel` | `water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel` | unitless | (obs, layer) | none |
 | `h2o_profile_apriori` | `water_vapor_h2o_mole_fraction_dry_air_apriori` | 1e-6 | (obs, layer) | none; layer means |
 | `pressure_weight` | `pressure_weight_column_average` | unitless | (obs, layer) | none |
-| `pressure_levels` | geolocation `pressure` | Pa | (obs, level) | x 100 from `hPa`; layer boundaries |
+| `pressure_levels` | `pressure` | Pa | (obs, level) | x 100 from `hPa`; layer boundaries |
 | `dry_column` | held (G7) | — | (obs, layer) | — |
 
 - **Which file:** the kernel and prior are in the H2O file only. DED has no
@@ -130,7 +130,10 @@ reader. The test passes 46 cases over both products.
 - **`dry_column` is held** (G7). Resolve its unit from the GHG-CCI Product
   Specification Document v3, or by asking IUP. It would then be
   `dry_air_partial_column`, like TROPOMI's.
-- **Stores:** 3 variable stores, plus `pressure` in the geolocation store.
+- **Stores:** 4 variable stores, `pressure` among them. Until 2026-10-19
+  `pressure` was in the geolocation store, and the finalized production
+  geolocation store still holds it; it is to be rebuilt without it (user
+  decision 2026-10-19, so every product matches).
   GOSAT-2 has the same format.
 - **What the fixture showed** (4 days, 6,702 soundings):
   - `pressure` is (obs, level) float32 in Pa, as hPa x 100 in float64, and

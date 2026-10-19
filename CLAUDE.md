@@ -39,7 +39,7 @@ stores.
 | --- | --- | --- | --- |
 | TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production finalized 2026-10-18, tag `v8.1-verified-20261018` (findings 9-10) |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
-| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (11 stores) |
+| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (11 stores); its geolocation store is to be rebuilt without `pressure`, which gets its own store (2026-10-19) |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
 | CrIS (SNPP RS; JPSS1 FS) | `CRIS/TRPSYL2HDOCRSRS_*`, `CRIS/TRPSDL2HDOCRS1FS_*` | daily file | later |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
@@ -169,8 +169,8 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   here:
   - one store per variable over the whole record;
   - every observation kept, never filtered;
-  - one `geolocation` store per product (`time`, `lat`, `lon`, plus the
-    pressure grid for profile products);
+  - one `geolocation` store per product (`time`, `lat`, `lon`); a profile
+    product's pressure grid is a variable store of its own (2026-10-19);
   - an identical `obs` axis and granule index in every store of a product.
 
   Any deviation needs the user's approval.
@@ -184,7 +184,8 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   - Model-comparison variables (kernels, priors, covariances, pressure):
     - the grammar and layout rules are in `docs/model-comparison-naming.md`;
     - each product's mapping is in its `docs/products/<product>.md`;
-    - `pressure` is in Pa, and vertical dims are `level` / `layer`.
+    - `pressure` is its own variable store, in Pa, and vertical dims are
+      `level` / `layer`.
   - Never set `standard_name`; a source one is retained unchanged.
     `cdm_data_type: Point`.
 - **Nomenclature rows come first.** Every variable, unit and frequency needs an

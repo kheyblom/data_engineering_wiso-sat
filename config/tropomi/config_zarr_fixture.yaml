@@ -55,6 +55,7 @@ variables:
   - water_vapor_partial_column_h2o_apriori
   - water_vapor_partial_column_hdo_apriori
   - dry_air_partial_column
+  - pressure
 
 expected_missing_days:
   - 2020-06-18

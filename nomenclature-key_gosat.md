@@ -29,15 +29,16 @@ one obs per distinct sounding** (decided 2026-10-14; see
 | `xh2o_averaging_kernel` | `1` | `water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel` | `unitless` | normalized column averaging kernel of the column-averaged dry-air mole fraction of water vapor (H2O), with respect to the layer dry-air mole fraction | none | H2O file; on `layer`, layer means, surface first |
 | `h2o_profile_apriori` | `1e-6` | `water_vapor_h2o_mole_fraction_dry_air_apriori` | `1e-6` | a priori dry-air mole fraction of water vapor (H2O) | none | H2O file; on `layer`, layer means, surface first |
 | `pressure_weight` | `1` | `pressure_weight_column_average` | `unitless` | layer pressure weight that forms a column average from a layer profile | none | both files, identical where both hold a sounding; on `layer`. Within 0.0026 of dp / p_surface but not equal, so stored as published |
+| `pressure_levels` | `hPa` | `pressure` | `Pa` | air pressure at each vertical level of a retrieval | x 100 | on `level` (6), the boundaries of the 5 layers, surface first; both files, identical where both hold a sounding. Its own store, not in the geolocation store (user decision 2026-10-19) |
 
-- **Units are already canonical.** FOCAL writes `1e-3` and `1e-6`, so no value
-  changes. The quality flags carry no units attribute (`unitless`).
+- **Units are already canonical**, except `pressure` (hPa x 100 to Pa).
+  FOCAL writes `1e-3` and `1e-6`, so no other value changes. The quality flags carry no units attribute (`unitless`).
 - **Every sounding is flag 0** in the files sampled: FOCAL publishes only
   soundings that pass its quality control (Sarkar et al. 2026). The flags are
   stored anyway, since quality flags are mandatory.
 - **Model-comparison variables** (named 2026-10-19; mapping in
-  `docs/products/gosat.md`): the kernel, the a priori and the pressure weight
-  above, and `pressure` in the coordinate key. They apply FOCAL's operator
+  `docs/products/gosat.md`): the kernel, the a priori, the pressure weight
+  and `pressure` above. They apply FOCAL's operator
   `XH2O_sim = sum_j w_j (xa_j + a_j (x_model_j - xa_j))`.
   - The kernel and the a priori are in the H2O file only, so they are absent
     (NaN) on DED-only soundings.
@@ -51,7 +52,6 @@ one obs per distinct sounding** (decided 2026-10-14; see
 | `time` | `seconds since 1970-01-01 00:00:00` | `time` | `nanoseconds since 1900-01-01` | decoded | float64 seconds; nanoseconds is the coarsest unit that holds every one exactly (ms fails 99% and us 76% of 38,003 sampled times) |
 | `latitude` | `degrees_north` | `lat` | `degrees_north` | none | sounding centre |
 | `longitude` | `degrees_east` | `lon` | `degrees_east` | none | sounding centre |
-| `pressure_levels` | `hPa` | `pressure` | `Pa` | x 100 | on `level` (6), the boundaries of the 5 layers, surface first; both files, identical where both hold a sounding |
 
 ## Temporal Frequency Key
 

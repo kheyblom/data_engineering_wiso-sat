@@ -44,6 +44,7 @@ Columns are matched by header name: reorder them freely, but do not rename them.
 | `target_product/h2o_profile_apriori` | `molec. cm-2` | `water_vapor_partial_column_h2o_apriori` | `mol m-2` | a priori layer partial column of water vapor (H2O) | x 1e4 / N_A | on `layer` (50), top first; SRON's "profile" is a partial column per layer |
 | `target_product/hdo_profile_apriori` | `molec. cm-2` | `water_vapor_partial_column_hdo_apriori` | `mol m-2` | a priori layer partial column of HDO water vapor | x 1e4 / N_A | on `layer` (50), top first; SRON's "profile" is a partial column per layer |
 | `meteo/dry_air_subcolumns` | `molec. cm-2` | `dry_air_partial_column` | `mol m-2` | layer partial column of dry air | x 1e4 / N_A | on `layer` (50), top first; model comparison |
+| `meteo/pressure_levels` | `Pa` | `pressure` | `Pa` | air pressure at each vertical level of a retrieval | none | on `level` (51), the boundaries of the 50 layers, top first: level 0 is 0 Pa and the last level is the surface pressure. Its own store, not in the geolocation store (user decision 2026-10-19) |
 
 - **δD** is published as a fraction (`ratio / standard_ratio - 1`, with
   `standard_ratio` 0.00031153). It becomes per mil, the canonical `1e-3`.
@@ -56,9 +57,8 @@ Columns are matched by header name: reorder them freely, but do not rename them.
   `docs/products/tropomi.md`). Both inputs are stored so users can form it.
 - **Model-comparison variables** (named 2026-10-19; mapping in
   `docs/products/tropomi.md`): the two column kernels, the two a priori
-  partial columns and the dry-air partial column above, and `pressure` in the
-  coordinate key. The partial columns take the same x 1e4 / N_A as the
-  columns.
+  partial columns, the dry-air partial column and `pressure` above. The
+  partial columns take the same x 1e4 / N_A as the columns.
 
 ## Coordinate Key
 
@@ -73,7 +73,6 @@ does this product.
 | `instrument/longitude_center` | `degrees east` | `lon` | `degrees_east` | none | pixel centre; respelled only |
 | `instrument/latitude_corners` | `degrees north` | `lat_corners` | `degrees_north` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
 | `instrument/longitude_corners` | `degrees east` | `lon_corners` | `degrees_east` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
-| `meteo/pressure_levels` | `Pa` | `pressure` | `Pa` | none | on `level` (51), the boundaries of the 50 layers, top first: level 0 is 0 Pa and the last level is the surface pressure (named 2026-10-19) |
 
 ## Temporal Frequency Key
 

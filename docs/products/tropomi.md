@@ -161,8 +161,8 @@ lists of what was missing are in git history (`0b0a3d7`,
 - **Geolocation store:**
   - `time`;
   - `lat`, `lon` (pixel centre);
-  - `pressure` on `level` (`meteo/pressure_levels`, 51 interfaces, Pa), only
-    once the model-comparison set is produced: the kernels are what need it;
+  - (`pressure` was planned here; since 2026-10-19 it is a variable store of
+    its own: see Model-comparison variables);
   - pixel corners, optional (`corner`, 32 B/obs).
 - **Filtering guidance to record in metadata, not apply.** Schneider et al.
   (2022) Table 1, read from the publisher's image. Sarkar et al. (2026)
@@ -258,14 +258,16 @@ them. Not built at bench or production scale yet.
 | `target_product/h2o_profile_apriori` | `water_vapor_partial_column_h2o_apriori` | mol m-2 | (obs, layer) | x 1e4 / N_A from `molec. cm-2` |
 | `target_product/hdo_profile_apriori` | `water_vapor_partial_column_hdo_apriori` | mol m-2 | (obs, layer) | x 1e4 / N_A |
 | `meteo/dry_air_subcolumns` | `dry_air_partial_column` | mol m-2 | (obs, layer) | x 1e4 / N_A |
-| `meteo/pressure_levels` | geolocation `pressure` | Pa | (obs, level) | none; layer interfaces |
+| `meteo/pressure_levels` | `pressure` | Pa | (obs, level) | none; layer interfaces |
 
 - SRON calls the priors "profile", but they are partial columns: "A-priori
   vertically integrated partial column of water in layers", in molec cm-2
   per layer. Hence `partial_column`.
-- **Stores:** 5 new variable stores on the existing obs axis and granule
-  index, and `pressure` added to the existing geolocation store, as the
-  corners were. The 19 existing stores are not rebuilt.
+- **Stores:** 6 new variable stores on the existing obs axis and granule
+  index, `pressure` among them. `pressure` is its own store, not part of the
+  geolocation store (user decision 2026-10-19), so the finalized geolocation
+  store (697 GiB) keeps position and time only. None of the 19 existing
+  stores is rebuilt.
 - **Size: ~19 TiB with byte-shuffled blosc**, against ~29 TiB with zarr's
   default zstd (Variable inventory, group 1). Expect ~20-21 TiB on disk, since
   the method runs 5-10% low on floats.

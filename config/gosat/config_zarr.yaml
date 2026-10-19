@@ -30,6 +30,7 @@ variables:
   - water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel
   - water_vapor_h2o_mole_fraction_dry_air_apriori
   - pressure_weight_column_average
+  - pressure
 
 # days between the first and last file with no files of either kind (listed
 # 2026-10-14). The build fails on any other gap.
@@ -214,7 +215,8 @@ attrs:
     distributed for WISO-SAT, every sounding of the record, stored as an
     icechunk-backed zarr store. Each day's DED and H2O files are merged onto
     one obs axis of distinct soundings. Join with the geolocation store of the
-    same product on obs for time, latitude, longitude and the pressure levels.
+    same product on obs for time, latitude and longitude, and with the
+    pressure store for the pressure levels.
   Conventions: ACDD-1.3
   source: >-
     IUP FOCAL GOSAT Level 2 product {version_label}, one DED and one H2O
@@ -231,9 +233,10 @@ attrs:
     Specification Document Version 3, www.esa-ghg-cci.org.
   related_store: >-
     wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
-    time, lat, lon and pressure (the 6 levels bounding the 5 layers, surface
-    first) for every obs; every other store of this product shares its obs
-    axis and granule index.
+    time, lat and lon for every obs, and
+    wisosat.{product}.{version}.{frequency}.{grid_name}.pressure.zarr the 6
+    pressure levels bounding the 5 layers, surface first; every store of this
+    product shares one obs axis and granule index.
   granule: >-
     one day; granule_id is the date, and granule_file names the day's DED and
     H2O files

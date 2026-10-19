@@ -6,7 +6,7 @@
 #   observations and the integer absent fill are all exercised;
 # - the kernel and a priori are (obs, layer) and H2O-only, so the absent mask
 #   broadcasts over a secondary dimension in a variable store; pressure is a
-#   2-D geolocation coordinate with a unit conversion (hPa x 100);
+#   2-D variable store with a unit conversion (hPa x 100);
 # - obs: 1000 against ~1,300-1,800 soundings a day lands appends mid-chunk;
 # - granules_per_commit: 2 gives two commits per store.
 product: gosat
@@ -32,6 +32,7 @@ variables:
   - water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel
   - water_vapor_h2o_mole_fraction_dry_air_apriori
   - pressure_weight_column_average
+  - pressure
 
 expected_missing_days:
   - 2015-09-14

@@ -16,11 +16,12 @@ Ported from ``data_engineering_mswep/utils/nomenclature.py``. What differs:
   needed. ``unit_conversion`` is parsed into a factor by ``conversion_factor``,
   so the multiplier a store was built with is the one the key documents.
 - **A coordinate key** maps the geolocation store's ``time``/``lat``/``lon``
-  (and, for a profile product, ``pressure``) onto their source variables.
+  (and TROPOMI's pixel corners) onto their source variables. A profile
+  product's ``pressure`` is a variable store, not a coordinate (user decision
+  2026-10-19).
   ``nomenclature_data.md`` has no coordinate rows, so these are not canonical
   names; they follow the gridded stores. A coordinate's ``unit_conversion`` is
-  ``decoded`` for time, or parsed like a variable's (GOSAT ``pressure``: hPa
-  x 100 to Pa).
+  ``decoded`` for time, or parsed like a variable's.
 - **Configs and stores name variables canonically.** The original name is the
   HDF5 path in the source file, which is no name for a store, so lookups run
   from the canonical side.

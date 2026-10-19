@@ -46,13 +46,14 @@ variables:
   # the pixel's address on the Level 1B grid (user decision 2026-10-18)
   - scanline_index
   - ground_pixel_index
-  # model comparison, on layer (named 2026-10-19); pressure, on level, goes in
-  # the geolocation store
+  # model comparison, on layer (named 2026-10-19), and pressure on level, its
+  # own store rather than part of geolocation (user decision 2026-10-19)
   - water_vapor_column_h2o_averaging_kernel
   - water_vapor_column_hdo_averaging_kernel
   - water_vapor_partial_column_h2o_apriori
   - water_vapor_partial_column_hdo_apriori
   - dry_air_partial_column
+  - pressure
 
 # 2020-07 has an orbit directory on every day
 expected_missing_days: []

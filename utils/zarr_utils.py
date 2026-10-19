@@ -9,7 +9,7 @@ the store's dimensions (``utils/granules.py``), and this module does the rest.
   as the style guide requires.
 - **Unit conversion.** The factor comes from the nomenclature key's
   ``unit_conversion``, applied in float64 and stored in the source dtype. A
-  geolocation coordinate can take one too (GOSAT ``pressure``, hPa to Pa).
+  geolocation coordinate can take one too.
 - **Vertical order.** An array on a vertical dimension (``level``, ``layer``,
   ``level_2``) keeps its source's order and says which it is in a
   ``vertical_order`` attribute, from the reader's ``VERTICAL_ORDER``
