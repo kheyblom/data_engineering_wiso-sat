@@ -124,6 +124,57 @@ def code_revision():
         return 'unknown'
 
 
+def uncommitted_changes():
+    """What ``git status`` reports for this working tree.
+
+    Returns:
+        list | None: ``git status --porcelain`` lines (empty when clean), or
+            None if git cannot answer.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        output = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            capture_output=True, text=True, check=True, cwd=here,
+        ).stdout
+    except Exception:
+        return None
+    return [line for line in output.splitlines() if line.strip()]
+
+
+def check_clean_tree(revision, settings):
+    """Refuse to build from anything but a clean commit (user decision 2026-10-18).
+
+    Every build commit is stamped with the revision that wrote it, and that
+    stamp is permanent. A dirty tree makes it say ``-dirty``, which nobody can
+    later explain from the store alone, so a build has to start from a
+    committed tree.
+
+    Only a fixture config may set ``allow_dirty_tree``. The pipeline test
+    builds during development, and its stores are throwaway; the test checks
+    that no other config sets it.
+
+    Args:
+        revision (str): From ``code_revision``.
+        settings (dict): The loaded configuration.
+
+    Raises:
+        ValueError: If the tree has uncommitted or untracked changes, or git
+            cannot say which revision this is.
+    """
+    if settings.get('allow_dirty_tree'):
+        return
+    if revision == 'unknown':
+        raise ValueError('git cannot say which revision this is; build from a git checkout')
+    if revision.endswith('-dirty'):
+        changes = uncommitted_changes() or []
+        raise ValueError(
+            f'the working tree is not a clean commit ({len(changes)} changes, e.g. '
+            f'{changes[:5]}); commit them, or move them out, before building: every '
+            f'build commit is stamped with the revision that wrote it'
+        )
+
+
 def time_units(product):
     """The product's time units, from its coordinate key.
 

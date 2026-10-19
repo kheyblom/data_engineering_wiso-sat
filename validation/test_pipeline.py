@@ -19,6 +19,8 @@ Per product:
 5. guards: an undeclared missing day, a wrong processor version, a run that
    omits the quality flags, an unknown variable, and (where the product has
    them) an undeclared empty granule directory or unreadable file;
+   A build without the fixture's ``allow_dirty_tree`` must refuse a working
+   tree that is not a clean commit (an untracked probe file makes it dirty).
 6. finalize: ``--attrs`` refuses without verification evidence; the full
    ``--attrs``, ``--tag``, ``--gc`` sequence; then the verifier still passes.
 
@@ -279,6 +281,28 @@ def test_product(results, config, scratch):
                 not os.path.exists(store_path(wrong, GEOLOCATION)),
             )
 
+    # a build must start from a clean commit. The fixture config allows a
+    # dirty tree (the test runs during development); without that, and with
+    # an untracked file made here, the build must refuse before writing
+    probe = os.path.join(ROOT, f'.dirty_tree_probe_{product}')
+    guard_zarr = os.path.join(scratch, 'guard_zarr')
+    shutil.rmtree(guard_zarr, ignore_errors=True)
+    directories = dict(settings['directories'], zarr=guard_zarr)
+    path = write_config(
+        settings, scratch, f'{product}_clean.yaml', directories=directories,
+        allow_dirty_tree=False,
+    )
+    try:
+        open(probe, 'w').close()
+        status, output = run('wisosat_zarr.py', '--config', path)
+    finally:
+        os.remove(probe)
+    results.check(
+        f'{product}: build refuses a working tree that is not a clean commit',
+        status != 0 and 'not a clean commit' in output and not os.path.exists(guard_zarr),
+        last_line(output, 'not a clean commit') or last_line(output, 'Error'),
+    )
+
     # 6. finalize refuses without evidence, then the full sequence
     empty = dict(settings['directories'], logs=os.path.join(scratch, 'empty_logs'))
     path = write_config(settings, scratch, f'{product}_nolog.yaml', directories=empty)
@@ -312,6 +336,48 @@ def test_product(results, config, scratch):
                   status == 0 and 'stores verified' in output, last_line(output, 'checks,'))
 
 
+def test_rules(results):
+    """Checks that hold for the whole codebase rather than one fixture.
+
+    Args:
+        results (Results): Collects the outcomes.
+    """
+    from finalize_wisosat_zarr import parse_dirty_notes
+    from utils.zarr_utils import check_clean_tree
+
+    def refuses(revision, settings):
+        try:
+            check_clean_tree(revision, settings)
+        except ValueError:
+            return True
+        return False
+
+    results.check(
+        'a build refuses a dirty or unknown revision, unless the config is a fixture',
+        refuses('abc1234-dirty', {}) and refuses('unknown', {})
+        and not refuses('abc1234', {}) and not refuses('abc1234-dirty', {'allow_dirty_tree': True}),
+    )
+    allowing = [
+        os.path.relpath(path, ROOT)
+        for path in sorted(glob.glob(os.path.join(ROOT, 'config', '*', '*.yaml')))
+        if load_config(path).get('allow_dirty_tree') and not path.endswith('_fixture.yaml')
+    ]
+    results.check('only fixture configs allow a dirty tree', not allowing, f'{allowing}')
+
+    malformed = []
+    for item in ('abc1234=clean revision', 'abc1234-dirty=', 'abc1234-dirty'):
+        try:
+            parse_dirty_notes([item])
+            malformed.append(item)
+        except ValueError:
+            pass
+    results.check(
+        'finalize --dirty-notes takes only REV-dirty=TEXT',
+        not malformed and parse_dirty_notes(['abc1234-dirty=notes']) == {'abc1234-dirty': 'notes'},
+        f'accepted {malformed}',
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description='end to end test over every product fixture.')
     parser.add_argument('--products', type=str, default=None,
@@ -325,6 +391,7 @@ def main():
         configs = [config for config in configs if config.split(os.sep)[1] in wanted]
 
     results = Results()
+    test_rules(results)
     scratch_root = os.environ.get('TMPDIR') or None
     for config in configs:
         with tempfile.TemporaryDirectory(dir=scratch_root) as scratch:

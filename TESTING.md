@@ -184,6 +184,24 @@ failed. Every value matched raw, but `instrument/latitude_center` and
 - **Why the audit missed it:** it checked whether each dataset was written at
   all, not row by row.
 
+### 11. A dirty working tree in the build's provenance (2026-10-18)
+
+The build of the corner geolocation store and the two index stores was stamped
+`@ e743105-dirty` on all 645 commits.
+- **The cause:** when it started, `git status` showed untracked marimo
+  notebooks (`.gitignore` covered only `testing*.ipynb`), and perhaps the
+  marimo entry in `pyproject.toml` and `uv.lock`. No pipeline code differed
+  from `e743105`, and no pipeline library changed version.
+- **The stores:** the stamp in their commit messages is permanent. Their
+  `history` explains it, through `finalize --dirty-notes`.
+- **The fix:**
+  - `notebooks/` is ignored;
+  - a build refuses a dirty tree, at submit and at start (`check_clean_tree`);
+  - only fixture configs may set `allow_dirty_tree`.
+- **The test:** an untracked probe file makes the tree dirty, and the build
+  must refuse without the fixture's allowance. A global check confirms that
+  no other config sets it. 46 cases pass.
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445

@@ -75,6 +75,8 @@ on a login node (metadata only). Nothing is written without `--apply`.
 ```bash
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --status
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --attrs [--apply]
+#   for stores whose build commits predate stamping or were built dirty:
+#   [--build-revisions REV@INDEX,...] [--dirty-notes 'REV-dirty=what was uncommitted']
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --tag NAME [--apply]
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --gc [--apply]
 ```
@@ -117,6 +119,18 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
     `leaked_rows` in `utils/granules.py`. The verifier repeats it on its own
     from raw;
   - `granule_source_rows` in the index keeps each file's own row count.
+- **Builds start only from a clean commit** (user decision 2026-10-18;
+  TESTING.md finding 11):
+  - every build commit is stamped `@ <revision>`, and `finalize` writes
+    `history` from those stamps;
+  - `wisosat_zarr.py` refuses to build if `git status` shows anything, tracked
+    or untracked, and `submit_wisosat_zarr.sh` refuses to submit a build;
+  - only fixture configs set `allow_dirty_tree`, which the test enforces;
+  - commit before submitting, and keep the tree clean until each build job
+    has started. A STATE.md edit left uncommitted makes a queued build fail
+    at start;
+  - stores built from a dirty tree before this need `finalize --attrs
+    --dirty-notes 'REV-dirty=what was uncommitted'`.
 - **Testing tiers and findings:** [TESTING.md](TESTING.md).
 - **Test after any shared change** (condition 2), from the repo root:
   `uv run python validation/stage_<product>.py` once, then

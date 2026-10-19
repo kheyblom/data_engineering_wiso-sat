@@ -30,6 +30,12 @@ variables:
 expected_missing_days:
   - 2015-09-14
 
+# Only fixture configs may build from a working tree with uncommitted changes:
+# the pipeline test builds during development and its stores are throwaway.
+# Every other build refuses (check_clean_tree), and the test checks that no
+# other config sets this.
+allow_dirty_tree: true
+
 # Rows that are not observations (no time, latitude or longitude written) are
 # left out by the shared rule (RowRule in utils/granules.py, 2026-10-17). None
 # is known in FOCAL, so nothing may be written on one.

@@ -44,6 +44,7 @@ from utils.zarr_utils import (
     COMMIT_MESSAGE,
     assemble,
     build_encoding,
+    check_clean_tree,
     check_fill_config,
     code_revision,
     committed_state,
@@ -160,9 +161,11 @@ def build(settings):
     chunks = resolve_chunks(settings)
     stores = run_stores(settings)
     log_key(product)
-    # stamped on every commit, so finalize can say which code wrote what
+    # stamped on every commit, so finalize can say which code wrote what;
+    # checked before anything is listed or written
     revision = code_revision()
     LOG.info(f'code revision {revision}')
+    check_clean_tree(revision, settings)
 
     known = [entry.original for entry in variables(product).values()]
     known += [entry.original for entry in coordinates(product).values()]

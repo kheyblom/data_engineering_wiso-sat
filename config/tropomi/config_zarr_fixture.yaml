@@ -60,6 +60,12 @@ expected_unreadable_granules:
   - '03335'  # segfaults HDF5 on open, rather than raising
   - '07821'  # truncated; the test's undeclared-file guard drops this, the last
 
+# Only fixture configs may build from a working tree with uncommitted changes:
+# the pipeline test builds during development and its stores are throwaway.
+# Every other build refuses (check_clean_tree), and the test checks that no
+# other config sets this.
+allow_dirty_tree: true
+
 # Rows that are not observations are left out of every store (RowRule in
 # utils/granules.py): a row needs its time, latitude and longitude all written
 # (user decisions 2026-10-16 and 2026-10-17). A row left out may hold values

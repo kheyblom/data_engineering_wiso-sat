@@ -39,6 +39,15 @@ older than the build commits it is given for, must start at a commit
 boundary, and is marked in the history as supplied at finalization. The
 history is written once and then kept.
 
+**A dirty build revision must be explained** (user decision 2026-10-18). A
+revision stamped ``-dirty`` (the working tree was not a clean commit when the
+build started) or ``unknown`` goes into ``history`` only with
+``--dirty-notes 'REV-dirty=what was uncommitted'``. The revision must be a
+commit of this repository, and the history marks the explanation as given at
+finalization. Builds now refuse a dirty tree (``check_clean_tree``), so this is
+for stores built before that. A fixture config (``allow_dirty_tree``) records
+its revisions as they are.
+
 ``--gc --apply`` is irreversible: icechunk only collects unreachable objects,
 and this script checks reachable bytes and history length either side, but a
 store with no second copy has nothing to restore from.
@@ -126,11 +135,41 @@ def parse_args():
         help='For build commits that name no code revision: REV@GRANULE_INDEX,... '
         'giving each revision with the granule index it started writing at.',
     )
+    parser.add_argument(
+        '--dirty-notes', type=str, action='append', default=None,
+        help='Explain a build revision stamped -dirty: REV-dirty=TEXT, what was '
+        'uncommitted when the build ran. Repeat for several.',
+    )
     return parser.parse_args()
 
 
 class MissingRevisions(ValueError):
-    """Build commits that name no code revision, with none supplied for them."""
+    """Build commits that name no code revision, with none supplied for them,
+    or a dirty revision with no explanation."""
+
+
+def parse_dirty_notes(items):
+    """Parse ``--dirty-notes``.
+
+    Args:
+        items (list | None): ``REV-dirty=TEXT`` strings.
+
+    Returns:
+        dict: Stamped revision -> explanation.
+
+    Raises:
+        ValueError: If an item is malformed or names a revision twice.
+    """
+    notes = {}
+    for item in items or []:
+        revision, separator, text = item.partition('=')
+        revision, text = revision.strip(), text.strip()
+        if not separator or not text or not (revision.endswith('-dirty') or revision == 'unknown'):
+            raise ValueError(f'--dirty-notes takes REV-dirty=TEXT; got {item!r}')
+        if revision in notes:
+            raise ValueError(f'--dirty-notes explains {revision} twice')
+        notes[revision] = text
+    return notes
 
 
 def parse_build_revisions(text):
@@ -344,7 +383,7 @@ def coverage_attrs(dataset, evidence):
     }
 
 
-def build_history(repository, settings, evidence, current, ids, supplied):
+def build_history(repository, settings, evidence, current, ids, supplied, notes=None):
     """How the store was built and audited, from the repository itself.
 
     Args:
@@ -354,13 +393,16 @@ def build_history(repository, settings, evidence, current, ids, supplied):
         current (dict): The store's attributes as they stand.
         ids (numpy.ndarray): The store's ``granule_id``.
         supplied (list | None): From ``parse_build_revisions``.
+        notes (dict | None): From ``parse_dirty_notes``.
 
     Returns:
         tuple: The history string and the ISO 8601 UTC creation timestamp.
 
     Raises:
-        MissingRevisions: From ``build_segments``, when a history is to be
-            written.
+        MissingRevisions: From ``build_segments``, or for a dirty revision with
+            no explanation, when a history is to be written.
+        ValueError: If an explanation names a revision no build commit carries,
+            or whose commit this repository does not have.
     """
     snapshots = list(repository.ancestry(branch=BRANCH))
     built = [s for s in snapshots if s.message not in NON_BUILD_MESSAGES]
@@ -373,13 +415,35 @@ def build_history(repository, settings, evidence, current, ids, supplied):
     existing = current.get('history', '')
     if OUR_HISTORY_MARKER in existing:
         return existing, created
-    parts = []
+    notes = dict(notes or {})
+    parts, used = [], set()
     for segment in build_segments(repository, ids, supplied):
+        revision = segment['revision']
         note = ', supplied at finalization' if segment['supplied'] else ''
+        dirty = revision == 'unknown' or revision.endswith('-dirty')
+        if dirty and not settings.get('allow_dirty_tree'):
+            if revision not in notes:
+                raise MissingRevisions(
+                    f'build revision {revision} was not a clean commit; explain what was '
+                    f'uncommitted with --dirty-notes {revision}=TEXT'
+                )
+            if revision != 'unknown':
+                revision = revision[:-len('-dirty')]
+                resolve_revision(revision)
+            note = (
+                f'; the working tree was not a clean commit when this ran: '
+                f'{notes[segment["revision"]]} (explained at finalization){note}'
+            )
+            used.add(segment['revision'])
         parts.append(
             f'granules {segment["first"]}..{segment["last"]} on '
             f'{date_span(segment["start"], segment["end"])} '
-            f'(data_engineering_wiso-sat @ {segment["revision"]}{note})'
+            f'(data_engineering_wiso-sat @ {revision}{note})'
+        )
+    unused = sorted(set(notes) - used)
+    if unused:
+        raise ValueError(
+            f'--dirty-notes explains {unused}, which no build commit of this store carries'
         )
     history = (
         f'{date_span(started, finished)}: written from the {settings["product"]} '
@@ -392,7 +456,8 @@ def build_history(repository, settings, evidence, current, ids, supplied):
     return history, created
 
 
-def resolve_attrs(repository, settings, store, evidence, supplied=None, strict=True):
+def resolve_attrs(repository, settings, store, evidence, supplied=None, strict=True,
+                  notes=None):
     """The global attributes a store should carry.
 
     The store's own attributes are the base; derived coverage goes on top, and
@@ -424,7 +489,7 @@ def resolve_attrs(repository, settings, store, evidence, supplied=None, strict=T
         ids = dataset['granule_id'].values
         try:
             history, created = build_history(
-                repository, settings, evidence, current, ids, supplied
+                repository, settings, evidence, current, ids, supplied, notes
             )
             provenance = {'history': history, 'date_created': created}
         except MissingRevisions as error:
@@ -483,7 +548,7 @@ def summarize(summary):
     )
 
 
-def run_status(repository, settings, store, path, supplied=None):
+def run_status(repository, settings, store, path, supplied=None, notes=None):
     """Report where one store stands.
 
     Args:
@@ -498,7 +563,7 @@ def run_status(repository, settings, store, path, supplied=None):
     """
     evidence = verification_evidence(settings, store)
     merged, current, missing = resolve_attrs(
-        repository, settings, store, evidence, supplied, strict=False
+        repository, settings, store, evidence, supplied, strict=False, notes=notes
     )
     if missing:
         LOG.warning(f'{store}: history cannot be written yet: {missing}')
@@ -526,7 +591,7 @@ def run_status(repository, settings, store, path, supplied=None):
     return 0
 
 
-def run_attrs(repository, settings, store, apply_changes, supplied=None):
+def run_attrs(repository, settings, store, apply_changes, supplied=None, notes=None):
     """Write one store's global attributes.
 
     Args:
@@ -548,7 +613,9 @@ def run_attrs(repository, settings, store, apply_changes, supplied=None):
         )
         return 1
     try:
-        merged, current, _ = resolve_attrs(repository, settings, store, evidence, supplied)
+        merged, current, _ = resolve_attrs(
+            repository, settings, store, evidence, supplied, notes=notes
+        )
     except MissingRevisions as error:
         LOG.error(f'{store}: refusing to write attributes: {error}')
         return 1
@@ -639,8 +706,9 @@ def main(settings, args):
             raise ValueError(f'{bad} are not stores of this config; choose from {stores}')
         stores = chosen
     supplied = parse_build_revisions(args.build_revisions)
-    if supplied and not (args.attrs or args.status):
-        raise ValueError('--build-revisions applies to --attrs and --status only')
+    notes = parse_dirty_notes(args.dirty_notes)
+    if (supplied or notes) and not (args.attrs or args.status):
+        raise ValueError('--build-revisions and --dirty-notes apply to --attrs and --status only')
     if not args.apply and not args.status:
         LOG.info('--apply not given: reporting only, nothing will be written')
 
@@ -651,9 +719,9 @@ def main(settings, args):
         # instead of producing an empty repository that every step agrees with
         repository = open_existing_repository(path)
         if args.status:
-            result = run_status(repository, settings, store, path, supplied)
+            result = run_status(repository, settings, store, path, supplied, notes)
         elif args.attrs:
-            result = run_attrs(repository, settings, store, args.apply, supplied)
+            result = run_attrs(repository, settings, store, args.apply, supplied, notes)
         elif args.tag:
             result = run_tag(repository, store, args.tag, args.apply)
         else:
