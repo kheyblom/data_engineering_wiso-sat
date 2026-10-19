@@ -3,8 +3,9 @@
 **GOSAT reader built at fixture level, 2026-10-14** (design condition 1, the
 second reader): `products/gosat.py`, `nomenclature-key_gosat.md`,
 `config/gosat/`, `validation/stage_gosat.py`. The fixture passes the
-end-to-end test. GOSAT-2 is not configured yet; it has the same format, and the
-reader's patterns already accept it.
+end-to-end test. The model-comparison stores joined it on 2026-10-19 (below).
+GOSAT-2 is not configured yet; it has the same format, and the reader's
+patterns already accept it.
 
 ## Raw data: four products
 
@@ -92,14 +93,17 @@ raw/GOSAT-2/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYY>-v3.0.1/v3.0.1/<YYYY>/IUP-GHG
   - So GOSAT time is int64 nanoseconds since 1900. The time unit is per
     product, from the key's coordinate table.
 - **The subset at fixture level:** δD and XH2O, their uncertainties, both
-  flags, and SZA. The model-comparison variables are named (below) but not
-  yet built.
+  flags, and SZA. Since 2026-10-19 it also has the XH2O kernel, the a priori,
+  the pressure weight, and `pressure` in the geolocation store (below): 10
+  variable stores and the geolocation store.
 
 ## Model-comparison variables (named 2026-10-19)
 
 Named in the cross-product naming pass. The grammar and decisions are in
 `docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
-(style_guides `fee64ec`). Units are after conversion. Not built yet.
+(style_guides `fee64ec`). Units are after conversion. **Built at fixture
+level 2026-10-19:** the key rows, both configs, and `VERTICAL_ORDER` in the
+reader. The test passes 46 cases over both products.
 
 - **Dims:** `layer_dim` (5) becomes `layer`; `level_dim` (6) becomes `level`,
   the layer boundaries.
@@ -128,6 +132,18 @@ Named in the cross-product naming pass. The grammar and decisions are in
   `dry_air_partial_column`, like TROPOMI's.
 - **Stores:** 3 variable stores, plus `pressure` in the geolocation store.
   GOSAT-2 has the same format.
+- **What the fixture showed** (4 days, 6,702 soundings):
+  - `pressure` is (obs, level) float32 in Pa, as hPa x 100 in float64, and
+    matches raw bit for bit;
+  - the kernel and the prior are NaN on whole rows for the 1,295 DED-only
+    soundings. `pressure_weight` has no absent soundings;
+  - every array on `level` or `layer` carries `vertical_order:
+    surface_first`. Pressure falls strictly from level 0 up, and the top
+    level is 0 Pa (G9).
+- **Shared code this needed:** a coordinate key row can carry a parsed
+  `unit_conversion` (`coordinate_factor`), and every array on a vertical dim
+  takes `vertical_order` from the reader's `VERTICAL_ORDER`. The build and
+  the verifier both check them.
 
 ## Known data issues
 
@@ -143,3 +159,4 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly |
 | G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit, and is **~1/4 of the hydrostatic dry column**. In molec cm-2, dp / (g M_dry) x N_A per layer over `dry_column` gives p1 / p50 / p99 3.97 / 3.99-4.00 / 4.04, on 2011-01-15 and 2015-06-01 (2,984 soundings; 2026-10-19). | open: held (user decision 2026-10-19; `docs/model-comparison-naming.md` N11). Not needed to apply the kernel. Resolve from the GHG-CCI PSD v3 or IUP |
 | G8 | `xh2o` holds negative values (minimum -116.6 ppm in one sampled day). | record only |
+| G9 | **The top pressure level is 0 hPa** on every sounding of the 4 fixture days (6,702): the top layer reaches the top of the atmosphere. | record only: stored as published (0 Pa) |

@@ -20,8 +20,11 @@ Read this first in a new session. Update it whenever work lands.
 - **The cross-product naming pass is done** (task 7, steps 1-2,
   2026-10-19). Its rows and rules are pushed: style_guides `a585066`,
   `fee64ec`.
-- **GOSAT** has a reader and a fixture only, for the 1-D subset. Next it
-  gains its model-comparison variables, then goes to production.
+- **GOSAT's model-comparison stores are built at fixture level**
+  (2026-10-19). These are the kernel, the a priori and the pressure weight,
+  plus `pressure` in the geolocation store: 10 variable stores and the
+  geolocation store. The test passes 46 cases over both products. Next:
+  production, awaiting the user's approval of the job.
 
 ## Next task: the model-comparison stores (TASKS.md task 7, step 3)
 
@@ -43,29 +46,32 @@ the docs. Read both before writing any key rows:
   (R11).
 
 **Next, in order:**
-1. GOSAT: add the kernel, prior, pressure weight and pressure rows to its
-   key and config, then extend the reader and fixture. Then fixture, bench
-   and production, as for TROPOMI.
-   - `xh2o_averaging_kernel` and `h2o_profile_apriori` are in the H2O file
-     only. They are absent (NaN) on DED-only soundings, like the other H2O
-     variables.
-   - `pressure_levels` and `pressure_weight` are in both files, and
-     identical where both hold a sounding. So `pressure` is written for
-     every sounding.
-   - **The shared code is already generic over secondary dims.**
-     `squeeze_dims` renames them, `obs_chunk` sizes them, and the absent
-     mask broadcasts over them. The corners proved this, but only in the
-     geolocation store, so the GOSAT fixture is the first test of a 2-D
-     variable store.
-   - **To add:**
-     - `pressure` in the coordinate key. Check that the coordinate
-       table can carry a numeric conversion: hPa x 100 to Pa;
-     - the `vertical_order` attribute (`surface_first` for GOSAT).
-   - Test every product's fixture after each shared change.
+1. GOSAT production. **Done at fixture level 2026-10-19:**
+   - the key rows and both configs;
+   - the shared code:
+     - a coordinate row can carry a parsed `unit_conversion`
+       (`coordinate_factor`; `pressure` is hPa x 100);
+     - every array on `level`, `layer` or `level_2` takes `vertical_order`
+       from the reader's `VERTICAL_ORDER`. The build fails if the reader
+       declares none;
+     - the verifier checks both.
+   - What the fixture showed is in `gosat.md` (Model-comparison variables;
+     G9: the top level is 0 hPa).
+
+   **Next:** the production build and verify, one develop job each, chained
+   `afterany`. Proposed to the user 2026-10-19 without a separate bench,
+   since the whole record (~2 GB raw) is far smaller than the TROPOMI bench
+   month. Commit before submitting.
 2. TROPOMI: measure kernel compression first (scratch script, login node).
    Then build 5 new stores, plus `pressure` in the geolocation store
-   (`top_first`). Show the user the job and its cost first: ~29 TiB
-   estimated.
+   (`top_first`: set `VERTICAL_ORDER` in `products/tropomi.py`). Show the
+   user the job and its cost first: ~29 TiB estimated.
+   - **`pressure` cannot just be added to the finalized geolocation
+     store.** Its granule index is complete, so the build treats it as done
+     and writes nothing. The verifier would then fail it ("holds exactly its
+     variables"). This needs a decision first: rebuild the geolocation
+     store (~1 build pass, plus re-verify and re-finalize), or add a
+     shared path that writes one new array onto a complete store.
 3. Later, for TES and IASI: multi-array variable stores (N18), and the
    per-product open issues listed under Other open items.
 

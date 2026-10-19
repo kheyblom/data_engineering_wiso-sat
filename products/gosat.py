@@ -31,6 +31,10 @@ file, in time order:
 Format facts:
 - **Flat files.** A source is named by its variable name.
 - **Observation dimension** is ``sounding_dim``.
+- **Vertical dimensions:** ``level_dim`` (6 pressure levels, the layer
+  boundaries) and ``layer_dim`` (5 layers) become ``level`` and ``layer``.
+  Profiles run from the surface up (the files' own comment: "Surface pressure
+  is represented by the 1st element"), and are stored so.
 - **Time** is float64 seconds since 1970-01-01. The values sit on no decimal
   grid coarser than a nanosecond, so ``decode_time`` returns exact
   datetime64[ns].
@@ -68,6 +72,8 @@ KINDS = ('DED', 'H2O')
 
 OBSERVATION_DIM = 'sounding_dim'
 DIMENSION_RENAMES = {'level_dim': 'level', 'layer_dim': 'layer'}
+# index 0 of level and layer is the surface (naming pass N7)
+VERTICAL_ORDER = 'surface_first'
 
 VERSION_ATTR = 'product_version'
 

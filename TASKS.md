@@ -87,7 +87,8 @@ what to read, the layouts per product, and the deliverables in order.
   (N1-N18). 48 rows and the XH2O rename are in style_guides `fee64ec` /
   `a585066`, along with the Level 2 rules for matrix stores and vertical
   dims.
-  - Next: GOSAT's kernel, prior, pressure weight and pressure grid, then
+  - GOSAT's kernel, prior, pressure weight and pressure grid: built at
+    fixture level 2026-10-19 (46 cases pass). Next: GOSAT production, then
     the TROPOMI stores.
   - TES and IASI first need multi-array variable stores in the shared
     code (N18).

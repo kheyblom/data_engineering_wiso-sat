@@ -11,9 +11,10 @@ every value of every store with what the raw file says it should be.
 **The raw side is read independently of the build.** The build reads with
 netCDF4 through the product's reader; this reads with h5py, straight from the
 source paths in the nomenclature key, with no masking and no CF decoding, and
-applies the declared fill and the key's conversion itself. Only two
+applies the declared fill and the key's conversion itself. Only three
 format facts are shared with the build, through the reader: how the product
-encodes time (``decode_time``) and its swath layout (``check_granule``).
+encodes time (``decode_time``), its swath layout (``check_granule``), and the
+vertical order its profiles are stored in (``VERTICAL_ORDER``).
 Comparisons are bit-exact, reading the stored values undecoded through zarr:
 the build does the same arithmetic in the same order, so anything short of
 identical is a defect.
@@ -68,6 +69,7 @@ from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import (
     canonical_frequency,
     conversion_factor,
+    coordinate_factor,
     coordinates,
     variable as key_variable,
 )
@@ -86,6 +88,7 @@ from utils.zarr_utils import (
     TIME_CALENDAR,
     TIME_EPOCH,
     TIME_FILL,
+    VERTICAL_DIMS,
     absent_fill,
     declared_fill,
     obs_chunk,
@@ -94,6 +97,7 @@ from utils.zarr_utils import (
     store_sources,
     time_source,
     time_units,
+    vertical_order,
 )
 
 LOG = logging.getLogger(__name__)
@@ -404,6 +408,13 @@ def check_structure(report, settings, store, group, chunks):
 
     for name in sorted(expected_vars & names):
         array, attrs = group[name], dict(group[name].attrs)
+        dims = array.metadata.dimension_names or ()
+        if set(dims) & set(VERTICAL_DIMS):
+            order = vertical_order(settings)
+            report.check(
+                f'{store}/{name}: vertical_order is {order!r}',
+                attrs.get('vertical_order') == order, f'{attrs.get("vertical_order")!r}',
+            )
         if name == 'time' or name.startswith('granule_time'):
             units = time_units(product)[0]
             report.check(
@@ -436,6 +447,11 @@ def check_structure(report, settings, store, group, chunks):
             report.check(
                 f'{store}/{name}: units {entry.units!r}',
                 attrs.get('units') == entry.units, f'{attrs.get("units")!r}',
+            )
+            report.check(
+                f'{store}/{name}.unit_conversion records {entry.unit_conversion!r}',
+                str(attrs.get('unit_conversion', '')).startswith(entry.unit_conversion),
+                f'{attrs.get("unit_conversion")!r}',
             )
             continue
         entry = key_variable(product, name)
@@ -663,8 +679,9 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
     targets = []
     for store in groups:
         for name, source in store_sources(product, store).items():
-            factor = None if store == GEOLOCATION else conversion_factor(
-                key_variable(product, name).unit_conversion
+            factor = (
+                coordinate_factor(coordinates(product)[name]) if store == GEOLOCATION
+                else conversion_factor(key_variable(product, name).unit_conversion)
             )
             targets.append((store, name, source, factor))
     items = sorted(

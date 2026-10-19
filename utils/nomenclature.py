@@ -16,8 +16,11 @@ Ported from ``data_engineering_mswep/utils/nomenclature.py``. What differs:
   needed. ``unit_conversion`` is parsed into a factor by ``conversion_factor``,
   so the multiplier a store was built with is the one the key documents.
 - **A coordinate key** maps the geolocation store's ``time``/``lat``/``lon``
-  onto their source variables. ``nomenclature_data.md`` has no coordinate rows,
-  so these are not canonical names; they follow the gridded stores.
+  (and, for a profile product, ``pressure``) onto their source variables.
+  ``nomenclature_data.md`` has no coordinate rows, so these are not canonical
+  names; they follow the gridded stores. A coordinate's ``unit_conversion`` is
+  ``decoded`` for time, or parsed like a variable's (GOSAT ``pressure``: hPa
+  x 100 to Pa).
 - **Configs and stores name variables canonically.** The original name is the
   HDF5 path in the source file, which is no name for a store, so lookups run
   from the canonical side.
@@ -80,8 +83,9 @@ class Coordinate(NamedTuple):
         original_units (str): The units the source publishes, as documented.
         name (str): The coordinate's name in the geolocation store.
         units (str): The units it is stored with.
-        unit_conversion (str): 'none', or 'decoded' for a time the reader
-            decodes from the source encoding.
+        unit_conversion (str): 'decoded' for a time the reader decodes from
+            the source encoding; otherwise 'none' or 'x <factor>', as in the
+            variable key.
     """
 
     original: str
@@ -259,8 +263,11 @@ def coordinates(product):
             units=row['units'],
             unit_conversion=row['unit_conversion'],
         )
-        if not all((coordinate.original, coordinate.name, coordinate.units)):
+        if not all((coordinate.original, coordinate.name, coordinate.units,
+                    coordinate.unit_conversion)):
             raise ValueError(f'incomplete coordinate row {coordinate.name!r} in {path}')
+        # parsed now, as for variables, so a typo fails before any file is opened
+        coordinate_factor(coordinate)
         key[coordinate.name] = coordinate
     missing = {'time', 'lat', 'lon'} - set(key)
     if missing:
@@ -339,6 +346,24 @@ def canonical_frequency(product, original):
             f'{key_path(product)}'
         )
     return key[original].canonical
+
+
+def coordinate_factor(coordinate):
+    """The multiplier a coordinate's ``unit_conversion`` describes.
+
+    Args:
+        coordinate (Coordinate): A coordinate key row.
+
+    Returns:
+        float | None: The factor, or None for 'none' and for a decoded time,
+            whose conversion is the reader's ``decode_time``.
+
+    Raises:
+        ValueError: If the conversion does not parse.
+    """
+    if coordinate.unit_conversion == 'decoded':
+        return None
+    return conversion_factor(coordinate.unit_conversion)
 
 
 def conversion_factor(text):

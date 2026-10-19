@@ -8,7 +8,12 @@ the store's dimensions (``utils/granules.py``), and this module does the rest.
   their dtype and value and carry the sentinel as an explicit ``_FillValue``,
   as the style guide requires.
 - **Unit conversion.** The factor comes from the nomenclature key's
-  ``unit_conversion``, applied in float64 and stored in the source dtype.
+  ``unit_conversion``, applied in float64 and stored in the source dtype. A
+  geolocation coordinate can take one too (GOSAT ``pressure``, hPa to Pa).
+- **Vertical order.** An array on a vertical dimension (``level``, ``layer``,
+  ``level_2``) keeps its source's order and says which it is in a
+  ``vertical_order`` attribute, from the reader's ``VERTICAL_ORDER``
+  (naming pass N7, 2026-10-19).
 - **Attributes.** Source attributes are carried, the config's
   ``variable_attrs`` go on top, and the nomenclature goes on last so a config
   cannot override the key. A source ``standard_name`` is retained unchanged
@@ -43,11 +48,12 @@ from .granules import (
 )
 from .nomenclature import (
     conversion_factor,
+    coordinate_factor,
     coordinates,
     key_path,
     variable as key_variable,
 )
-from .path_utils import GEOLOCATION, format_attrs, template_fields
+from .path_utils import GEOLOCATION, format_attrs, load_reader, template_fields
 
 LOG = logging.getLogger(__name__)
 
@@ -81,6 +87,12 @@ TIME_FILL = np.iinfo('int64').min
 # than the quantity; the store sets its own. xarray refuses to write a time
 # whose attributes already hold 'calendar'
 DROPPED_ATTRS = ('_FillValue', 'missing_value', 'units', 'long_name', 'calendar')
+
+# the style guide's vertical dimensions. Every product names them so, whatever
+# its source calls them; a matrix's second axis is level_2 (naming pass N5, N6)
+VERTICAL_DIMS = ('level', 'layer', 'level_2')
+# which end of the column index 0 is, as the source orders it (N7)
+VERTICAL_ORDERS = ('top_first', 'surface_first')
 
 NOMENCLATURE_NOTE = (
     'Variable names, units and long names follow the internal data engineering '
@@ -196,6 +208,31 @@ def time_units(product):
             f'{sorted(TIME_UNIT_CODES)} since {TIME_EPOCH}'
         )
     return units, TIME_UNIT_CODES[word]
+
+
+def vertical_order(settings):
+    """The vertical order of the product's profiles, as its reader declares it.
+
+    A format fact, so it lives in the reader beside its dimension renames.
+    Each source keeps its own order (naming pass N7): no product is flipped.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        str: 'top_first' or 'surface_first'.
+
+    Raises:
+        ValueError: If the reader declares none, or something else. Only a
+            product that stores a vertical dimension needs to declare it.
+    """
+    order = getattr(load_reader(settings), 'VERTICAL_ORDER', None)
+    if order not in VERTICAL_ORDERS:
+        raise ValueError(
+            f'products/{settings["product"]}.py must set VERTICAL_ORDER to one of '
+            f'{VERTICAL_ORDERS} to store a vertical dimension; it is {order!r}'
+        )
+    return order
 
 
 def configure_runtime(settings):
@@ -499,12 +536,15 @@ def coordinate_attrs(product, name, array, settings, fill):
         attrs['unit_conversion'] = f'decoded from {entry.original_units!r} to a timestamp'
         if 'calendar' in source:
             attrs['original_calendar'] = str(source['calendar'])
-    else:
+    elif entry.unit_conversion == 'none':
         attrs['units'] = entry.units
         attrs['unit_conversion'] = (
             'none -- respelled only, no value changed'
             if entry.units != source.get('units') else 'none'
         )
+    else:
+        attrs['units'] = entry.units
+        attrs['unit_conversion'] = unit_conversion_note(entry, str(source.get('units', '')))
     if fill:
         attrs['source_fill_values_masked'] = ', '.join(repr(value) for value in fill)
     return attrs
@@ -601,7 +641,7 @@ def assemble(store, datas, obs_start, settings):
         fill = declared_fill(settings, source)
 
         if store == GEOLOCATION:
-            factor = None
+            factor = coordinate_factor(coordinates(product)[name])
             attrs = coordinate_attrs(product, name, first, settings, fill)
         else:
             factor = conversion_factor(key_variable(product, name).unit_conversion)
@@ -629,6 +669,8 @@ def assemble(store, datas, obs_start, settings):
                 f'{"NaN" if np.issubdtype(values.dtype, np.floating) else integer_fill}, '
                 'which no source value equals.'
             )
+        if set(first.dims) & set(VERTICAL_DIMS):
+            attrs['vertical_order'] = vertical_order(settings)
         if integer_fill is not None:
             fills[name] = integer_fill
         variables[name] = xr.Variable(first.dims, stored, attrs)

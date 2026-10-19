@@ -27,6 +27,9 @@ variables:
   - water_vapor_column_h2o_mole_fraction_dry_air_standard_error
   - quality_flags_retrieval_h2o
   - solar_zenith_angle
+  - water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel
+  - water_vapor_h2o_mole_fraction_dry_air_apriori
+  - pressure_weight_column_average
 
 # days between the first and last file with no files of either kind (listed
 # 2026-10-14). The build fails on any other gap.
@@ -190,7 +193,8 @@ absent_fill_values:
 # Scale settings (design condition 3). The whole record is ~7e6 soundings
 # (~28 MB per float32 store), so one chunk would hold the lot; 1,048,576 obs
 # is 4 MiB of float32 and 8 MiB of int64 time, near the guide's 5-40 MiB
-# floor while keeping several chunks for partial reads.
+# floor while keeping several chunks for partial reads. The (obs, layer) and
+# (obs, level) arrays take 20 and 24 MiB at the same length, so no halving.
 chunks:
   obs: 1048576
   granule: 8192
@@ -210,7 +214,7 @@ attrs:
     distributed for WISO-SAT, every sounding of the record, stored as an
     icechunk-backed zarr store. Each day's DED and H2O files are merged onto
     one obs axis of distinct soundings. Join with the geolocation store of the
-    same product on obs for time, latitude and longitude.
+    same product on obs for time, latitude, longitude and the pressure levels.
   Conventions: ACDD-1.3
   source: >-
     IUP FOCAL GOSAT Level 2 product {version_label}, one DED and one H2O
@@ -227,8 +231,9 @@ attrs:
     Specification Document Version 3, www.esa-ghg-cci.org.
   related_store: >-
     wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
-    time, lat and lon for every obs; every other store of this product shares
-    its obs axis and granule index.
+    time, lat, lon and pressure (the 6 levels bounding the 5 layers, surface
+    first) for every obs; every other store of this product shares its obs
+    axis and granule index.
   granule: >-
     one day; granule_id is the date, and granule_file names the day's DED and
     H2O files
