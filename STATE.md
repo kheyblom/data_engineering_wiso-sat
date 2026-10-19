@@ -20,17 +20,16 @@ Read this first in a new session. Update it whenever work lands.
 - **The cross-product naming pass is done** (task 7, steps 1-2,
   2026-10-19). Its rows and rules are pushed: style_guides `a585066`,
   `fee64ec`.
-- **GOSAT production is built and verified** (2026-10-19; jobs 7874257 and
-  7874258, ~0.2 core-hours).
+- **GOSAT production is finished** (2026-10-19; jobs 7874257 and 7874258,
+  ~0.2 core-hours).
   - 11 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`:
     the geolocation store, with `pressure`, and 10 variable stores, including
     the kernel, the a priori and the pressure weight.
   - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
-  - **Not yet finalized.** Run `--attrs` then `--tag
-    v3.0.1-verified-20261019`, each as a dry run and then with `--apply` on
-    the user's sign-off (commands in CLAUDE.md). `--status` shows nothing
-    unreachable, so no `--gc` is needed. The run log is in TESTING.md,
-    Tier 3. Check `--status` first: this may already be done.
+  - **Finalized 2026-10-19** with the user's sign-off, tag
+    `v3.0.1-verified-20261019`. Every store reports "remaining nothing,
+    finalized". No `--gc` was needed. The run log is in TESTING.md, Tier 3.
+  - Its data-lake home is undecided, as for TROPOMI.
 
 ## Next task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3)
 
@@ -123,7 +122,7 @@ per-product open issues under Other open items.
 
 ## Other open items
 
-- **The data-lake home of the TROPOMI stores** is undecided. Scratch is
+- **The data-lake home of the TROPOMI and GOSAT stores** is undecided. Scratch is
   purged, so ask the user before moving them.
 - **GOSAT `dry_column`** is held (naming pass N11): it is ~1/4 of the
   hydrostatic dry column, with no area in its unit (`gosat.md` G7). Resolve

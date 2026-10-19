@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 46 cases, TROPOMI and GOSAT, with GOSAT's 2-D model-comparison stores |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **built and verified** (2026-10-19): 0 failures; finalize next |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized |
 
 ## Tier 0 and 1: the fixture test
 
@@ -579,8 +579,7 @@ the production run, in order.
 
 Blockers:
 - **TROPOMI:** done. All 19 stores were finalized 2026-10-18 (run log above).
-- **GOSAT:** built and verified 2026-10-19 (run log below). Finalize is
-  next.
+- **GOSAT:** done 2026-10-19 (run log below).
 
 ### GOSAT run log (2026-10-19)
 
@@ -606,5 +605,8 @@ bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/
 - **Size:** 946 MB. The geolocation store is 407 MB, the kernel 175 MB, the
   a priori 185 MB, and `pressure_weight` only ~1 MB: it compresses almost
   entirely, being nearly a fixed fraction of surface pressure (gosat.md).
-- **finalize `--status`:** every store verified, nothing unreachable, so no
-  `--gc` is needed. `--attrs` and `--tag` remain.
+- **Finalized 2026-10-19,** with the user's sign-off and nothing
+  unreachable, so no `--gc`:
+  - `--attrs --apply` committed the attributes to all 11 stores;
+  - `--tag v3.0.1-verified-20261019 --apply` tagged those commits;
+  - `--status`: every store reports "remaining nothing, finalized".
