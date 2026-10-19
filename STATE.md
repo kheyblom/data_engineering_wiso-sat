@@ -55,7 +55,14 @@ A TROPOMI-only name would fix the pattern too early.
 1. A proposal for the user. For each product and source: canonical name,
    units, dims, and how it is split. **Written 2026-10-19:
    `docs/model-comparison-naming.md`** (decisions N1-N12, 24 rows, findings
-   F1-F6). Awaiting the user's review, in place with `#@CLAUDE` comments.
+   F1-F6). Second review 2026-10-19:
+   - approved: N1-N13, with covariances and the IASI temperature
+     cross-kernel added (now 43 rows);
+   - open: N14-N17, and the row tables (sections 4-5), which the user has
+     not reviewed yet;
+   - N13 is applied: the two XH2O rows are renamed in `style_guides/nomenclature_data.md`
+     (**uncommitted there, for the user's review**), and in the GOSAT key and
+     configs. The fixture test passes 46 cases.
 2. The agreed rows in `nomenclature_data.md`. The user reviews before
    commit (see How we work).
 3. Then the stores: GOSAT production; the TROPOMI model-comparison stores on
@@ -70,6 +77,10 @@ No compute is needed for steps 1-2.
 
 - **The data-lake home of the TROPOMI stores** is undecided. Scratch is
   purged, so ask the user before moving them.
+- **GOSAT `dry_column`** is held (naming pass N11): it is ~1/4 of the
+  hydrostatic dry column, with no area in its unit (`gosat.md` G7). Resolve
+  it from the GHG-CCI PSD v3, or by asking IUP, then add it as
+  `dry_air_partial_column`.
 - **GOSAT-2 configs** (`product: gosat2`) need a small shared change, so the
   reader and key can be named apart from the product.
 - **The other products** (task 6): SCIAMACHY, AIRS, CrIS, IASI, TES. Each
