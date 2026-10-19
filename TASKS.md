@@ -69,14 +69,16 @@ needed eventually; all were deferred from the first production subset.
 what to read, the layouts per product, and the deliverables in order.
 - **What:** each product's column averaging kernels, a priori profiles,
   dry-air partial columns and pressure grid. For TROPOMI that is six sources,
-  each 50 or 51 layers, ~29 TiB estimated.
+  each 50 or 51 layers: ~20 TiB with blosc + shuffle (~29 TiB with the
+  default codec; measured 2026-10-19).
 - **First:** name them in one cross-product naming pass, before GOSAT
   production, which waits on it. The layouts differ by product: column
   kernels, block matrices, log-space ratio kernels, SVD components, priors as
   partial columns or mole fractions.
 - **Then:** add the nomenclature rows (user review), and the stores.
-  - For TROPOMI they go on the existing obs axis as new stores; the existing
-    17 are not rebuilt.
+  - For TROPOMI they go on the existing obs axis as six new stores, `pressure`
+    among them (its own store since 2026-10-19); the existing 19 are not
+    rebuilt.
   - Measure the compression first, and settle the 2-D chunking (the obs
     chunk must shrink for 50 layers).
 - **Other possible stores** are listed with size estimates in
@@ -90,7 +92,11 @@ what to read, the layouts per product, and the deliverables in order.
   `a585066`, along with the Level 2 rules for matrix stores and vertical
   dims.
   - GOSAT's kernel, prior, pressure weight and pressure grid: built and
-    verified and finalized in production 2026-10-19 with the rest of GOSAT. Next: the TROPOMI stores.
+    verified and finalized in production 2026-10-19 with the rest of GOSAT;
+    `pressure` moved to its own store the same day.
+  - TROPOMI: key rows, configs, compression, shards and `finalize --expire`
+    done; bench passed 2026-10-19 (TESTING.md Tier 2b). Production waits on
+    the cost work in STATE.md, step 7.
   - TES and IASI first need multi-array variable stores in the shared
     code (N18).
 

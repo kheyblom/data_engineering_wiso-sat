@@ -2,7 +2,7 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-19, updated before the TROPOMI bench)
+## Where we are (2026-10-19, updated after the TROPOMI 2-D bench)
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 59 cases
@@ -96,24 +96,28 @@ Read this first in a new session. Update it whenever work lands.
      build snapshots of a sharded store; `--gc` then deletes them. It
      refuses an untagged store, and `--status` lists it as remaining.
    - The test passes 59 cases.
-6. **Bench** (`config_zarr_bench.yaml`, 2020-07, 390 orbits; the 19 bench
-   stores from 2026-10-16 are complete, so only the 6 new ones are built),
-   approved by the user 2026-10-19:
-   - build: develop, 8 cores, 96 GB, 3 h, `granules_per_commit: 20`
-     (memory estimated ~60 GB: ~1 GB of 2-D sources per orbit, two batches
-     in flight, plus the float64 conversion of one store's batch);
-   - verify `--stores` the six, chained `afterany`: develop, 8 cores, 96 GB,
-     4 h;
-   - at most 56 core-hours, ~15-25 expected. It measures peak memory, write
-     rate, verify time per orbit, superseded bytes, and the files per store.
-7. **Production** after the bench, shown first with its cost.
-   - **Verify time is the main risk:** the verifier does not resume and
-     cannot split a store, and one 2-D store is ~3.3 TiB. If the bench
-     shows a store will not verify within develop's 6 h, the verifier needs
-     a granule-range split, or the main queue (12 h, whole node).
-   - Builds resume, so chain them `afterany`.
-   - **Finalize:** the 6 new stores get `v8.1-verified-<date>`, then
-     `--expire` and `--gc`.
+6. **Bench done (2026-10-19; TESTING.md Tier 2b, finding 12):** build
+   7875114 (37 min) and verify 7875115 (46 min, **313 checks, 0 failures**),
+   11.2 core-hours. 19.9 TiB projected; superseded shards 11.7%; peak memory
+   56 GiB build, 65 GiB verify.
+   - **At bench rates production would cost ~1,050 core-hours** (build 469,
+     verify 583), and the verifier cannot run it: no resume, no split of a
+     store, and it always re-verifies geolocation (~73 h for one run).
+   - **Finding 12:** the build uses ~4x the CPU its stages account for
+     (~38 s per orbit against ~11 s profiled). Kernel time was 3x user time
+     in a login-node probe: memory churn suspected, possibly
+     `MALLOC_TRIM_THRESHOLD_=0`. Since `b94038c` runs log their CPU split.
+7. **Before production** (each shown to the user first):
+   - a small diagnostic job on ~40 orbits: the CPU split, and the build with
+     and without `MALLOC_TRIM_THRESHOLD_=0`;
+   - fix what it finds; consider blosc 3 (write CPU 4.0 s against 6.4 s per
+     orbit, ~10% larger);
+   - a verifier that can split by granule range and skip re-verifying a
+     finalized store's values, with finalize accepting the pieces as
+     evidence;
+   - then a production plan with a firm cost.
+8. **Production**, chained `afterany`; finalize the 6 stores with
+   `v8.1-verified-<date>`, then `--expire` and `--gc`.
 
 **Later:** multi-array variable stores for TES and IASI (N18), and the
 per-product open issues under Other open items.
@@ -269,5 +273,5 @@ per-product open issues under Other open items.
 
 ## Open questions
 
-- **TROPOMI scale for the 2-D stores:** `granules_per_commit`, memory and
-  the verify split, from the bench (steps 6-7).
+- **TROPOMI 2-D production cost:** ~1,050 core-hours at bench rates; the
+  diagnostic job and the verifier split decide the real figure (step 7).

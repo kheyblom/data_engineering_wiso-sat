@@ -296,6 +296,49 @@ observations (x94):
 Partial and shell files (finding 7) hold fewer observations, so the time
 figures lean high.
 
+## Tier 2b: the TROPOMI 2-D bench (2026-10-19)
+
+The six model-comparison stores (two column kernels, two a priori partial
+columns, `dry_air_partial_column`, `pressure`) over the same month as Tier 2,
+2020-07: 390 orbits, 346,391,445 obs, 1.06% of the record (x 94.28 scales to
+it). Built at `c7135d6` into the Tier 2 bench directory; the 19 bench stores
+from 2026-10-16 were complete and skipped. Blosc zstd 5 + shuffle, shards of
+4,194,304 obs, `granules_per_commit` 20, 8 workers. Develop, 8 cores, 96 GB.
+
+| job | what | wall | CPU used | peak memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7875114 | build | 37 min 20 s | 4 h 05 min (7.2 cores) | 56.4 GiB main, 3.1 GiB worker | 6 stores, 20 commits each; kernels masked 5,401,428,800 values (108M rows), the others none |
+| 7875115 | verify `--stores` the six (and geolocation) | 46 min 22 s | 2 h 27 min (3.8 cores) | 65.5 GiB main, 3.2 GiB worker | **313 checks, 0 failures**; every value bit for bit |
+
+- **Cost:** 11.2 core-hours billed (5.0 build, 6.2 verify).
+- **Size:** 211.2 GiB live (kernels 33.6 and 28.2, priors 39.7 each, dry air
+  35.1, pressure 34.8): **19.9 TiB** scaled to the record, as estimated.
+- **Superseded shards:** 11.7-11.8% of each store before `--expire`, as
+  predicted (~2.5 / 20). 144 files in each store's `chunks/`.
+- **Scaled to production at these rates:** build 58.7 h wall, 469
+  core-hours billed; verify 72.9 h wall, 583 core-hours. **~1,050 core-hours
+  in all**, against ~380 for all TROPOMI work so far.
+
+**Finding 12: the build uses ~4x the CPU its stages account for.**
+- Profiled on one orbit through the build's own functions (login node,
+  2026-10-19), per orbit of 803,025 obs: reading and decompressing the six
+  zlib sources 3.1 s CPU; masking and converting 1.0 s; writing with blosc 5
+  and shards 6.4-7.1 s (blosc 3: 4.0 s; blosc 1: 2.6 s; default zstd 3.6 s).
+  About 11 s in all, against ~38 s measured in the bench.
+- The wall time matches the profile (~5.7 s per orbit, the main process
+  writing six stores in turn); the CPU does not.
+- A 4-orbit build on the login node showed kernel time 3x user time (15.3 s
+  against 5.1 s), which points at memory management: multi-GB arrays
+  allocated, zeroed and freed every batch, possibly worsened by the submit
+  script's `MALLOC_TRIM_THRESHOLD_=0`. That probe was killed after 40 s,
+  probably by the login node's limiter, and is not repeated there.
+- Since `b94038c` every run logs its CPU split (main and workers, user and
+  sys), so the next job shows where it goes.
+- **The verifier cannot run production as it stands:** it does not resume,
+  cannot split a store, and always re-verifies the geolocation store. One
+  run over the six would take ~73 h; one store alone would not fit develop's
+  6 h either.
+
 ## Tier 3: production
 
 Per product:
