@@ -114,10 +114,29 @@ Read this first in a new session. Update it whenever work lands.
      cannot split one store. A `pressure` or kernel store verify (~3.3 TiB
      each) may not fit develop's 6 h, so the bench must measure it.
    - **Finalize:** the 6 new stores get the tag `v8.1-verified-<date>`.
-   - **File count:** each new store holds ~250,000 chunk files in one flat
-     directory (131,072 obs per chunk), against 62,204 in the geolocation
-     store now. Sharding would cut it to ~7,800 per array; it is new code,
-     and the user has not decided on it.
+   - **File count (analysed 2026-10-19, awaiting the user's decision):**
+     - icechunk's local storage keeps every chunk object in one flat
+       `chunks/` directory. A store holds its data chunks plus, per commit,
+       one rewritten tail chunk per obs array and one rewritten chunk per
+       index array (7), and one manifest per array. Checked on TROPOMI's
+       geolocation store: 54,507 data chunks + 645 commits x 12 = 62,247
+       predicted, 62,204 on disk.
+     - Unsharded, each new store would hold ~249,000 data chunks, ~265,000
+       files at 20 granules per commit: ~1.6M for the six. Scratch allows
+       10.5M files (1.38M used), so it is not a quota problem.
+     - **Sharding tested** (scratch test through xarray + icechunk, uneven
+       appends): values exact, slices read correctly. A shard of 4,194,304
+       obs (= `chunks.obs`) around the 131,072-obs inner chunks gives 7,787
+       data files per store, as `lat` has.
+     - **Its cost:** each commit rewrites the partly filled last shard, and
+       the old copy stays reachable from earlier snapshots. Superseded bytes
+       ~= 2.5 / granules_per_commit of the data: ~12% (~2.3 TiB) at 20, ~4%
+       at 60. The scratch test predicted 188%, measured 176%.
+     - **Reclaiming it:** `expire_snapshots` then `garbage_collect` removed
+       every superseded shard in the test, leaving exactly the live bytes,
+       but collapses the commit history to the tip. finalize builds
+       `history` from that history, so expiry would be a new finalize step
+       after `--attrs` and `--tag`, with `--status` taught to accept it.
 
 **Later:** multi-array variable stores for TES and IASI (N18), and the
 per-product open issues under Other open items.
@@ -271,6 +290,7 @@ per-product open issues under Other open items.
 ## Open questions
 
 - **Chunk file count of the 2-D stores:** ~250,000 files per store, or
-  sharding (step 5 above).
+  sharding, with or without snapshot expiry (step 5 above). The bench waits
+  for this, so it tests the final layout.
 - **TROPOMI scale for the 2-D stores:** `granules_per_commit` and the queue,
   from the bench (step 5).
