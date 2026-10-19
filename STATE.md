@@ -26,56 +26,91 @@ Read this first in a new session. Update it whenever work lands.
     the geolocation store, with `pressure`, and 10 variable stores, including
     the kernel, the a priori and the pressure weight.
   - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
-  - **Not yet finalized.** The user types `--attrs` then `--tag
-    v3.0.1-verified-20261019`. `--status` shows nothing unreachable, so no
-    `--gc` is needed. The run log is in TESTING.md, Tier 3.
+  - **Not yet finalized.** Run `--attrs` then `--tag
+    v3.0.1-verified-20261019`, each as a dry run and then with `--apply`
+    (commands in CLAUDE.md). `--status` shows nothing unreachable, so no
+    `--gc` is needed. The run log is in TESTING.md, Tier 3. Check
+    `--status` at the start of the next session: the user may have run
+    them.
 
-## Next task: the model-comparison stores (TASKS.md task 7, step 3)
+## Next task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3)
 
-**The naming pass is done (2026-10-19).** Every product's kernels, priors,
-dry-air columns, covariances and pressure grid are named in
-the docs. Read both before writing any key rows:
-- each product's sources, names, units, dims, conversions and stores are in
-  the Model-comparison variables section of `docs/products/<product>.md`;
-- the grammar, the layout rules and the decisions (N1-N18) are in
-  `docs/model-comparison-naming.md`.
+**Read first:**
+- `docs/products/tropomi.md`, sections Model-comparison variables (the
+  mapping) and Variable inventory (the size estimates and how they were
+  measured);
+- `docs/model-comparison-naming.md`, the rules (N1-N18);
+- TESTING.md, Tier 3, "Additions decided 2026-10-18". It is the corner
+  rebuild, the precedent for this task's geolocation step.
 
-**What it settled, in short:**
-- `pressure` is a geolocation coordinate, in Pa.
-- Vertical dims are `level` / `layer`; a matrix's second axis is `level_2`.
-- Each source keeps its vertical order, recorded in `vertical_order`.
-- A matrix published in pieces is one store (TES, IASI). That needs
-  multi-array variable stores in the shared code, which does not exist yet.
-- Left out: GOSAT `dry_column` (held, G7) and the TROPESS ratio covariance
-  (R11).
+**What to build** (names, units and conversions in `tropomi.md`):
+- 5 variable stores on `layer` (50), all float32:
+  - the H2O and HDO column kernels;
+  - the H2O and HDO a priori partial columns (x 1e4 / N_A);
+  - `dry_air_partial_column` (x 1e4 / N_A).
+- `pressure` on `level` (51) in the geolocation store, in Pa as published
+  (no conversion).
+- Set `VERTICAL_ORDER = 'top_first'` in `products/tropomi.py`: level 0 is
+  0 Pa. `DIMENSION_RENAMES` needs nothing, since `nlayer`/`nlevel` lose
+  their `n`.
+- **~29 TiB estimated**, against 1.8 TiB for the 19 existing stores.
 
-**Next, in order:**
-1. GOSAT production. **Done at fixture level 2026-10-19:**
-   - the key rows and both configs;
-   - the shared code:
-     - a coordinate row can carry a parsed `unit_conversion`
-       (`coordinate_factor`; `pressure` is hPa x 100);
-     - every array on `level`, `layer` or `level_2` takes `vertical_order`
-       from the reader's `VERTICAL_ORDER`. The build fails if the reader
-       declares none;
-     - the verifier checks both.
-   - What the fixture showed is in `gosat.md` (Model-comparison variables;
-     G9: the top level is 0 hPa).
+**What GOSAT already proved in the shared code** (2026-10-19, `8398108`):
+- 2-D variable stores;
+- a coordinate with a unit conversion;
+- `vertical_order`, set by the build and checked by the verifier;
+- the chunk rule. 50 layers take 131,072 obs per chunk, and 51 levels the
+  same (25.5 MiB).
 
-   **Production built and verified 2026-10-19**, with no bench (the user
-   approved). Finalize remains (above).
-2. TROPOMI: measure kernel compression first (scratch script, login node).
-   Then build 5 new stores, plus `pressure` in the geolocation store
-   (`top_first`: set `VERTICAL_ORDER` in `products/tropomi.py`). Show the
-   user the job and its cost first: ~29 TiB estimated.
-   - **`pressure` cannot just be added to the finalized geolocation
-     store.** Its granule index is complete, so the build treats it as done
-     and writes nothing. The verifier would then fail it ("holds exactly its
-     variables"). This needs a decision first: rebuild the geolocation
-     store (~1 build pass, plus re-verify and re-finalize), or add a
-     shared path that writes one new array onto a complete store.
-3. Later, for TES and IASI: multi-array variable stores (N18), and the
-   per-product open issues listed under Other open items.
+TROPOMI needs no new shared code, unless the steps below find some.
+
+**Steps, in order:**
+1. **Measure kernel compression** with a scratch script on a login node,
+   reusing the Variable inventory's method (one orbit, in-memory zarr,
+   zstd). The 29 TiB is an estimate; the kernels may compress better.
+   Report it to the user before going on.
+2. **Key rows and configs.** Add the 5 rows and the `pressure` coordinate
+   row to `nomenclature-key_tropomi.md` (the rows exist in style_guides
+   `fee64ec`). Add the 5 variables to all three TROPOMI configs.
+   - **Fill:** SRON declares none, so the new float sources will hold the
+     netCDF default 9.96921e+36 where unwritten. Declare each in
+     `source_fill_values` only where it occurs: the verifier fails a
+     declared value that never occurs over the record, and fails an
+     undeclared default fill.
+   - **Rows left out:** `meteo/*` may be written on rows that have no
+     position (the 6 rows of finding 10 hold SZA). If so the build fails,
+     with "cannot be left out". Check, then ask the user before adding to
+     `allowed_on_rows_left_out`.
+3. **Fixture:** `uv run python validation/stage_tropomi.py --restage`. It
+   copies only the sources in the key, so the new ones arrive only on a
+   restage. Then run the pipeline test (both products).
+4. **Decide with the user how `pressure` reaches the geolocation store.**
+   A finalized store's index is complete, so a normal build writes nothing
+   to it, and the verifier would fail it for a missing array.
+   - **The precedent** (corners, 2026-10-18): move the geolocation store
+     aside as a backup, and rebuild it from granule 0 in the same pass as
+     the new stores. The 16 old variable stores are no-ops. Then verify the
+     new stores, run `--phases structure,index` over all of them, finalize
+     the new ones, and delete the backup only with approval.
+   - **The alternative:** a shared path that writes one new array onto a
+     complete store. That is new code, so the user decides.
+5. **Bench** (`config_zarr_bench.yaml`, 2020-07, 390 orbits), then production.
+   Show every job and its cost first.
+   - **Memory is the main risk.** At 60 granules per commit, the new arrays
+     are ~1 GB per orbit (~850k obs x 301 values x 4 B), so ~60 GB a batch
+     with two in flight. Develop has given 32 GB. The bench must set
+     `granules_per_commit` (per config; condition 3) or the queue (main has
+     the whole node and 12 h).
+   - **Time:** the corner rebuild was ~3.7 h to build and ~3.3 h to verify
+     on develop. ~29 TiB of new data will take several times longer. Builds
+     resume, so chain them `afterany`. The verifier does not resume, and
+     cannot split one store. A geolocation verify that includes `pressure`
+     may not fit develop's 6 h, so the bench must measure it.
+   - **Finalize:** the new stores, and the rebuilt geolocation store, get
+     the tag `v8.1-verified-<date>`.
+
+**Later:** multi-array variable stores for TES and IASI (N18), and the
+per-product open issues under Other open items.
 
 ### History of the naming pass
 
@@ -136,6 +171,9 @@ the docs. Read both before writing any key rows:
   git.
 - **Finalize is typed by hand**, one action per call (`CLAUDE.md`). `--gc
   --apply` is irreversible and needs approval. So does any `rm -rf`.
+  - On 2026-10-19 the auto-mode permission check refused even the GOSAT
+    `--attrs` dry run. Unless the user adds a permission rule, list the
+    commands for the user to run.
 - **Long or irreversible login-node steps** run detached (`setsid nohup`),
   so a dropped connection cannot stop them.
 - **Verify only new or changed stores.** A cheap `--phases structure,index`
@@ -214,4 +252,7 @@ the docs. Read both before writing any key rows:
 
 ## Open questions
 
-- None at present. The pressure coordinate question was settled by N3/N4.
+- **TROPOMI `pressure`:** rebuild the geolocation store, as with the corners,
+  or write one new array onto the complete store (step 4 above).
+- **TROPOMI scale for the 2-D stores:** `granules_per_commit` and the queue,
+  from the bench (step 5).
