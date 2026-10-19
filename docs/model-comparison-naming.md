@@ -1,10 +1,13 @@
 # Model-comparison naming pass (TASKS.md task 7, step 1)
 
-**Status: proposal, revised 2026-10-19 after the second review.** Review in
-place with `#@CLAUDE` comments.
-- N13 is applied, uncommitted: the two renamed rows in `nomenclature_data.md`,
-  plus the GOSAT key and configs. The fixture test passes 46 cases.
-- None of the new rows is in `nomenclature_data.md` yet.
+**Status: every decision approved (N1-N18), 2026-10-19. Next: review the
+row tables (sections 4-5).** Review in place with `#@CLAUDE` comments.
+- Uncommitted in `style_guides`, for your review:
+  - the N13 rename in `nomenclature_data.md`;
+  - the amendment in the style guide's Level 2 section (N18, and N5/N6).
+- The GOSAT key and configs carry the N13 rename. The fixture test passes 46
+  cases.
+- None of the 48 new rows is in `nomenclature_data.md` yet.
 
 Scope: every product's column averaging kernels, a priori profiles, dry-air
 partial columns and pressure grid, named once across all products. Evidence:
@@ -24,8 +27,8 @@ survey), and the checks under Findings.
 | N7 | **Vertical order** | keep each source's order; record it in a `vertical_order` attribute | **approved** |
 | N8 | **Log-space kernels** | `_log` after `averaging_kernel` | **approved** |
 | N9 | **TES block splits** | the row species leads the name; `_cross_<species>` names the true-state species of an off-diagonal block (2.4) | **approved** |
-| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). One store per SVD kernel, holding its components as arrays (2.10), as a case of N18 | split and padding approved; single store open with N18 |
-| N18 | **One store per matrix, in every product** (new, from your comment on 2.10) | a matrix published in pieces is one store holding its pieces as arrays: TES's kernel and three covariances (4 blocks each), and IASI's two SVD kernels. Vectors, priors and single-array matrices keep one store each (2.13) | open; needs a style-guide amendment |
+| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). One store per SVD kernel, holding its components as arrays (2.10), as a case of N18 | **approved** |
+| N18 | **One store per matrix, in every product** (new, from your comment on 2.10) | a matrix published in pieces is one store holding its pieces as arrays: TES's kernel and three covariances (4 blocks each), and IASI's two SVD kernels. Vectors, priors and single-array matrices keep one store each (2.13) | **approved**; style-guide amendment drafted, uncommitted for review |
 | N11 | **GOSAT `dry_column`** | hold until its unit is resolved (2.6). Noted for later in STATE.md and `gosat.md` G7 | **approved** (held) |
 | N12 | **Error covariances and the IASI temperature cross-kernel** | added to this pass (2.7): 19 more rows | **approved** |
 | N13 | **Rename two existing rows** | `water_vapor_column_mole_fraction_dry_air[_standard_error]` become `water_vapor_column_h2o_mole_fraction_dry_air[_standard_error]` (2.9) | **approved; applied**, uncommitted for your review |
@@ -653,17 +656,12 @@ built, not now. They show that the pattern holds for the profile products:
 | `water_vapor_delta_d` | IASI (`musica_deltad`) |
 | `water_vapor_proxy_humidity`, `water_vapor_proxy_delta_d` | IASI (`musica_wvp`, split) |
 
-## 4. Proposed rows for `nomenclature_data.md` (43 new, 2 renamed)
+## 4. Proposed rows for `nomenclature_data.md` (48 new, 2 renamed)
 
-The count changes:
-- N16 (approved) drops
-  `water_vapor_hdo_h2o_ratio_observation_error_covariance_log`;
-- N18, if approved, adds 6 store names: `water_vapor_proxy_averaging_kernel_svd`,
-  `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`,
-  `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log`, and
-  `water_vapor_hdo_and_h2o_mole_fraction_dry_air_{observation,measurement,total}_error_covariance_log`.
-
-That makes 48 new rows.
+Every decision is now settled (N1-N18). The rows are 24 for kernels, priors,
+dry-air columns and pressure weights, 18 for covariances and the IASI
+temperature cross-kernel, and 6 store names for the matrix stores (N18).
+The TROPESS ratio covariance is left out (N16), so it has no row.
 
 | canonical_name | canonical_units | long_name |
 | --- | --- | --- |
@@ -692,7 +690,7 @@ That makes 48 new rows.
 | `dry_air_partial_column` | mol m-2 | layer partial column of dry air |
 | `pressure_weight_column_average` | unitless | layer pressure weight that forms a column average from a layer profile |
 
-Added for N12 (19):
+Added for N12 (18):
 
 | canonical_name | canonical_units | long_name |
 | --- | --- | --- |
@@ -708,13 +706,23 @@ Added for N12 (19):
 | `water_vapor_hdo_mole_fraction_dry_air_total_error_covariance_log_cross_h2o` | unitless | total error covariance of the ln dry-air mole fraction of HDO water vapor with the ln H2O mole fraction |
 | `water_vapor_h2o_mole_fraction_dry_air_total_error_covariance_log_cross_hdo` | unitless | total error covariance of the ln dry-air mole fraction of water vapor (H2O) with the ln HDO mole fraction |
 | `water_vapor_h2o_mole_fraction_dry_air_total_error_covariance_log` | unitless | total error covariance of the ln dry-air mole fraction of water vapor (H2O) |
-| `water_vapor_hdo_h2o_ratio_observation_error_covariance_log` | unitless | observation error covariance of the ln HDO/H2O mole ratio of water vapor |
 | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | unitless | 1-sigma observation error of the ln dry-air mole fraction of water vapor (H2O) |
 | `water_vapor_proxy_humidity_averaging_kernel_cross_air_temperature_svd_left_vectors` | unitless | left singular vectors of the cross averaging kernel of the water vapor proxy state with respect to air temperature, humidity proxy rows |
 | `water_vapor_proxy_delta_d_averaging_kernel_cross_air_temperature_svd_left_vectors` | unitless | left singular vectors of the cross averaging kernel of the water vapor proxy state with respect to air temperature, delta D proxy rows |
 | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_right_vectors` | unitless | right singular vectors of the cross averaging kernel of the water vapor proxy state with respect to air temperature |
 | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_singular_values` | K-1 | singular values of the cross averaging kernel of the water vapor proxy state with respect to air temperature |
 | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_rank` | unitless | rank of the truncated singular value decomposition of the cross averaging kernel of the water vapor proxy state with respect to air temperature |
+
+Store names for the matrix stores (N18, 6). Each names a store, not an array; the arrays inside keep the rows above:
+
+| canonical_name | canonical_units | long_name |
+| --- | --- | --- |
+| `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log` | unitless | averaging kernel of the joint ln HDO and ln H2O dry-air mole fraction state of water vapor, as its four blocks |
+| `water_vapor_hdo_and_h2o_mole_fraction_dry_air_observation_error_covariance_log` | unitless | observation error covariance of the joint ln HDO and ln H2O dry-air mole fraction state of water vapor, as its four blocks |
+| `water_vapor_hdo_and_h2o_mole_fraction_dry_air_measurement_error_covariance_log` | unitless | measurement error covariance of the joint ln HDO and ln H2O dry-air mole fraction state of water vapor, as its four blocks |
+| `water_vapor_hdo_and_h2o_mole_fraction_dry_air_total_error_covariance_log` | unitless | total error covariance of the joint ln HDO and ln H2O dry-air mole fraction state of water vapor, as its four blocks |
+| `water_vapor_proxy_averaging_kernel_svd` | unitless | truncated singular value decomposition of the water vapor proxy-state averaging kernel, as its components |
+| `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd` | K-1 | truncated singular value decomposition of the cross averaging kernel of the water vapor proxy state with respect to air temperature, as its components |
 
 Renamed (N13):
 
@@ -790,6 +798,11 @@ The block-to-name mapping of each covariance is the kernel's (2.4): `[0:17,
 0:17]` HDO, `[0:17, 17:34]` HDO `_cross_h2o`, `[17:34, 0:17]` H2O
 `_cross_hdo`, `[17:34, 17:34]` H2O.
 
+**Stores (N18):** 6. The two priors are one store each. The kernel's 4 blocks
+share `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log`.
+Each covariance's 4 blocks share
+`water_vapor_hdo_and_h2o_mole_fraction_dry_air_{observation,measurement,total}_error_covariance_log`.
+
 No dry-air partial column is published. `AirDensity` is a number density on
 levels, so it is left out.
 
@@ -838,7 +851,11 @@ truncated SVD over the 2 x 29 proxy state (2.5).
   - The H2O and δD priors are the physical ones. The proxies follow from
     them only through ln and a reference ratio, so not exactly in float32.
   - Both pairs are proposed; the physical pair could be dropped.
-- **Size:** each SVD vector store is ~2.4 TB uncompressed (1.6e9 obs x 13 x
+- **Stores (N18):** 6. The four priors are one store each. The six
+  `musica_wvp_avk_*` arrays share `water_vapor_proxy_averaging_kernel_svd`,
+  and the five `musica_wvp_xavkat_*` arrays share
+  `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`.
+- **Size:** each SVD vector array is ~2.4 TB uncompressed (1.6e9 obs x 13 x
   29 x 4 B), ~9.7 TB for the four.
 
 ## 6. Findings from this pass (2026-10-19)

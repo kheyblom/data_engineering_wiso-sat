@@ -60,11 +60,15 @@ A TROPOMI-only name would fix the pattern too early.
      cross-kernel added (now 43 rows);
    - third and fourth reviews: N14-N17 approved (N16 leaves the TROPESS
      ratio covariance out; recorded in `tropess.md`);
-   - open: N18, one store per matrix in every product (TES and IASI),
-     which needs a style-guide amendment (wording in section 2.13) and
-     multi-array variable stores in the shared code. N10's single store
-     follows N18. The row tables (sections 4-5, 48 rows) have not been
-     reviewed yet;
+   - N18 approved: one store per matrix in every product (TES, IASI). It
+     needs multi-array variable stores in the shared code, built and
+     tested on every fixture before any TES or IASI build;
+   - **every decision is approved (N1-N18). Next: the user reviews the row
+     tables** (sections 4-5: 48 new rows, 2 renamed);
+   - **uncommitted in `style_guides`, for the user's review:** the N13
+     rename in `nomenclature_data.md`, and the Level 2 amendment in the style
+     guide (N18's matrix-store sentence, plus a `level`/`layer`/`level_2`
+     line for N5/N6). Commit the GOSAT key and configs with it;
    - N13 is applied: the two XH2O rows are renamed in `style_guides/nomenclature_data.md`
      (**uncommitted there, for the user's review**), and in the GOSAT key and
      configs. The fixture test passes 46 cases.
