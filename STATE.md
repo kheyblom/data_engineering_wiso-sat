@@ -20,11 +20,15 @@ Read this first in a new session. Update it whenever work lands.
 - **The cross-product naming pass is done** (task 7, steps 1-2,
   2026-10-19). Its rows and rules are pushed: style_guides `a585066`,
   `fee64ec`.
-- **GOSAT's model-comparison stores are built at fixture level**
-  (2026-10-19). These are the kernel, the a priori and the pressure weight,
-  plus `pressure` in the geolocation store: 10 variable stores and the
-  geolocation store. The test passes 46 cases over both products. Next:
-  production, awaiting the user's approval of the job.
+- **GOSAT production is built and verified** (2026-10-19; jobs 7874257 and
+  7874258, ~0.2 core-hours).
+  - 11 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`:
+    the geolocation store, with `pressure`, and 10 variable stores, including
+    the kernel, the a priori and the pressure weight.
+  - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
+  - **Not yet finalized.** The user types `--attrs` then `--tag
+    v3.0.1-verified-20261019`. `--status` shows nothing unreachable, so no
+    `--gc` is needed. The run log is in TESTING.md, Tier 3.
 
 ## Next task: the model-comparison stores (TASKS.md task 7, step 3)
 
@@ -58,10 +62,8 @@ the docs. Read both before writing any key rows:
    - What the fixture showed is in `gosat.md` (Model-comparison variables;
      G9: the top level is 0 hPa).
 
-   **Next:** the production build and verify, one develop job each, chained
-   `afterany`. Proposed to the user 2026-10-19 without a separate bench,
-   since the whole record (~2 GB raw) is far smaller than the TROPOMI bench
-   month. Commit before submitting.
+   **Production built and verified 2026-10-19**, with no bench (the user
+   approved). Finalize remains (above).
 2. TROPOMI: measure kernel compression first (scratch script, login node).
    Then build 5 new stores, plus `pressure` in the geolocation store
    (`top_first`: set `VERTICAL_ORDER` in `products/tropomi.py`). Show the

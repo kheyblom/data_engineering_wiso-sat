@@ -56,7 +56,8 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
-Next: GOSAT production, with the model-comparison stores named in task 7.
+GOSAT production built and verified 2026-10-19: 11 stores, 8,856,028
+observations, 0 failures (TESTING.md Tier 3). Finalize pending.
 
 
 # 7. Model-comparison stores: kernels, priors, dry-air columns, pressure grid
@@ -87,9 +88,9 @@ what to read, the layouts per product, and the deliverables in order.
   (N1-N18). 48 rows and the XH2O rename are in style_guides `fee64ec` /
   `a585066`, along with the Level 2 rules for matrix stores and vertical
   dims.
-  - GOSAT's kernel, prior, pressure weight and pressure grid: built at
-    fixture level 2026-10-19 (46 cases pass). Next: GOSAT production, then
-    the TROPOMI stores.
+  - GOSAT's kernel, prior, pressure weight and pressure grid: built and
+    verified in production 2026-10-19 with the rest of GOSAT (finalize
+    pending). Next: the TROPOMI stores.
   - TES and IASI first need multi-array variable stores in the shared
     code (N18).
 

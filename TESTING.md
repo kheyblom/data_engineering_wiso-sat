@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 46 cases, TROPOMI and GOSAT, with GOSAT's 2-D model-comparison stores |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: next. Its model-comparison variables were named 2026-10-19 |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **built and verified** (2026-10-19): 0 failures; finalize next |
 
 ## Tier 0 and 1: the fixture test
 
@@ -579,8 +579,32 @@ the production run, in order.
 
 Blockers:
 - **TROPOMI:** done. All 19 stores were finalized 2026-10-18 (run log above).
-- **GOSAT:** the whole record is ~9,000 small files, so a single develop job
-  covers build and verification. Its kernel, a priori and pressure-weight
-  stores are named (2026-10-19), and are built with the rest.
-  - Building them later is possible: a new store resumes from zero on the same
-    obs axis while the others are no-ops.
+- **GOSAT:** built and verified 2026-10-19 (run log below). Finalize is
+  next.
+
+### GOSAT run log (2026-10-19)
+
+No bench: the whole record (~2 GB raw) is far smaller than the TROPOMI bench
+month, so the user approved going straight from the fixture to production.
+Both jobs ran on the develop queue with 4 cores, 16 GB and a 1 h limit, from
+commit `8398108`.
+
+```bash
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/gosat/config_zarr.yaml QUEUE=develop NCPUS=4 MEM=16GB WALLTIME=01:00:00 ./submit_wisosat_zarr.sh'
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/gosat/config_zarr.yaml VERIFY=1 QUEUE=develop NCPUS=4 MEM=16GB WALLTIME=01:00:00 AFTER=7874257.desched1 ./submit_wisosat_zarr.sh'
+```
+
+| job | what | wall | peak memory | result |
+| --- | --- | --- | --- | --- |
+| 7874257 | build | 2 min 1 s | 0.51 GiB main, 0.12 GiB per worker | 11 stores, 4,498 days, 13 commits each; nothing masked |
+| 7874258 | verify | 52 s | 0.9 GiB | **359 checks, 0 failures**; 14 arrays bit for bit over 8,856,028 obs |
+
+- **Cost:** ~0.2 core-hours for both jobs.
+- **Listing:** 4,498 days, 2009-04-23 to 2021-12-31, with the 138 declared
+  missing days and no others.
+- **Bounds:** lat -87.84 to 84.89, lon -180.00 to 180.00.
+- **Size:** 946 MB. The geolocation store is 407 MB, the kernel 175 MB, the
+  a priori 185 MB, and `pressure_weight` only ~1 MB: it compresses almost
+  entirely, being nearly a fixed fraction of surface pressure (gosat.md).
+- **finalize `--status`:** every store verified, nothing unreachable, so no
+  `--gc` is needed. `--attrs` and `--tag` remain.
