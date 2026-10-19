@@ -192,8 +192,8 @@ Read this first in a new session. Update it whenever work lands.
        - A verification-text fix (`7925c4b`) keeps the 16 older stores'
          records unchanged.
        - **All 19 stores are finalized, tag `v8.1-verified-20261018`.**
-       - **Open:** delete the backup at
-         `.../zarr/tropomi_backup_20261018/`. It needs the user's approval.
+       - The old geolocation backup was deleted 2026-10-18, with the user's
+         approval.
      - **Production plan (done):**
        1. Move the current geolocation store aside as a renamed backup; do
           not delete it.
