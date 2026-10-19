@@ -4,285 +4,151 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-18)
 
-- **Tasks 1-4 are done.**
-  - The shared pipeline is built: TROPOMI reader, GOSAT second reader at
-    fixture level, verifier, finalize and batch wrapper.
-  - Layout and usage are in `CLAUDE.md`.
-- **Task 5 (testing plan) is in progress.** `TESTING.md` holds the tiers and
-  findings 1-8.
-  - Tiers 0-1 pass: `validation/test_pipeline.py`, 38 cases over TROPOMI and
-    GOSAT (~75 s, login node).
-  - **Tier 2, the TROPOMI bench, passed on 2026-10-16.** Build 189 s and
-    verify 328 s for July 2020 (390 files, 8 workers); 529 checks, 0
-    failures. The results, timing breakdown and full-record extrapolation
-    are in `TESTING.md` (Tier 2).
-- **The TROPOMI raw tree is final and fully audited (2026-10-16).**
-  - 38,648 files, 2017-11-08 to 2025-11-29.
-  - Every gap and defect is declared in `config/tropomi/config_zarr.yaml`.
-  - All facts, issues (T1-T21) and the defect orbit lists are in
-    `docs/products/tropomi.md`.
-  - Each sensor's doc carries its own **Known data issues** table; add new
-    findings there.
+- **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
+  testing tiers (`TESTING.md`) are in place. The fixture test passes 46 cases
+  over TROPOMI and GOSAT.
+- **TROPOMI production is finished** (task 6, first product).
+  - 19 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`,
+    all finalized under tag `v8.1-verified-20261018`:
+    - the geolocation store: time, lat, lon and the pixel corners;
+    - 16 variable stores;
+    - `scanline_index` and `ground_pixel_index`.
+  - 32,657,526,234 observations, ~1.8 TiB.
+  - The run log (every job, finding and decision) is in `TESTING.md`,
+    Tier 3; findings 9-11 come from it. Product facts and the variable
+    inventory are in `docs/products/tropomi.md`.
+- **GOSAT** has a reader and a fixture only. Its production waits on the
+  naming pass below.
 
-## Next (in order)
+## Next task: the cross-product naming pass (TASKS.md task 7, first step)
 
-1. **Tier 3, the TROPOMI production chain, is planned and awaits the user's
-   approval.** The commands, the store groups and the costs are in
-   `TESTING.md` (Tier 3). Submit nothing until the user says so. The steps:
-   - step 0: a minutes-long check, on the bench stores, that `VERIFY_ARGS`
-     survives `qsub -v`;
-   - B1 and B2: the build, then a resume guard;
-   - V1-V3: verification split by `--stores`, all chained `afterany`;
-   - then `finalize`: `--status`, `--attrs`, `--tag`, and `--gc` (dry run
-     first).
+**Goal:** canonical names, units and layouts for every product's model
+comparison variables, decided once across all products:
+- column averaging kernels;
+- a priori profiles;
+- dry-air partial columns;
+- the vertical grid, pressure.
 
-   **Submitted 2026-10-16 with the user's approval:**
-   - step 0, job 7840965: **passed**. Both `--stores` names arrived whole
-     through `qsub -v`.
-   - **First chain (7840968-72) failed at once.** B1 segfaulted (exit 139)
-     listing granules: netCDF4/HDF5 crashes opening the declared-unreadable
-     orbit 3335 instead of raising. `afterany` then ran B2 and V1-V3
-     through, all dead within a minute (~0.3 core-hours). The open probe now
-     runs in a child process (commit `7220460`, test 38/38).
-   - **The chain was resubmitted the same day, with the same commands.** Each
-     job is `afterany` the one before:
+GOSAT production waits on it, so that its kernel and prior stores are built
+with the rest.
 
-     | job | id |
-     | --- | --- |
-     | B1 | 7841000 |
-     | B2 | 7841009 |
-     | V1 | 7841010 |
-     | V2 | 7841011 |
-     | V3 | 7841012 |
+**Read first:**
+- the style guide's Level 2 section. Split stacked arrays into one store per
+  quantity, and split matrices into blocks, keeping the cross blocks. The
+  vertical grid goes in the geolocation store;
+- `nomenclature_data.md`, and the naming rule under Decisions below;
+- `docs/l2-survey.md`: units per product, and the kernel and covariance
+  layouts (TES 34 x 34 HDO/H2O blocks, TROPESS log-space ratio kernels);
+- `docs/products/<product>.md` for each product. TROPOMI has the full
+  variable inventory with size estimates (deferred group: ~29 TiB).
 
-     The first B2 and V1-V3 (7841001-04) were deleted by mistake, while B1
-     was running, and resubmitted unchanged.
+**The layouts differ by product:**
+- column kernels: TROPOMI, SCIAMACHY, GOSAT;
+- block matrices: TES;
+- log-space ratio kernels: TROPESS (AIRS, CrIS);
+- SVD components: IASI;
+- priors as partial columns (TROPOMI) or mole fractions.
 
-   - **B1 progress check, 13:50 MDT:** batch 277 of 645, no errors.
-     - Listing found 38,645 granules, with 77 missing days as declared.
-     - Batches started at ~20 s and are now ~26 s. Expected end ~16:30 MDT,
-       ~4.4 h in all.
-     - Memory: PBS reports ~32 GiB because it counts the file cache. The
-       processes hold ~8.3 GiB: main 7.1 GiB, workers 0.1-0.27 GiB.
-     - The whole chain should end ~02:00-03:00 MDT on 2026-10-17.
-   - **The build is done.**
-     - B1 ran 4 h 24 min, exit 0, all 645 batches. Peak memory was 11.04 GiB
-       main and 0.40 GiB per worker.
-     - B2 was a no-op ("every store is already complete"), exit 0.
-     - The stores hold 32,657,526,240 obs and 1.3 TiB on disk.
-   - **V1 started 16:27.** Its structure and index phases pass: 38,645
-     granules match the raw listing, and every store's obs length agrees. The
-     values phase runs at ~16 s per 60 granules, so V1 should end ~19:30-20:00.
-   - **V1-V3 all ended with exit 1 (2026-10-17).** In each, only the same 2
-     checks failed (`instrument/latitude_center` and `longitude_center`: no
-     undeclared netCDF default fill, 6 values); every value comparison
-     passed.
-     - Run times were 3.4, 4.1 and 4.6 h, ~97 core-hours in all.
-     - **The cause:** 6 rows in three nearly empty partial files, orbits 8480
-       (row 0), 8674 (rows 0 and 3) and 8726 (rows 0-2), all June 2019.
-       They have time, SZA (~100.5-101 deg, night), solar azimuth and
-       viewing zenith written, and nothing else. Lat/lon are fill, and so are
-       the corners, every retrieval source and the flags.
-     - They count as observations under finding 8 (time written). No fill is
-       declared for lat/lon, so the geolocation store holds 9.97e36 for them,
-       and the bounds read lat max 9.97e36.
-     - The 16 variable stores are correct: fill or NaN on these rows, except
-       SZA, which holds SRON's value.
-     - **Decided (user, 2026-10-17):** a row with no position is not an
-       observation. The rule is now shared code for every product (commit
-       `5c88bf0`; TESTING.md finding 10).
-     - **The stores were rewound, not deleted (2026-10-17).**
-       - `tools/rewind_stores.py` reset all 17 stores to their commit holding
-         granules 0-7019 (through orbit 08457): 4,824,553,284 obs, checked
-         consistent across stores.
-       - Orbit 8480, the first affected, is granule 7042.
-       - The old tips are saved in `logs/rewind_wisosat_zarr_tropomi.json`
-         (geolocation's was `TR6CN4DWVX26F3CV4RM0`). They are recoverable
-         with `reset_branch` until `finalize --gc`.
-     - **Resumed chain, submitted 2026-10-17 with the user's approval.** It
-       uses the same commands as before, each job `afterany` the one before:
+A TROPOMI-only name would fix the pattern too early.
 
-       | job | id |
-       | --- | --- |
-       | B1, resume from granule 7020 | 7855751 |
-       | B2 | 7855752 |
-       | V1 | 7855753 |
-       | V2 | 7855754 |
-       | V3 | 7855755 |
+**Deliverable, in order:**
+1. A proposal for the user. For each product and source: canonical name,
+   units, dims, and how it is split.
+2. The agreed rows in `nomenclature_data.md`. The user reviews before
+   commit (see How we work).
+3. Then the stores: GOSAT production; the TROPOMI model-comparison stores on
+   the existing obs axis, without rebuilding the 19.
+   - Before any 2-D store, measure kernel compression with a scratch script
+     (login node, no rows needed).
+   - The chunk rule already sizes 2-D arrays: 50 layers take 131,072 obs.
 
-       Expect B1 ~3.7 h and V1-V3 ~12 h.
-     - **The resumed chain passed (2026-10-18).**
-       - B1: 3 h 41 min, exit 0, peak 11.05 GiB main. B2 was a no-op.
-       - V1-V3: 3.5, 3.8 and 4.1 h. They ran 201, 200 and 231 checks with
-         0 failures, and each says `stores verified`.
-       - 129,562,471 rows were left out, 6 of them with a time, with 0
-         values on them.
-       - Bounds: lat -89.9997 to 89.9997, lon -180 to 180.
-     - **`finalize --status`:**
-       - every store is verified 2026-10-18, has 11 attributes pending, no
-         tags, and 646 reachable snapshots;
-       - the rewind's old commits are unreachable: ~1.04 TiB over 17 stores
-         (geolocation 182 GiB);
-       - next are `--attrs`, then `--tag`, then `--gc`.
-     - **Provenance fix (user decision 2026-10-18; commit `5bfc662`).**
-       - Build commits now carry their code revision.
-       - `finalize` writes `history` per revision run.
-       - The `verification` text now states the scope of the split runs.
-     - **These stores' commits predate the stamp**, so `--attrs` takes the
-       revisions checked out when each B1 started. Use exactly:
-       `--build-revisions 7220460@0,24186fe@7020`
-       - 7840968's B1 ran at 7220460: granules 0-7019, 2026-10-16.
-       - 7855751's B1 ran at 24186fe: granules 7020 on, 2026-10-17. Its
-         build code equals 5c88bf0.
-       - Both checked with `git diff`.
-     - **Applied 2026-10-18 08:34 MDT:** `--attrs` (one commit per store),
-       then `--tag v8.1-verified-20261018` on all 17 stores (geolocation tip
-       `0JYYG54RB35JDY4R5PH0`).
-     - **The `--gc` dry run would delete ~1.04 TiB**, all of it the 528 commits
-       per store that the rewind orphaned (geolocation 182 GiB).
-     - **`--gc --apply` ran 2026-10-18 08:38-08:40 MDT**, approved by the user
-       and run detached (`setsid nohup`). Output:
-       `logs/finalize_gc_apply_tropomi_20261018.out`.
-       - It deleted ~1.04 TiB over the 17 stores, exit 0. The rewind can no
-         longer be undone.
-       - The final `--status` reports every store **"remaining nothing,
-         finalized"**: 647 reachable snapshots, 0 unreachable, tag
-         `v8.1-verified-20261018`, 1.3 TiB in all.
-     - **Open:** the stores sit on scratch, which is purged. Where they live
-       in the data lake is undecided; ask the user before moving them.
-     - **Additions decided 2026-10-18 (user):**
-       - `lat_corners` and `lon_corners` go in the geolocation store, on
-         `corner`;
-       - `scanline_index` and `ground_pixel_index` become variable stores,
-         SRON's values as written;
-       - an array's obs chunk is halved until it fits 40 MiB, so corners
-         take 2,097,152;
-       - nomenclature rows: style_guides `81fef95` (the commit message of
-         `3dbf1d2` misnames it `57d22cd`);
-       - code: `d18e440`. Fixture: 41 cases, 0 failures.
-     - **Bench for the additions, submitted 2026-10-18:** build 7861696, then
-       verify 7861698 (`--stores scanline_index,ground_pixel_index`). The bench
-       geolocation store was deleted first, with approval. The bench measures
-       the verify time: geolocation with corners may approach the 6 h develop
-       limit in production.
-     - **Bench passed (2026-10-18).**
-       - Build: 140 s, exit 0.
-       - Verify: 118 s, 125 checks, 0 failures.
-       - Geolocation grew from 2,493 to 8,162 MiB for the month; the two
-         index stores are 8 MiB.
-       - Scaled to the record: build ~3.9 h, verify ~3.3 h. One verify run
-         fits the 6 h limit.
-     - **Production, submitted 2026-10-18 with the user's approval:**
-       - the old geolocation store was moved to
-         `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi_backup_20261018/`;
-       - B1 7861748, B2 7861749, V 7861750 (`--stores
-         scanline_index,ground_pixel_index`), each `afterany`.
-       - The user agreed that only the new stores need value verification;
-         the 16 old ones get the structure,index check.
-     - **Production result (2026-10-18):**
-       - B1: 3 h 43 min, exit 0, peak 10.49 GiB. B2 was a no-op.
-       - V: 3 h 47 min, 129 checks, 0 failures.
-       - The structure,index check over all 19 stores: 429 checks, 0
-         failures. Every store's index is identical to the new geolocation
-         store's.
-       - The new stores were stamped `e743105-dirty`, because untracked
-         marimo notebooks sat in the tree (TESTING.md finding 11). They were
-         finalized with `--dirty-notes` (exact text in the finalize log),
-         and the tree is now enforced clean for builds.
-       - A verification-text fix (`7925c4b`) keeps the 16 older stores'
-         records unchanged.
-       - **All 19 stores are finalized, tag `v8.1-verified-20261018`.**
-       - The old geolocation backup was deleted 2026-10-18, with the user's
-         approval.
-     - **Production plan (done):**
-       1. Move the current geolocation store aside as a renamed backup; do
-          not delete it.
-       2. Build geolocation, scanline_index and ground_pixel_index from
-          granule 0. The 16 variable stores are untouched.
-       3. Verify the three new stores, split by the bench's timing.
-       4. Run `--phases structure,index` over all 19 stores, to check the old
-          stores' index against the new geolocation.
-       5. Finalize the three new stores (no `--build-revisions` needed), tag
-          `v8.1-verified-<date>`.
-       6. Delete the backup only with the user's approval.
-     - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
-       `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
-       it only after verification has passed.
-   - **To check on resume:**
-     - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
-     - that B2 was a no-op;
-     - then each verify run's `stores verified` line and its stores.
+No compute is needed for steps 1-2.
 
-   - **The audit opened every file with h5py, not netCDF4.** Another file
-     could still crash a build worker. The build would then fail loudly and
-     resume from its last commit.
-   - Logs: `logs/<id>.desched1.OU`, `logs/wisosat_zarr_tropomi.log` and
-     `logs/verify_wisosat_zarr_tropomi.log`.
-   - When V3 ends, check that each run says `stores verified` and covers its
-     stores, then run `finalize --status`.
-2. **Scale settings, decided with the user on 2026-10-16** and set in
-   `config/tropomi/config_zarr.yaml`:
-   - 8 workers: the build is write-bound;
-   - `chunks.obs` 4,194,304;
-   - `granules_per_commit` 60, to cut commits and objects per store; history
-     is kept;
-   - the develop queue: 8 cores, 32 GB, 6 h limit (NCAR docs), at ~125
-     core-hours estimated, against ~670+ on main.
-3. Later, not blocking TROPOMI:
-   - the cross-product naming pass for kernels, priors and dry-air columns,
-     which GOSAT production waits on;
-   - GOSAT-2 configs (`product: gosat2`), which need a small shared change so
-     the reader and key can be named apart from the product;
-   - task 6, the other products.
+## Other open items
+
+- **The data-lake home of the TROPOMI stores** is undecided. Scratch is
+  purged, so ask the user before moving them.
+- **GOSAT-2 configs** (`product: gosat2`) need a small shared change, so the
+  reader and key can be named apart from the product.
+- **The other products** (task 6): SCIAMACHY, AIRS, CrIS, IASI, TES. Each
+  gets a reader at fixture level first.
+- **Elsewhere:** GLEAM and MSWEP carry a deferred task 2 (add `cdm_data_type:
+  Grid`; `standard_name` from the source only).
+
+## How we work (user preferences, 2026-10-14 to 10-18)
+
+- **Show every batch job before submitting it**, with its cost; wait for
+  approval. Go tiny fixture, then bench, then production. The allocation is
+  finite: TROPOMI used ~380 core-hours in all.
+- **Builds start only from a clean commit.** The build and the wrapper both
+  refuse a dirty tree. Commit before submitting, and keep the tree clean
+  until each build job has started.
+- **Edits to style_guides** are shown to the user before commit. They review
+  in place, with `#@CLAUDE` comments.
+- **Finalize is typed by hand**, one action per call (`CLAUDE.md`). `--gc
+  --apply` is irreversible and needs approval. So does any `rm -rf`.
+- **Long or irreversible login-node steps** run detached (`setsid nohup`),
+  so a dropped connection cannot stop them.
+- **Verify only new or changed stores.** A cheap `--phases structure,index`
+  run over every store then confirms the shared index.
 
 ## Things the next session needs to know
 
-- **PBS writes a job's `.OU` file while it runs** (`Keep_Files = od`).
-  The file's existence does not mean the job ended. Check `job_state` with
+- **PBS writes a job's `.OU` file while it runs** (`Keep_Files = od`). The
+  file's existence does not mean the job ended. Check `job_state` with
   `qstat -f <id>.desched1`, and `Exit_status` with `qstat -xf`. Plain
-  `qstat -u $USER` may not list held jobs.
+  `qstat -u $USER` may not list held jobs. Watch a chain's first job until
+  it commits, and delete the rest if it dies (`afterany` runs them anyway).
 - **Commands.** Run from the repo root:
   - test: `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`;
-  - batch: `bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=... [VERIFY=1] [AFTER=<jobid>] QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=01:00:00 ./submit_wisosat_zarr.sh'`.
+  - batch: `bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=... [VERIFY=1] [AFTER=<jobid>] QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=06:00:00 ./submit_wisosat_zarr.sh'`.
     Tool shells do not read `~/.bashrc`, so `bash -lc` is needed for
     `PBS_ACCOUNT`.
-- **A develop node reports 64 cpus to `os.sched_getaffinity` even when 32
-  are requested** (seen in the audit job). The wrapper only checks that
-  `num_workers` <= cpus available; the config sets the real count.
-- **Scratch is purged.** These are disposable or reproducible: the audit
-  output at `/glade/derecho/scratch/kheyblom/data/wisosat/audit/`, the
-  fixture at `.../data/wisosat_fixture/` and the bench at
-  `.../data/wisosat_bench/`. The durable record is in the docs (defect lists
-  in `tropomi.md`).
-- **The bench stores are throwaway.** Delete them before re-running the
-  bench: builds resume, so a complete store is a silent no-op.
-- **Elsewhere:** GLEAM and MSWEP carry a deferred task 2 (add `cdm_data_type:
-  Grid`; `standard_name` from the source only). Both are pushed.
+- **Develop queue:** 6 h maximum walltime. 8 cores and 32 GB suit TROPOMI.
+  A TROPOMI build is ~4 h and one verify run ~3.5-4 h.
+- **Scratch is purged.** The audit output, the fixture and the bench under
+  `/glade/derecho/scratch/kheyblom/data/` can be thrown away or
+  reproduced. The durable record is in the docs.
+- **The bench stores are throwaway.** Delete one before re-running it:
+  builds resume, so a complete store is a silent no-op.
+- **TROPOMI's history attributes needed help**, and are written now:
+  - commits from before the revision stamp took
+    `--build-revisions 7220460@0,24186fe@7020`;
+  - the corner build took `--dirty-notes`. The exact text is in
+    `logs/finalize_wisosat_zarr_tropomi.log`.
 
 ## Decisions in force (user)
 
-- **Store names:**
-  - `wisosat.<product>.<version>.inst.native_swath.<variable>.zarr`;
-  - the version comes from the files' attributes, with no product token
-    (2026-10-14).
+- **Store names:** `wisosat.<product>.<version>.inst.native_swath.<variable>.zarr`.
+  The version comes from the files' attributes, with no product token
+  (2026-10-14).
 - **One pass, many stores:** each granule is read once and written to every
   store of a config (2026-10-14).
-- **GOSAT DED and H2O merged into one product** per day (2026-10-14).
-- **TROPOMI rows with unwritten time are left out**, checked, and
-  `granule_source_rows` keeps each file's row count (2026-10-16). The three
-  corrupt upstream files are declared and left out.
-- **The TROPOMI subset is 16 one-dimensional stores:** the core 7 plus the 9
-  inputs to the Schneider et al. (2022) Table 1 filters.
-- **Kernels, priors, dry-air columns and the pressure grid are deferred** to
-  the cross-product naming pass. Measure kernel compression with a scratch
-  script, which needs no rows.
+- **GOSAT DED and H2O are merged into one product** per day (2026-10-14).
+- **An observation is a row with time, lat and lon all written**, for every
+  product (2026-10-16, extended 2026-10-17).
+  - Other rows are left out, checked; a row left out may hold values only
+    in `allowed_on_rows_left_out`.
+  - `granule_source_rows` keeps each file's row count. Corrupt upstream
+    files are declared and left out.
+- **The TROPOMI subset:**
+  - the core 7, plus the 9 inputs to the Schneider et al. (2022) Table 1
+    filters;
+  - `scanline_index` and `ground_pixel_index`, SRON's values as written;
+  - the pixel corners, in the geolocation store (2026-10-18).
+- **Kernels, priors, dry-air columns and the pressure grid** wait for the
+  naming pass (task 7).
+- **Chunks:** `chunks.obs` 4,194,304, halved per array until it fits 40 MiB.
+  That keeps every store's chunk boundaries aligned (2026-10-18).
+- **Scale (TROPOMI):** 8 workers, 60 granules per commit, develop queue
+  (2026-10-16).
 - **Filtering guidance** in the metadata is Table 1 in full, plus the
   inferred reduced chi-squared.
-- **Naming rule:** quantity first, then qualifiers general to specific;
-  established terms stay whole; unitless quantities use `unitless`.
+- **Naming rule:** the quantity first, then qualifiers general to specific.
+  Established terms stay whole; unitless quantities use `unitless`.
 
 ## Open questions
 
 - **Coordinate naming in the geolocation store.** `pressure` follows the
   `time`/`lat`/`lon` convention (no nomenclature row) unless the user says
-  otherwise. It only matters once the model-comparison set is produced.
+  otherwise. Settle it in the naming pass.

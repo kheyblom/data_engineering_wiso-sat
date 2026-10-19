@@ -363,8 +363,222 @@ well under one core-hour.
 (dry run, then `--apply`). Scratch is purged, so the stores are moved to
 their data-lake home afterwards; where is to be decided.
 
+### TROPOMI run log (2026-10-16 to 2026-10-18)
+
+Moved from STATE.md when TROPOMI finished. Every job, finding and decision of
+the production run, in order.
+
+1. **Tier 3, the TROPOMI production chain, is planned and awaits the user's
+   approval.** The commands, the store groups and the costs are in
+   `TESTING.md` (Tier 3). Submit nothing until the user says so. The steps:
+   - step 0: a minutes-long check, on the bench stores, that `VERIFY_ARGS`
+     survives `qsub -v`;
+   - B1 and B2: the build, then a resume guard;
+   - V1-V3: verification split by `--stores`, all chained `afterany`;
+   - then `finalize`: `--status`, `--attrs`, `--tag`, and `--gc` (dry run
+     first).
+
+   **Submitted 2026-10-16 with the user's approval:**
+   - step 0, job 7840965: **passed**. Both `--stores` names arrived whole
+     through `qsub -v`.
+   - **First chain (7840968-72) failed at once.** B1 segfaulted (exit 139)
+     listing granules: netCDF4/HDF5 crashes opening the declared-unreadable
+     orbit 3335 instead of raising. `afterany` then ran B2 and V1-V3
+     through, all dead within a minute (~0.3 core-hours). The open probe now
+     runs in a child process (commit `7220460`, test 38/38).
+   - **The chain was resubmitted the same day, with the same commands.** Each
+     job is `afterany` the one before:
+
+     | job | id |
+     | --- | --- |
+     | B1 | 7841000 |
+     | B2 | 7841009 |
+     | V1 | 7841010 |
+     | V2 | 7841011 |
+     | V3 | 7841012 |
+
+     The first B2 and V1-V3 (7841001-04) were deleted by mistake, while B1
+     was running, and resubmitted unchanged.
+
+   - **B1 progress check, 13:50 MDT:** batch 277 of 645, no errors.
+     - Listing found 38,645 granules, with 77 missing days as declared.
+     - Batches started at ~20 s and are now ~26 s. Expected end ~16:30 MDT,
+       ~4.4 h in all.
+     - Memory: PBS reports ~32 GiB because it counts the file cache. The
+       processes hold ~8.3 GiB: main 7.1 GiB, workers 0.1-0.27 GiB.
+     - The whole chain should end ~02:00-03:00 MDT on 2026-10-17.
+   - **The build is done.**
+     - B1 ran 4 h 24 min, exit 0, all 645 batches. Peak memory was 11.04 GiB
+       main and 0.40 GiB per worker.
+     - B2 was a no-op ("every store is already complete"), exit 0.
+     - The stores hold 32,657,526,240 obs and 1.3 TiB on disk.
+   - **V1 started 16:27.** Its structure and index phases pass: 38,645
+     granules match the raw listing, and every store's obs length agrees. The
+     values phase runs at ~16 s per 60 granules, so V1 should end ~19:30-20:00.
+   - **V1-V3 all ended with exit 1 (2026-10-17).** In each, only the same 2
+     checks failed (`instrument/latitude_center` and `longitude_center`: no
+     undeclared netCDF default fill, 6 values); every value comparison
+     passed.
+     - Run times were 3.4, 4.1 and 4.6 h, ~97 core-hours in all.
+     - **The cause:** 6 rows in three nearly empty partial files, orbits 8480
+       (row 0), 8674 (rows 0 and 3) and 8726 (rows 0-2), all June 2019.
+       They have time, SZA (~100.5-101 deg, night), solar azimuth and
+       viewing zenith written, and nothing else. Lat/lon are fill, and so are
+       the corners, every retrieval source and the flags.
+     - They count as observations under finding 8 (time written). No fill is
+       declared for lat/lon, so the geolocation store holds 9.97e36 for them,
+       and the bounds read lat max 9.97e36.
+     - The 16 variable stores are correct: fill or NaN on these rows, except
+       SZA, which holds SRON's value.
+     - **Decided (user, 2026-10-17):** a row with no position is not an
+       observation. The rule is now shared code for every product (commit
+       `5c88bf0`; TESTING.md finding 10).
+     - **The stores were rewound, not deleted (2026-10-17).**
+       - `tools/rewind_stores.py` reset all 17 stores to their commit holding
+         granules 0-7019 (through orbit 08457): 4,824,553,284 obs, checked
+         consistent across stores.
+       - Orbit 8480, the first affected, is granule 7042.
+       - The old tips are saved in `logs/rewind_wisosat_zarr_tropomi.json`
+         (geolocation's was `TR6CN4DWVX26F3CV4RM0`). They are recoverable
+         with `reset_branch` until `finalize --gc`.
+     - **Resumed chain, submitted 2026-10-17 with the user's approval.** It
+       uses the same commands as before, each job `afterany` the one before:
+
+       | job | id |
+       | --- | --- |
+       | B1, resume from granule 7020 | 7855751 |
+       | B2 | 7855752 |
+       | V1 | 7855753 |
+       | V2 | 7855754 |
+       | V3 | 7855755 |
+
+       Expect B1 ~3.7 h and V1-V3 ~12 h.
+     - **The resumed chain passed (2026-10-18).**
+       - B1: 3 h 41 min, exit 0, peak 11.05 GiB main. B2 was a no-op.
+       - V1-V3: 3.5, 3.8 and 4.1 h. They ran 201, 200 and 231 checks with
+         0 failures, and each says `stores verified`.
+       - 129,562,471 rows were left out, 6 of them with a time, with 0
+         values on them.
+       - Bounds: lat -89.9997 to 89.9997, lon -180 to 180.
+     - **`finalize --status`:**
+       - every store is verified 2026-10-18, has 11 attributes pending, no
+         tags, and 646 reachable snapshots;
+       - the rewind's old commits are unreachable: ~1.04 TiB over 17 stores
+         (geolocation 182 GiB);
+       - next are `--attrs`, then `--tag`, then `--gc`.
+     - **Provenance fix (user decision 2026-10-18; commit `5bfc662`).**
+       - Build commits now carry their code revision.
+       - `finalize` writes `history` per revision run.
+       - The `verification` text now states the scope of the split runs.
+     - **These stores' commits predate the stamp**, so `--attrs` takes the
+       revisions checked out when each B1 started. Use exactly:
+       `--build-revisions 7220460@0,24186fe@7020`
+       - 7840968's B1 ran at 7220460: granules 0-7019, 2026-10-16.
+       - 7855751's B1 ran at 24186fe: granules 7020 on, 2026-10-17. Its
+         build code equals 5c88bf0.
+       - Both checked with `git diff`.
+     - **Applied 2026-10-18 08:34 MDT:** `--attrs` (one commit per store),
+       then `--tag v8.1-verified-20261018` on all 17 stores (geolocation tip
+       `0JYYG54RB35JDY4R5PH0`).
+     - **The `--gc` dry run would delete ~1.04 TiB**, all of it the 528 commits
+       per store that the rewind orphaned (geolocation 182 GiB).
+     - **`--gc --apply` ran 2026-10-18 08:38-08:40 MDT**, approved by the user
+       and run detached (`setsid nohup`). Output:
+       `logs/finalize_gc_apply_tropomi_20261018.out`.
+       - It deleted ~1.04 TiB over the 17 stores, exit 0. The rewind can no
+         longer be undone.
+       - The final `--status` reports every store **"remaining nothing,
+         finalized"**: 647 reachable snapshots, 0 unreachable, tag
+         `v8.1-verified-20261018`, 1.3 TiB in all.
+     - **Open:** the stores sit on scratch, which is purged. Where they live
+       in the data lake is undecided; ask the user before moving them.
+     - **Additions decided 2026-10-18 (user):**
+       - `lat_corners` and `lon_corners` go in the geolocation store, on
+         `corner`;
+       - `scanline_index` and `ground_pixel_index` become variable stores,
+         SRON's values as written;
+       - an array's obs chunk is halved until it fits 40 MiB, so corners
+         take 2,097,152;
+       - nomenclature rows: style_guides `81fef95` (the commit message of
+         `3dbf1d2` misnames it `57d22cd`);
+       - code: `d18e440`. Fixture: 41 cases, 0 failures.
+     - **Bench for the additions, submitted 2026-10-18:** build 7861696, then
+       verify 7861698 (`--stores scanline_index,ground_pixel_index`). The bench
+       geolocation store was deleted first, with approval. The bench measures
+       the verify time: geolocation with corners may approach the 6 h develop
+       limit in production.
+     - **Bench passed (2026-10-18).**
+       - Build: 140 s, exit 0.
+       - Verify: 118 s, 125 checks, 0 failures.
+       - Geolocation grew from 2,493 to 8,162 MiB for the month; the two
+         index stores are 8 MiB.
+       - Scaled to the record: build ~3.9 h, verify ~3.3 h. One verify run
+         fits the 6 h limit.
+     - **Production, submitted 2026-10-18 with the user's approval:**
+       - the old geolocation store was moved to
+         `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi_backup_20261018/`;
+       - B1 7861748, B2 7861749, V 7861750 (`--stores
+         scanline_index,ground_pixel_index`), each `afterany`.
+       - The user agreed that only the new stores need value verification;
+         the 16 old ones get the structure,index check.
+     - **Production result (2026-10-18):**
+       - B1: 3 h 43 min, exit 0, peak 10.49 GiB. B2 was a no-op.
+       - V: 3 h 47 min, 129 checks, 0 failures.
+       - The structure,index check over all 19 stores: 429 checks, 0
+         failures. Every store's index is identical to the new geolocation
+         store's.
+       - The new stores were stamped `e743105-dirty`, because untracked
+         marimo notebooks sat in the tree (TESTING.md finding 11). They were
+         finalized with `--dirty-notes` (exact text in the finalize log),
+         and the tree is now enforced clean for builds.
+       - A verification-text fix (`7925c4b`) keeps the 16 older stores'
+         records unchanged.
+       - **All 19 stores are finalized, tag `v8.1-verified-20261018`.**
+       - The old geolocation backup was deleted 2026-10-18, with the user's
+         approval.
+     - **Production plan (done):**
+       1. Move the current geolocation store aside as a renamed backup; do
+          not delete it.
+       2. Build geolocation, scanline_index and ground_pixel_index from
+          granule 0. The 16 variable stores are untouched.
+       3. Verify the three new stores, split by the bench's timing.
+       4. Run `--phases structure,index` over all 19 stores, to check the old
+          stores' index against the new geolocation.
+       5. Finalize the three new stores (no `--build-revisions` needed), tag
+          `v8.1-verified-<date>`.
+       6. Delete the backup only with the user's approval.
+     - **Then finalize:** `--status`, `--attrs`, `--tag`, and `--gc` last. The
+       `--gc` dry run comes first. `--gc` ends the rewind's undo window, so run
+       it only after verification has passed.
+   - **To check on resume:**
+     - B1's `Exit_status` and its `peak memory` / `done :-)` lines;
+     - that B2 was a no-op;
+     - then each verify run's `stores verified` line and its stores.
+
+   - **The audit opened every file with h5py, not netCDF4.** Another file
+     could still crash a build worker. The build would then fail loudly and
+     resume from its last commit.
+   - Logs: `logs/<id>.desched1.OU`, `logs/wisosat_zarr_tropomi.log` and
+     `logs/verify_wisosat_zarr_tropomi.log`.
+   - When V3 ends, check that each run says `stores verified` and covers its
+     stores, then run `finalize --status`.
+2. **Scale settings, decided with the user on 2026-10-16** and set in
+   `config/tropomi/config_zarr.yaml`:
+   - 8 workers: the build is write-bound;
+   - `chunks.obs` 4,194,304;
+   - `granules_per_commit` 60, to cut commits and objects per store; history
+     is kept;
+   - the develop queue: 8 cores, 32 GB, 6 h limit (NCAR docs), at ~125
+     core-hours estimated, against ~670+ on main.
+3. Later, not blocking TROPOMI:
+   - the cross-product naming pass for kernels, priors and dry-air columns,
+     which GOSAT production waits on;
+   - GOSAT-2 configs (`product: gosat2`), which need a small shared change so
+     the reader and key can be named apart from the product;
+   - task 6, the other products.
+
 Blockers:
-- **TROPOMI:** none. The chain above awaits approval.
+- **TROPOMI:** done. All 19 stores were finalized 2026-10-18 (run log above).
 - **GOSAT:** the whole record is ~9,000 small files, so a single develop job
   covers build and verification. It waits on the cross-product naming pass,
   so that its kernel and a priori stores are built with the rest.

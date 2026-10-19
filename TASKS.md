@@ -32,10 +32,19 @@ I want you to build the codebase. Design the codebase to be consistent with the 
 Progress: Shared pipeline, TROPOMI reader, key, configs and fixture built 2026-10-14; the end-to-end fixture test passes (17 cases). Store naming and the one-pass build decided 2026-10-14. Second reader (GOSAT, DED and H2O merged per day, approved 2026-10-14) built at fixture level 2026-10-14; the test passes 34 cases over both products. The four new nomenclature rows were reviewed and committed (style_guides `3966e69`), which closes the task.
 
 
-# 5. Create a testing plan for the codebase
+# 5. Create a testing plan for the codebase [COMPLETED 2026-10-18]
 Develop a plan to test this codebase so that we know that it works before we move to production runs.
 
-Progress: TESTING.md written 2026-10-14. Tiers 0-1 pass (fixtures for TROPOMI and GOSAT). The Tier 2 TROPOMI bench is staged; its job commands await approval. Found the TROPOMI download incomplete (339 orbits, 12 days); see docs/products/tropomi.md (T7). Re-downloaded and fully audited 2026-10-16. Tier 2 bench passed 2026-10-16 (build 189 s, verify 328 s, 0 failures); see TESTING.md. Scale settings decided 2026-10-16; the Tier 3 TROPOMI chain is planned in TESTING.md and awaits approval.
+Progress:
+- TESTING.md written 2026-10-14. Tiers 0-1 (fixtures for TROPOMI and GOSAT)
+  pass 46 cases.
+- The TROPOMI download was found incomplete (339 orbits, 12 days); see
+  docs/products/tropomi.md (T7). It was re-downloaded and fully audited on
+  2026-10-16.
+- The Tier 2 bench passed 2026-10-16.
+- Tier 3, TROPOMI production, ran 2026-10-16 to 10-18; its findings are 9-11.
+- The plan stands for every later product: fixture, then bench, then
+  production.
 
 # 6. Production runs: create the final prooduct zarr stores.
 One product at a time, starting with TROPOMI.
@@ -44,15 +53,18 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - 17 stores, 32,657,526,234 observations, 1.3 TiB. Two index stores and the
   corners joined on 2026-10-18: 19 stores, ~1.8 TiB.
 - Tag `v8.1-verified-20261018`.
-- See STATE.md and TESTING.md (Tier 3, findings 9-10).
+- See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
-Next: GOSAT, which waits on the cross-product naming pass.
+Next: the naming pass of task 7, then GOSAT production.
 
 
 # 7. Model-comparison stores: kernels, priors, dry-air columns, pressure grid
 Added 2026-10-18 at the user's request, so these are not forgotten. They are
 needed eventually; all were deferred from the first production subset.
+
+**This is the next task.** Start with the brief in STATE.md ("Next task"):
+what to read, the layouts per product, and the deliverables in order.
 - **What:** each product's column averaging kernels, a priori profiles,
   dry-air partial columns and pressure grid. For TROPOMI that is six sources,
   each 50 or 51 layers, ~29 TiB estimated.
