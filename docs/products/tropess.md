@@ -59,6 +59,11 @@ products share one file format, so they will most likely share one reader:
   - `observation_ops/xa`: a priori ratio, `1`.
   - `observation_ops/averaging_kernel` (17 x 17, **log-space** ratio kernel)
     and `observation_error`.
+  - **`observation_error` is left out of the stores** (user decision
+    2026-10-19). It is not a valid covariance in any version sampled (R11).
+    Its reserved name is `water_vapor_hdo_h2o_ratio_observation_error_covariance_log`
+    (`docs/model-comparison-naming.md` N16, 2.11). Revisit only if TROPESS
+    documents or fixes it.
   - `observation_ops/observation_error_h2o`: `1`, **a relative / ln-space
     error, p50 0.09. Never scale it x 1e6.**
   - `x_test`, and `retrieval/x_raw` and `x_h2o_raw`: uncorrected, in the
@@ -86,6 +91,6 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R7 | **`x_h2o` reaches 0.44 mol mol-1**, which is unphysical. | record only |
 | R8 | **`observation_error_h2o` is a ln-space relative error** with units `1`, sitting next to mole-fraction variables. | open: must never be scaled x 1e6 (project rule) |
 | R9 | **RS (Summary) files are pre-filtered**; FS files are not. | record only |
-| R11 | **FS `observation_error` is not a valid covariance.** Its `source` attribute says `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. Negative variances appear in all three files sampled (AIRS R1p11 2021-02-10, CrIS-JPSS1 R1p17 2022-07-10, AIRS R1p20 2023-06-15), in 16-31% of targets at 750-619 hPa, where the kernel is largest. R1p17 and R1p20 are also asymmetric, by as much as the variances (2026-10-19). | open: proposed left out (`docs/model-comparison-naming.md` N16, 2.11); worth reporting to TROPESS |
+| R11 | **FS `observation_error` is not a valid covariance.** Its `source` attribute says `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. Negative variances appear in all three files sampled (AIRS R1p11 2021-02-10, CrIS-JPSS1 R1p17 2022-07-10, AIRS R1p20 2023-06-15), in 16-31% of targets at 750-619 hPa, where the kernel is largest. R1p17 and R1p20 are also asymmetric, by as much as the variances (2026-10-19). | decided (user, 2026-10-19): left out, with no nomenclature row (`docs/model-comparison-naming.md` N16, 2.11). Revisit if TROPESS documents or fixes it; worth reporting to them |
 | R12 | **`observation_error_h2o` looks 1-sigma**: p50 0.093, against p50 0.089 for the square root of TES's H2O observation-error variance. Not stated in the file (2026-10-19). | open: confirm against the TROPESS user guide |
 | R10 | **FS `pressure` level 0 is -999** in R1p17 (CrIS-JPSS1 2022-07-10) and R1p20 (AIRS 2023-06-15), but holds the surface pressure in R1p11 (AIRS 2021-02-10), as in RS (2026-10-19). | open: check across the record; the fill is masked as usual |

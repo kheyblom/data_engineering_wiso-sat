@@ -24,14 +24,15 @@ survey), and the checks under Findings.
 | N7 | **Vertical order** | keep each source's order; record it in a `vertical_order` attribute | **approved** |
 | N8 | **Log-space kernels** | `_log` after `averaging_kernel` | **approved** |
 | N9 | **TES block splits** | the row species leads the name; `_cross_<species>` names the true-state species of an off-diagonal block (2.4) | **approved** |
-| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). **Revised: one store per SVD kernel**, holding its components as arrays (2.10) | split and padding approved; one store per kernel open (needs a style-guide amendment) |
+| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). One store per SVD kernel, holding its components as arrays (2.10), as a case of N18 | split and padding approved; single store open with N18 |
+| N18 | **One store per matrix, in every product** (new, from your comment on 2.10) | a matrix published in pieces is one store holding its pieces as arrays: TES's kernel and three covariances (4 blocks each), and IASI's two SVD kernels. Vectors, priors and single-array matrices keep one store each (2.13) | open; needs a style-guide amendment |
 | N11 | **GOSAT `dry_column`** | hold until its unit is resolved (2.6). Noted for later in STATE.md and `gosat.md` G7 | **approved** (held) |
 | N12 | **Error covariances and the IASI temperature cross-kernel** | added to this pass (2.7): 19 more rows | **approved** |
 | N13 | **Rename two existing rows** | `water_vapor_column_mole_fraction_dry_air[_standard_error]` become `water_vapor_column_h2o_mole_fraction_dry_air[_standard_error]` (2.9) | **approved; applied**, uncommitted for your review |
 | N14 | **Error role names** (new, from N12) | `<type>_error_covariance` for the three TES matrices (`observation`, `measurement`, `total`: established terms, kept whole), and `observation_standard_error` for a 1-sigma observation error, after the existing `_standard_error` (2.7) | **approved** |
 | N15 | **TES covariance cross blocks** (new) | store both, though `S_HD` is exactly `S_DH` transposed (F8): ~3.4 GB each, the guide's rule as written, and the same four-block set as the kernel (2.7) | **approved** |
-| N16 | **TROPESS `observation_error` is not a valid covariance** (new, F7) | **revised: leave it out**, and add no row for it. It has negative variances in every processor version sampled, at the levels the retrieval is sensitive to. Revisit if TROPESS documents or fixes it (2.11) | open |
-| N17 | **IASI cross-kernel units** (new, F9) | the singular values take `K-1`, a corrected source unit (the files say `1`), with no value change. The vectors stay `unitless` (2.12) | open |
+| N16 | **TROPESS `observation_error` is not a valid covariance** (new, F7) | **leave it out**, and add no row for it. It has negative variances in every processor version sampled, at the levels the retrieval is sensitive to. Revisit if TROPESS documents or fixes it (2.11) | **approved**; recorded in `tropess.md` |
+| N17 | **IASI cross-kernel units** (new, F9) | the singular values take `K-1`, a corrected source unit (the files say `1`), with no value change. The vectors stay `unitless` (2.12) | **approved** |
 
 ## 2. Answers to the reviews
 
@@ -407,9 +408,8 @@ alone:
 - The singular values alone are at most a diagnostic. The vectors alone mean
   nothing.
 
-That separates them from the TES blocks, each of which is a usable kernel by
-itself (e.g. H2O-H2O for H2O comparisons). So the TES blocks stay separate
-stores.
+The TES blocks were first kept apart as each usable alone. That does not
+hold up, and the rule extends to every product: see 2.13.
 
 **A clean single-store layout.** It follows the pattern the geolocation store
 already uses, one store holding several arrays on the same `obs` axis and
@@ -445,10 +445,7 @@ wisosat.iasi.<version>.inst.native_swath.water_vapor_proxy_averaging_kernel_cros
 - **Costs:**
   - **A style-guide amendment.** The guide says "one store per data
     variable", and the geolocation store is its only multi-array store. The
-    proposed wording: "a matrix published as a factorization (e.g. a
-    truncated SVD) is one store, named for the factorization, holding its
-    components as arrays, each with its own canonical name." The edit is
-    shown to you before commit.
+    wording is in 2.13; the edit is shown to you before commit.
   - **A store-name rule.** The variable slot holds the factorization's name,
     which gets its own row in `nomenclature_data.md` (2 more rows).
     `geolocation` is the precedent for a store name that no single array
@@ -456,9 +453,10 @@ wisosat.iasi.<version>.inst.native_swath.water_vapor_proxy_averaging_kernel_cros
   - **A shared-code change.** Today every variable store has one source; a
     store with several sources is new outside geolocation. The build,
     verifier and config gain it, and every product's fixture tests it.
-- **Recommendation: adopt it**, for these two IASI kernels only.
+- **Recommendation: adopt it**, as one case of the every-product rule in
+  2.13.
 
-### 2.11 N16, third review: the TROPESS ratio covariance
+### 2.11 N16, third review: the TROPESS ratio covariance (left out, approved)
 
 **What it is meant to be.**
 - MUSES retrieves ln HDO and ln H2O together, as TES does. Its observation
@@ -495,7 +493,9 @@ What the files hold, in three versions:
   Cholesky) would have a positive diagonal.
 
 **Options.**
-- **Leave it out (recommended).**
+- **Leave it out: approved 2026-10-19.** It is recorded where it will be
+  found again: `tropess.md` (its variable list and R11), this document (N16,
+  F7), and the TROPESS key when it is written.
   - Variable selection is ours to make; the guide forbids dropping
     observations, not variables. The TROPOMI subset already leaves out 50.
   - A matrix that is wrong at every level and in every version, in a way
@@ -513,7 +513,7 @@ What the files hold, in three versions:
 `observation_error_h2o` is unaffected. Its values are positive throughout
 (p10 0.024), so it stays in.
 
-### 2.12 N17, third review: the IASI cross-kernel units
+### 2.12 N17, third review: the IASI cross-kernel units (approved)
 
 **What it is.** The temperature cross-kernel says how the retrieved water
 vapour proxies respond to an error in the true temperature profile:
@@ -558,6 +558,73 @@ retrieval, where humidity and temperature are strongly coupled.
 - Attach the unit to the vectors. That is arbitrary, and contradicts their
   orthonormality.
 
+### 2.13 N18: one store per matrix, in every product
+
+**Why not do it everywhere: you are right, it should be.** The reason
+given for keeping the TES blocks apart was that each block is usable alone.
+That does not hold up:
+
+```
+ln H2O_ret = ln H2O_ap + A_HD (ln HDO_true - ln HDO_ap) + A_HH (ln H2O_true - ln H2O_ap)
+```
+
+- Even an H2O-only comparison with a model that carries HDO needs `A_HD` as
+  well as `A_HH`.
+- δD needs all four blocks.
+- The same is true of each covariance's blocks.
+- So the pieces of a matrix are used together in every product, not only in
+  IASI.
+
+**The rule, stated once for every product.** A matrix published in pieces is
+one store, named for the whole matrix. Each piece is an array in it, with its
+own canonical name. The pieces are either:
+- the blocks of a stacked state (TES), or
+- the components of a factorization (IASI's SVDs).
+
+The existing split rule still holds inside the store: every block, and every
+per-quantity component, is its own array. No axis mixes two quantities.
+
+| product | matrix stores | arrays in each |
+| --- | --- | --- |
+| TES | `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log` | the 4 kernel blocks (2.4) |
+| TES | `water_vapor_hdo_and_h2o_mole_fraction_dry_air_{observation,measurement,total}_error_covariance_log` (3 stores) | the 4 blocks of that covariance |
+| IASI | `water_vapor_proxy_averaging_kernel_svd` | 6 components (2.10) |
+| IASI | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd` | 5 components |
+| TROPESS FS | `water_vapor_hdo_h2o_ratio_averaging_kernel_log` | 1: published whole, so it is already one array |
+| TROPOMI, SCIAMACHY, GOSAT | none | their column kernels are vectors, one per retrieved column, and each is a whole quantity |
+
+- **`hdo_and_h2o`** names the joint state that the TES matrices span. It is
+  spelled out so it cannot be read as the `hdo_h2o_ratio` token. It gets one
+  row per store name: 4 for TES, and 2 for IASI (2.10).
+- **Store counts:** TES goes from 18 stores to 6 (2 priors, 1 kernel, 3
+  covariances), and IASI from 15 to 6 (4 priors, 2 kernels).
+- **Why stop at matrices.** Grouping a product's whole operator (kernel,
+  prior, dry-air column, pressure weight) into one store would also be
+  possible. But each of those is a complete quantity that is used alone:
+  - a prior, to see the prior's influence;
+  - the dry-air column, to convert units;
+  - the pressure weight, for any column average.
+
+  Keeping them separate also keeps what the one-store-per-variable rule
+  buys: each store is built, verified and finalized on its own, and added
+  later without rebuilding the others. For TROPOMI, one 29 TiB store would
+  lose that.
+- **The line, then:** pieces that mean nothing apart share a store.
+  Quantities that mean something alone do not.
+
+**Proposed style-guide wording**, replacing the guide's sentence "Split
+associated matrices (averaging kernels, covariances) into their blocks,
+keeping the cross blocks":
+
+> Split associated matrices (averaging kernels, covariances) into their
+> blocks, keeping the cross blocks. A matrix published in pieces (the blocks
+> of a stacked state, or the components of a factorization such as a
+> truncated SVD) is one store, named for the whole matrix, holding each piece
+> as its own array with its own canonical name.
+
+The edit is shown to you before commit, and the shared code gains
+multi-array variable stores, tested on every product's fixture.
+
 ## 3. The grammar, applied
 
 - **Quantity**: `water_vapor` (as in the 2026-10-14 rows), `dry_air`,
@@ -588,12 +655,15 @@ built, not now. They show that the pattern holds for the profile products:
 
 ## 4. Proposed rows for `nomenclature_data.md` (43 new, 2 renamed)
 
-If N16 and N10 are approved as revised, the count changes:
-- N16 drops `water_vapor_hdo_h2o_ratio_observation_error_covariance_log`;
-- N10 adds the two store names `water_vapor_proxy_averaging_kernel_svd` and
-  `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`.
+The count changes:
+- N16 (approved) drops
+  `water_vapor_hdo_h2o_ratio_observation_error_covariance_log`;
+- N18, if approved, adds 6 store names: `water_vapor_proxy_averaging_kernel_svd`,
+  `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`,
+  `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log`, and
+  `water_vapor_hdo_and_h2o_mole_fraction_dry_air_{observation,measurement,total}_error_covariance_log`.
 
-That makes 44 new rows.
+That makes 48 new rows.
 
 | canonical_name | canonical_units | long_name |
 | --- | --- | --- |
@@ -732,7 +802,7 @@ prior; RS (Summary) has neither.
 | --- | --- | --- | --- | --- | --- |
 | `observation_ops/xa` | FS | `water_vapor_hdo_h2o_ratio_apriori` | unitless | (obs, level) | none |
 | `observation_ops/averaging_kernel` | FS | `water_vapor_hdo_h2o_ratio_averaging_kernel_log` | unitless | (obs, level, level_2) | none; "logarithmic_averaging_kernel_hdo_to_h2o_ratio" |
-| `observation_ops/observation_error` | FS | `water_vapor_hdo_h2o_ratio_observation_error_covariance_log` | unitless | (obs, level, level_2) | none; not a valid covariance as published; left out if N16 is approved (F7) |
+| `observation_ops/observation_error` | FS | `water_vapor_hdo_h2o_ratio_observation_error_covariance_log` | unitless | (obs, level, level_2) | none; not a valid covariance as published; left out (N16, approved; F7) |
 | `observation_ops/observation_error_h2o` | FS | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | unitless | (obs, level) | none; 1-sigma inferred; never scaled |
 | `pressure` | FS, RS | geolocation `pressure` | Pa | (obs, level) | x 100 from `hPa` |
 
