@@ -101,9 +101,11 @@ source_fill_values:
   target_product/h2o_column_averaging_kernel: [9.96921e+36]
   target_product/hdo_column_averaging_kernel: [9.96921e+36]
 
-# As in config_zarr.yaml: lossless blosc for the 50- and 51-wide arrays
+# As in config_zarr.yaml: lossless blosc and shards for the 50- and 51-wide
+# arrays
 compression:
   blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  shard_obs: 4194304
   arrays:
     - water_vapor_column_h2o_averaging_kernel
     - water_vapor_column_hdo_averaging_kernel
@@ -118,7 +120,10 @@ compression:
 #   guide's 5-40 MiB. One chunk spans ~4.7 orbits.
 # - granule: the whole ~31.5k-entry index in one chunk.
 # - granules_per_commit: ~1.5 GB of reads per batch at 16 variables; a batch
-#   is also what a walltime kill can lose.
+#   is also what a walltime kill can lose. With the six 2-D stores (2026-10-19)
+#   a batch of 20 is ~20 GB of reads, ~60 GB in the main process with two in
+#   flight, so the bench asks for 96 GB; it also sets the superseded shard
+#   bytes (~2.5 / 20 = ~12% until finalize --expire).
 # - num_workers: read processes. HDF5 is not thread safe, so reads are spread
 #   over processes, never threads.
 chunks:

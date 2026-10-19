@@ -160,7 +160,7 @@ def build(settings):
     reader = load_reader(settings)
     num_workers, per_commit = configure_runtime(settings)
     chunks = resolve_chunks(settings)
-    compressors = resolve_compression(settings)
+    codecs = resolve_compression(settings)
     stores = run_stores(settings)
     log_key(product)
     # stamped on every commit, so finalize can say which code wrote what;
@@ -260,7 +260,7 @@ def build(settings):
                     # encoding and the store's global attributes
                     observations.attrs = global_attrs(settings, store, versions)
                     encoding = build_encoding(
-                        observations, index, chunks, fills, product, compressors
+                        observations, index, chunks, fills, product, codecs
                     )
                 message = COMMIT_MESSAGE.format(
                     first=subset[0].granule.id, last=subset[-1].granule.id,

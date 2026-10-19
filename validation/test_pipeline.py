@@ -23,8 +23,10 @@ Per product:
    them) an undeclared empty granule directory or unreadable file;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
-6. finalize: ``--attrs`` refuses without verification evidence; the full
-   ``--attrs``, ``--tag``, ``--gc`` sequence; then the verifier still passes.
+6. finalize: ``--attrs`` refuses without verification evidence, and
+   ``--expire`` an untagged sharded store; the full ``--attrs``, ``--tag``,
+   ``--expire``, ``--gc`` sequence, after which a sharded store keeps only
+   its tip and every store reports finalized; then the verifier still passes.
 
 Run from the repo root after staging each fixture:
 
@@ -52,7 +54,7 @@ import yaml # type: ignore
 import zarr
 
 from utils.path_utils import GEOLOCATION, load_config, run_stores, store_path
-from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE
+from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE, sharded_stores
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -249,8 +251,8 @@ def test_product(results, config, scratch):
     status, output = run('verify_wisosat_zarr.py', '--config', path, '--phases', 'structure')
     results.check(
         f'{product}: verifier fails on a codec the config does not set',
-        status != 0 and 'compressed as the config sets' in output,
-        last_line(output, 'compressed as the config sets'),
+        status != 0 and 'compressed and sharded as the config sets' in output,
+        last_line(output, 'compressed and sharded as the config sets'),
     )
 
     # 5. guards that must stop a build before it writes
@@ -262,6 +264,12 @@ def test_product(results, config, scratch):
             'quality flags',
         ),
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
+        'a shard that is not a multiple of chunks.obs': (
+            {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},
+                             'shard_obs': settings['chunks']['obs'] + 1,
+                             'arrays': [settings['variables'][0]]}},
+            'positive multiple of chunks.obs',
+        ),
         'compression of an unknown array': (
             {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},
                              'arrays': ['no_such_array']}},
@@ -332,23 +340,45 @@ def test_product(results, config, scratch):
     results.check(f'{product}: finalize --attrs refuses an unverified store',
                   status != 0 and 'refusing' in output)
     status, output = run('verify_wisosat_zarr.py', '--config', base)
-    for action in (['--attrs'], ['--tag', 'fixture'], ['--gc']):
+    sharded = sharded_stores(settings)
+    for action in (['--attrs'], ['--expire'], ['--tag', 'fixture'], ['--expire'], ['--gc']):
         status, output = run('finalize_wisosat_zarr.py', '--config', base, *action, '--apply')
+        if action == ['--expire'] and sharded and 'fixture' not in repository(settings, sharded[0]).list_tags():
+            # expiry before the tag would drop the build log with nothing named
+            results.check(f'{product}: finalize --expire refuses an untagged store',
+                          status != 0 and 'tag the tip first' in output, last_line(output, 'ERROR'))
+            continue
         results.check(f'{product}: finalize {action[0]}', status == 0, last_line(output, 'ERROR'))
+    if sharded:
+        kept = {store: [s.message for s in history(settings, store)] for store in sharded}
+        results.check(
+            f'{product}: --expire leaves each sharded store its tip and root only',
+            all(len(messages) == 2 and not any(m.startswith(COMMIT_PREFIX) for m in messages)
+                for messages in kept.values()),
+            f'{kept[sharded[0]]}',
+        )
+    status, output = run('finalize_wisosat_zarr.py', '--config', base, '--status')
+    results.check(
+        f'{product}: every store reports finalized',
+        status == 0 and output.count('remaining nothing, finalized') == len(stores),
+        last_line(output, 'remaining') if 'remaining --' not in output else last_line(output, 'remaining --'),
+    )
+    # the build log is read from a store never expired (geolocation is never
+    # sharded), so the check cannot pass on an empty list of commits
     attrs = dict(zarr.open_group(
-        repository(settings, stores[-1]).readonly_session(BRANCH).store, mode='r'
+        repository(settings, stores[0]).readonly_session(BRANCH).store, mode='r'
     ).attrs)
     results.check(
         f'{product}: finalized stores carry coverage and provenance',
         all(key in attrs for key in ('verification', 'history', 'date_created',
                                      'time_coverage_start', 'geospatial_lat_min')),
     )
-    built = [snapshot.message for snapshot in history(settings, stores[-1])
+    built = [snapshot.message for snapshot in history(settings, stores[0])
              if snapshot.message.startswith(COMMIT_PREFIX)]
     revisions = {COMMIT_RE.match(message)['revision'] for message in built}
     results.check(
         f'{product}: every build commit names its code revision, and the history too',
-        None not in revisions
+        revisions and None not in revisions
         and all(f'data_engineering_wiso-sat @ {revision}' in attrs['history']
                 for revision in revisions),
         f'{sorted(map(str, revisions))}; {attrs.get("history", "")[:160]}',

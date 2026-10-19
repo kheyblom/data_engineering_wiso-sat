@@ -6,9 +6,10 @@ finalization step did no harm. Ported from ``finalize_mswep_zarr.py``; what
 differs is that one config names several stores, so each action runs over all
 of them, or over ``--stores``.
 
-Four actions, exactly one per invocation. The three that write must run in
+Five actions, exactly one per invocation. The four that write must run in
 this order: a tag is immutable, so tagging before the attributes exist names a
-store that does not describe itself for good.
+store that does not describe itself for good; and expiry drops the build
+commits ``history`` is written from.
 
 ``--status``
     Where each store stands: verification, attributes pending, tags, reachable
@@ -19,6 +20,14 @@ store that does not describe itself for good.
     metadata commit per store. It cannot drop or change a variable attribute.
 ``--tag NAME``
     Name each store's branch tip.
+``--expire``
+    For a store holding a sharded array only: drop every snapshot older than
+    the tagged tip, so ``--gc`` can delete the shards each build commit
+    superseded (user decision 2026-10-19). Every commit rewrites the partly
+    filled last shard, and each old copy stays reachable from its snapshot:
+    ~2.5 / ``granules_per_commit`` of the store's bytes. Refuses unless
+    ``--attrs`` and ``--tag`` have run; the per-commit build log then lives
+    on in ``history``. Other stores keep their history.
 ``--gc``
     Delete objects no surviving snapshot references. Dry-run it first.
 
@@ -48,7 +57,8 @@ finalization. Builds now refuse a dirty tree (``check_clean_tree``), so this is
 for stores built before that. A fixture config (``allow_dirty_tree``) records
 its revisions as they are.
 
-``--gc --apply`` is irreversible: icechunk only collects unreachable objects,
+``--expire --apply`` and ``--gc --apply`` are irreversible, and expiry ends
+the undo window of ``tools/rewind_stores.py``. icechunk only collects unreachable objects,
 and this script checks reachable bytes and history length either side, but a
 store with no second copy has nothing to restore from.
 """
@@ -69,7 +79,8 @@ import zarr
 from utils.log_utils import setup_logging
 from utils.path_utils import load_config, log_path, run_stores, store_path
 from utils.zarr_utils import (
-    BRANCH, COMMIT_RE, code_revision, open_existing_repository, open_store,
+    BRANCH, COMMIT_PREFIX, COMMIT_RE, code_revision, open_existing_repository, open_store,
+    sharded_stores,
 )
 # imported rather than restated, so the bar for 'verified' cannot drift from
 # what the verifier runs by default
@@ -122,6 +133,11 @@ def parse_args():
         help='Write the global attributes. Refuses unless the verifier passed.',
     )
     action.add_argument('--tag', type=str, default=None, help='Create this tag at each tip.')
+    action.add_argument(
+        '--expire', action='store_true',
+        help='Drop the build snapshots of a sharded store, after --attrs and --tag. '
+        'Irreversible with --apply.',
+    )
     action.add_argument(
         '--gc', action='store_true',
         help='Delete unreachable objects. Irreversible with --apply.',
@@ -404,17 +420,18 @@ def build_history(repository, settings, evidence, current, ids, supplied, notes=
         ValueError: If an explanation names a revision no build commit carries,
             or whose commit this repository does not have.
     """
+    # once written, the history is kept: it names the revisions that built the
+    # store, and regenerating it would churn on every unrelated commit here.
+    # It is also all that is left of the build commits once --expire has run
+    existing = current.get('history', '')
+    if OUR_HISTORY_MARKER in existing and current.get('date_created'):
+        return existing, current['date_created']
+
     snapshots = list(repository.ancestry(branch=BRANCH))
     built = [s for s in snapshots if s.message not in NON_BUILD_MESSAGES]
     finished = built[0].written_at.astimezone(datetime.timezone.utc)
     started = built[-1].written_at.astimezone(datetime.timezone.utc)
     created = finished.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-    # once written, the history is kept: it names the revisions that built the
-    # store, and regenerating it would churn on every unrelated commit here
-    existing = current.get('history', '')
-    if OUR_HISTORY_MARKER in existing:
-        return existing, created
     notes = dict(notes or {})
     parts, used = [], set()
     for segment in build_segments(repository, ids, supplied):
@@ -576,7 +593,11 @@ def run_status(repository, settings, store, path, supplied=None, notes=None):
         LOG.warning(f'{store}: history cannot be written yet: {missing}')
     pending = [key for key in merged if current.get(key) != merged[key]]
     tags = repository.list_tags()
-    reachable = len(list(repository.ancestry(branch=BRANCH)))
+    snapshots = list(repository.ancestry(branch=BRANCH))
+    reachable = len(snapshots)
+    unexpired = store in sharded_stores(settings) and any(
+        snapshot.message.startswith(COMMIT_PREFIX) for snapshot in snapshots
+    )
     LOG.info(
         f'{store}: verified {evidence["when"][:10] if evidence else "NO"}; '
         f'{len(pending)} attributes pending; tags {sorted(tags) or "none"}; '
@@ -592,7 +613,9 @@ def run_status(repository, settings, store, path, supplied=None, notes=None):
             remaining.append('--attrs')
         if not tags:
             remaining.append('--tag NAME')
-        if summary.bytes_deleted or summary.snapshots_deleted:
+        if unexpired:
+            remaining.append('--expire')
+        if unexpired or summary.bytes_deleted or summary.snapshots_deleted:
             remaining.append('--gc')
     LOG.info(f'{store}: remaining {" then ".join(remaining) or "nothing, finalized"}')
     return 0
@@ -666,6 +689,55 @@ def run_tag(repository, store, tag, apply_changes):
     return 0
 
 
+def run_expire(repository, settings, store, apply_changes):
+    """Drop the build snapshots of a sharded store, keeping its tagged tip.
+
+    Args:
+        repository (icechunk.Repository): The store's repository.
+        settings (dict): The loaded configuration.
+        store (str): The store's variable slot.
+        apply_changes (bool): Whether to expire.
+
+    Returns:
+        int: 0 on success or nothing to do, 1 if the store is not ready or
+            its tip or contents changed.
+    """
+    if store not in sharded_stores(settings):
+        LOG.info(f'{store}: holds no sharded array; its build history is kept')
+        return 0
+    snapshots = list(repository.ancestry(branch=BRANCH))
+    tip = snapshots[0]
+    built = [snapshot for snapshot in snapshots if snapshot.message.startswith(COMMIT_PREFIX)]
+    if not built:
+        LOG.info(f'{store}: build snapshots already expired')
+        return 0
+    before = open_store(repository)
+    if OUR_HISTORY_MARKER not in before.attrs.get('history', ''):
+        LOG.error(f'{store}: refusing to expire: run --attrs first, so history keeps the build log')
+        return 1
+    if not any(repository.lookup_tag(tag) == tip.id for tag in repository.list_tags()):
+        LOG.error(f'{store}: refusing to expire: tag the tip first (--tag NAME)')
+        return 1
+    if not apply_changes:
+        LOG.info(
+            f'{store}: dry run; --apply would expire {len(snapshots) - 2} snapshots older '
+            f'than the tip {tip.id} ({tip.message}), {len(built)} of them build commits'
+        )
+        return 0
+    expired = repository.expire_snapshots(older_than=tip.written_at)
+    after = open_store(repository)
+    kept = [snapshot.message for snapshot in repository.ancestry(branch=BRANCH)]
+    LOG.info(f'{store}: expired {len(expired)} snapshots; history now {kept}')
+    if (
+        next(iter(repository.ancestry(branch=BRANCH))).id != tip.id
+        or dict(after.sizes) != dict(before.sizes)
+        or dict(after.attrs) != dict(before.attrs)
+    ):
+        LOG.error(f'{store}: expiry changed the tip or its contents; do not trust it')
+        return 1
+    return 0
+
+
 def run_gc(repository, store, apply_changes):
     """Delete objects no surviving snapshot references, checked either side.
 
@@ -731,6 +803,8 @@ def main(settings, args):
             result = run_attrs(repository, settings, store, args.apply, supplied, notes)
         elif args.tag:
             result = run_tag(repository, store, args.tag, args.apply)
+        elif args.expire:
+            result = run_expire(repository, settings, store, args.apply)
         else:
             result = run_gc(repository, store, args.apply)
         status = status or result

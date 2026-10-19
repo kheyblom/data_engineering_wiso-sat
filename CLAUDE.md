@@ -39,7 +39,7 @@ stores.
 | --- | --- | --- | --- |
 | TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production finalized 2026-10-18, tag `v8.1-verified-20261018` (findings 9-10) |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | later |
-| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (11 stores); its geolocation store is to be rebuilt without `pressure`, which gets its own store (2026-10-19) |
+| GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (12 stores; geolocation rebuilt without `pressure`, which has its own store) |
 | AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
 | CrIS (SNPP RS; JPSS1 FS) | `CRIS/TRPSYL2HDOCRSRS_*`, `CRIS/TRPSDL2HDOCRS1FS_*` | daily file | later |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
@@ -82,12 +82,16 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
 #   for stores whose build commits predate stamping or were built dirty:
 #   [--build-revisions REV@INDEX,...] [--dirty-notes 'REV-dirty=what was uncommitted']
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --tag NAME [--apply]
+uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --expire [--apply]
+#   sharded stores only: drops the build snapshots, so --gc reclaims superseded shards
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --gc [--apply]
 ```
 
 - **Tag names:** `<version>-verified-YYYYMMDD`, after GLEAM. TROPOMI is
   `v8.1-verified-<date>`.
-- **`--gc --apply` is irreversible.** It also ends the undo window for
+- **`--expire --apply` and `--gc --apply` are irreversible.** Expiry runs
+  after `--attrs` and `--tag` (it refuses otherwise): it drops the build
+  commits, whose log then lives on in `history`. Both end the undo window for
   `tools/rewind_stores.py`. Read its dry run first.
 
 - **One config = one product; one run builds many stores.** The geolocation
@@ -97,11 +101,14 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   granule index.
 - **Granule index:** six coordinates on a `granule` dimension in every store,
   appended in the same commit as the data.
-- **Compression is per array, in config** (user decision 2026-10-19). A
-  config's `compression` block names a blosc setting and the arrays it applies
-  to. Every other array keeps zarr's default zstd, and the verifier checks each
-  array's codec against the config. TROPOMI uses it for its 50- and 51-wide
-  arrays, ~34% smaller, lossless.
+- **Compression and shards are per array, in config** (user decisions
+  2026-10-19). A config's `compression` block names a blosc setting, an
+  optional `shard_obs` (a multiple of `chunks.obs`) and the arrays they apply
+  to. Every other array keeps zarr's default zstd, unsharded, and the verifier
+  checks each array against the config. TROPOMI uses it for its 50- and
+  51-wide arrays: ~34% smaller, lossless, and ~7,800 shard files per array
+  rather than ~249,000 chunk files. Each commit rewrites the last shard;
+  `finalize --expire` reclaims the superseded copies.
 - **Multi-file granules** (GOSAT: each day's DED and H2O files merged onto one
   obs axis):
   - the reader marks where a variable is absent, and shared code fills it

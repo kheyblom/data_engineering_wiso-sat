@@ -291,62 +291,109 @@ DEFAULT_COMPRESSOR = 'zstd'
 
 
 def resolve_compression(settings):
-    """The compressors for the arrays the config names, checked.
+    """The codecs for the arrays the config names, checked.
 
     A scale setting, so it lives in config (condition 3). Byte-shuffled blosc
     stores TROPOMI's 50-layer kernels, priors and pressure ~34% smaller than
     zarr's default zstd, losslessly (measured on two orbits, 2026-10-19).
-    Every array not named keeps the default, so stores built before this are
-    unchanged.
+
+    ``shard_obs`` (optional) packs the named arrays' chunks into shards of
+    that many observations, one file each (user decision 2026-10-19). A
+    50-wide float32 array's chunk is 131,072 obs, so unsharded it would hold
+    ~249,000 chunk files in one directory; a shard of 4,194,304 obs, the
+    configured ``chunks.obs``, holds 32 of them and gives the array as many
+    files as a 1-D one. The chunk stays the unit a reader fetches, within the
+    style guide's 5-40 MiB. Each commit rewrites the partly filled last shard,
+    and ``finalize --expire`` reclaims the superseded copies.
+
+    Every array not named keeps the default, unsharded, so stores built
+    before this are unchanged.
 
     Args:
         settings (dict): The loaded configuration.
 
     Returns:
-        dict: Array name -> ``[BloscCodec]``; empty if the config sets none.
+        dict: Array name -> ``{'compressors': [BloscCodec], 'shard_obs': int |
+            None}``; empty if the config sets none.
 
     Raises:
-        ValueError: If the block has keys other than ``blosc`` and ``arrays``,
-            lacks either, or names an array no store of the config holds.
+        ValueError: If the block has keys other than ``blosc``, ``shard_obs``
+            and ``arrays``, lacks ``blosc`` or ``arrays``, names an array no
+            store of the config holds, or sets a ``shard_obs`` that is not a
+            positive multiple of ``chunks.obs``.
     """
     config = settings.get('compression') or {}
     if not config:
         return {}
-    extra = sorted(set(config) - {'blosc', 'arrays'})
+    extra = sorted(set(config) - {'blosc', 'shard_obs', 'arrays'})
     if extra or not config.get('blosc') or not config.get('arrays'):
         raise ValueError(
-            f'compression must set blosc and arrays and nothing else; it sets {sorted(config)}'
+            f'compression must set blosc and arrays, and may set shard_obs; it sets '
+            f'{sorted(config)}'
         )
     product = settings['product']
     known = {name for store in run_stores(settings) for name in store_sources(product, store)}
     unknown = sorted(set(config['arrays']) - known)
     if unknown:
         raise ValueError(f'compression names arrays no store of this config holds: {unknown}')
+    shard = config.get('shard_obs')
+    if shard is not None:
+        # a multiple of chunks.obs, so shard boundaries are chunk boundaries of
+        # every unsharded array too; every halved obs chunk divides it
+        length = resolve_chunks(settings)['obs']
+        if not isinstance(shard, int) or shard < 1 or shard % length:
+            raise ValueError(
+                f'compression shard_obs must be a positive multiple of chunks.obs '
+                f'({length}); it is {shard!r}'
+            )
     # one codec per array: a codec instance is immutable, but each array's
     # typesize is filled in from its own dtype when it is created
-    return {name: [BloscCodec(**config['blosc'])] for name in config['arrays']}
+    return {
+        name: {'compressors': [BloscCodec(**config['blosc'])], 'shard_obs': shard}
+        for name in config['arrays']
+    }
 
 
-def compressor_matches(array, compressors):
-    """Whether a stored array carries the compressor the config gives it.
+def sharded_stores(settings):
+    """The stores holding an array the config shards.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        list: Store variable slots, in run order.
+    """
+    sharded = {name for name, spec in resolve_compression(settings).items() if spec['shard_obs']}
+    product = settings['product']
+    return [
+        store for store in run_stores(settings)
+        if sharded & set(store_sources(product, store))
+    ]
+
+
+def codecs_match(array, codecs):
+    """Whether a stored array carries the compressor and shards the config gives it.
 
     Args:
         array (zarr.Array): The stored array.
-        compressors (dict): From ``resolve_compression``.
+        codecs (dict): From ``resolve_compression``.
 
     Returns:
         tuple: ``(ok, detail)``, the detail naming what is stored.
     """
     stored = [codec.to_dict() for codec in array.compressors]
     names = [entry['name'] for entry in stored]
-    expected = compressors.get(array.basename)
+    expected = codecs.get(array.basename)
     if expected is None:
-        return names == [DEFAULT_COMPRESSOR], f'{names}'
-    want = expected[0].to_dict()['configuration']
-    ok = names == ['blosc'] and all(
+        return names == [DEFAULT_COMPRESSOR] and array.shards is None, f'{names}, shards {array.shards}'
+    want = expected['compressors'][0].to_dict()['configuration']
+    shards = None
+    if expected['shard_obs']:
+        shards = (expected['shard_obs'],) + tuple(array.shape[1:])
+    ok = names == ['blosc'] and array.shards == shards and all(
         stored[0]['configuration'].get(key) == want[key] for key in ('cname', 'clevel', 'shuffle')
     )
-    return ok, f'{stored}'
+    return ok, f'{stored}, shards {array.shards}'
 
 
 # the style guide's ceiling on one uncompressed chunk
@@ -782,7 +829,7 @@ def global_attrs(settings, store, versions):
     return derived | format_attrs(settings, store)
 
 
-def build_encoding(observations, index, chunks, fills, product, compressors):
+def build_encoding(observations, index, chunks, fills, product, codecs):
     """Zarr encoding for every variable of a first write.
 
     Args:
@@ -791,8 +838,8 @@ def build_encoding(observations, index, chunks, fills, product, compressors):
         chunks (dict): From ``resolve_chunks``.
         fills (dict): Integer variable -> the ``_FillValue`` it declares.
         product (str): The product, whose key sets the time units.
-        compressors (dict): From ``resolve_compression``; an array not in it
-            keeps zarr's default.
+        codecs (dict): From ``resolve_compression``; an array not in it keeps
+            zarr's default, unsharded.
 
     Returns:
         dict: Encoding for ``to_icechunk``.
@@ -810,8 +857,10 @@ def build_encoding(observations, index, chunks, fills, product, compressors):
                 leading = obs_chunk(leading, itemsize, tuple(variable.shape[1:]))
             shape = (leading,) + tuple(variable.shape[1:])
             encoding[name] = {'chunks': shape}
-            if name in compressors:
-                encoding[name]['compressors'] = compressors[name]
+            if name in codecs:
+                encoding[name]['compressors'] = codecs[name]['compressors']
+                if codecs[name]['shard_obs']:
+                    encoding[name]['shards'] = (codecs[name]['shard_obs'],) + tuple(variable.shape[1:])
             if np.issubdtype(variable.dtype, np.datetime64):
                 encoding[name].update(
                     {'units': units, 'calendar': TIME_CALENDAR, 'dtype': 'int64',

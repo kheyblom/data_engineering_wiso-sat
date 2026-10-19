@@ -110,9 +110,12 @@ source_fill_values:
   meteo/dry_air_subcolumns: [9.96921e+36]
   meteo/pressure_levels: [9.96921e+36]
 
-# as in config_zarr.yaml, so the fixture exercises a configured codec
+# as in config_zarr.yaml, so the fixture exercises a configured codec and
+# shards: 4 chunks of 5,000 obs to a shard, so appends land mid-shard and
+# rewrite it, and finalize --expire has superseded shards to reclaim
 compression:
   blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  shard_obs: 20000
   arrays:
     - water_vapor_column_h2o_averaging_kernel
     - water_vapor_column_hdo_averaging_kernel

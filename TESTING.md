@@ -9,7 +9,7 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 50 cases, TROPOMI and GOSAT, with both products' 2-D model-comparison stores and the per-array codec |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 59 cases, TROPOMI and GOSAT, with both products' 2-D model-comparison stores, the per-array codec and shards, and `finalize --expire` |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
 | 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized |
 
@@ -610,3 +610,24 @@ bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/
   - `--attrs --apply` committed the attributes to all 11 stores;
   - `--tag v3.0.1-verified-20261019 --apply` tagged those commits;
   - `--status`: every store reports "remaining nothing, finalized".
+
+### GOSAT rework: `pressure` out of the geolocation store (2026-10-19)
+
+The user moved `pressure` into its own variable store in every product
+(style_guides `65ac688`). The finalized geolocation store was moved to
+`/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat_backup_20261019/`,
+then rebuilt without it, with the new `pressure` store, from granule 0, at a
+clean `5261f04`. The other 10 stores were no-ops.
+
+| job | what | wall | peak memory | result |
+| --- | --- | --- | --- | --- |
+| 7874907 | build | 1 min 44 s | 0.33 GiB main, 0.13 GiB per worker | geolocation and `pressure`, 4,498 granules, 13 commits each; nothing masked |
+| 7874909 | verify `--stores pressure` (with geolocation) | 2 min | 0.29 GiB | **102 checks, 0 failures**; bounds as before |
+| 7874913 | verify `--phases structure,index`, all 12 stores | 8 s | 0.11 GiB | **373 checks, 0 failures**: one obs axis and index |
+
+- **Cost:** ~0.25 core-hours. A first `structure,index` job (7874911) was
+  chained to a guessed job id; it was deleted before it ran and resubmitted.
+- **Finalized 2026-10-19** with the user's sign-off: `--attrs --apply`, then
+  `--tag v3.0.1-verified-20261019 --apply`, on the two new stores; nothing
+  unreachable. `--status`: all 12 stores "remaining nothing, finalized".
+- The backup is kept until the user approves deleting it.

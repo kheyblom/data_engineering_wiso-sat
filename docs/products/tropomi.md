@@ -271,7 +271,11 @@ them. Not built at bench or production scale yet.
 - **Size: ~19 TiB with byte-shuffled blosc**, against ~29 TiB with zarr's
   default zstd (Variable inventory, group 1). Expect ~20-21 TiB on disk, since
   the method runs 5-10% low on floats.
-  - The chunk rule gives 50 and 51 levels 131,072 obs per chunk.
+  - The chunk rule gives 50 and 51 levels 131,072 obs per chunk. **Shards**
+    of 4,194,304 obs (= `chunks.obs`) hold 32 of them per file: ~7,800 files
+    per store rather than ~249,000 (user decision 2026-10-19). Each commit
+    rewrites the last shard, and `finalize --expire` then `--gc` reclaim the
+    superseded copies (~2.5 / `granules_per_commit` of the bytes until then).
   - **Compression measured 2026-10-19**, on orbits 14069 (2020-07-01) and
     32414 (2024-01-15): values prepared as the build prepares them, written
     at the production chunk to an in-memory zarr store under lossless

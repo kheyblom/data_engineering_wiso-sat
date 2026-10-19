@@ -90,7 +90,7 @@ from utils.zarr_utils import (
     TIME_FILL,
     VERTICAL_DIMS,
     absent_fill,
-    compressor_matches,
+    codecs_match,
     declared_fill,
     obs_chunk,
     open_existing_repository,
@@ -374,7 +374,7 @@ def open_groups(settings, stores):
     return opened
 
 
-def check_structure(report, settings, store, group, chunks, compressors):
+def check_structure(report, settings, store, group, chunks, codecs):
     """Check one store's layout, encoding and attributes from metadata.
 
     Args:
@@ -383,7 +383,7 @@ def check_structure(report, settings, store, group, chunks, compressors):
         store (str): The store's variable slot.
         group (zarr.Group): Its root group.
         chunks (dict): The configured chunks.
-        compressors (dict): The configured compressors.
+        codecs (dict): The configured codecs, from ``resolve_compression``.
     """
     product = settings['product']
     names = set(group.array_keys())
@@ -408,8 +408,8 @@ def check_structure(report, settings, store, group, chunks, compressors):
             and array.chunks == (length,) + tuple(array.shape[1:]),
             f'{dims} {array.chunks}',
         )
-        ok, detail = compressor_matches(array, compressors)
-        report.check(f'{store}/{name}: compressed as the config sets', ok, detail)
+        ok, detail = codecs_match(array, codecs)
+        report.check(f'{store}/{name}: compressed and sharded as the config sets', ok, detail)
 
     for name in sorted(expected_vars & names):
         array, attrs = group[name], dict(group[name].attrs)
@@ -942,14 +942,14 @@ def main(settings, args):
     LOG.info(f'stores: {stores}')
     report = Report()
     chunks = resolve_chunks(settings)
-    compressors = resolve_compression(settings)
+    codecs = resolve_compression(settings)
     opened = open_groups(settings, stores)
     groups = {store: group for store, (_, group) in opened.items()}
 
     if 'structure' in phases:
         LOG.info('--- structure')
         for store, group in groups.items():
-            check_structure(report, settings, store, group, chunks, compressors)
+            check_structure(report, settings, store, group, chunks, codecs)
 
     granules, index = None, None
     if {'index', 'values'} & set(phases):

@@ -563,8 +563,15 @@ source_fill_values:
 # ~19 TiB against ~29 TiB with zarr's default zstd, which every other array
 # keeps (two orbits measured 2026-10-19; user decision 2026-10-19). Level 9
 # saves ~3% more but writes at 15-40 MiB/s.
+#
+# shard_obs packs their 131,072-obs chunks 32 to a file: ~7,800 files per
+# array, as a 1-D array has, rather than ~249,000 in one directory (user
+# decision 2026-10-19). It equals chunks.obs, so shard edges are the 1-D
+# stores' chunk edges. finalize --expire reclaims the shards each commit
+# supersedes (~2.5 / granules_per_commit of the bytes).
 compression:
   blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  shard_obs: 4194304
   arrays:
     - water_vapor_column_h2o_averaging_kernel
     - water_vapor_column_hdo_averaging_kernel

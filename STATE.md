@@ -2,10 +2,10 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-19, updated after task 7 step 3)
+## Where we are (2026-10-19, updated before the TROPOMI bench)
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place. The fixture test passes 50 cases
+  testing tiers (`TESTING.md`) are in place. The fixture test passes 59 cases
   over TROPOMI and GOSAT.
 - **TROPOMI production is finished** (task 6, first product).
   - 19 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`,
@@ -21,18 +21,19 @@ Read this first in a new session. Update it whenever work lands.
   2026-10-19). Its rows and rules are pushed: style_guides `a585066`,
   `fee64ec`.
 - **GOSAT production is finished** (2026-10-19; jobs 7874257 and 7874258,
-  ~0.2 core-hours).
-  - 11 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`:
-    the geolocation store, with `pressure`, and 10 variable stores, including
-    the kernel, the a priori and the pressure weight.
-  - **To be reworked (user decision 2026-10-19):** `pressure` moves out of
-    the geolocation store into its own store, in every product. GOSAT's
-    geolocation store is rebuilt without it, and a `pressure` store is
-    built (step 4 below).
-  - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
-  - **Finalized 2026-10-19** with the user's sign-off, tag
-    `v3.0.1-verified-20261019`. Every store reports "remaining nothing,
-    finalized". No `--gc` was needed. The run log is in TESTING.md, Tier 3.
+  ~0.2 core-hours), and **reworked** the same day (jobs 7874907, 7874909,
+  7874913, ~0.25 core-hours) so `pressure` is its own store.
+  - 12 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`:
+    the geolocation store (time, lat, lon), `pressure`, and 10 variable
+    stores, including the kernel, the a priori and the pressure weight.
+  - 8,856,028 observations. The rebuilt pair: 102 checks, 0 failures; the
+    shared index over all 12: 373 checks, 0 failures.
+  - **All 12 finalized** with the user's sign-off, tag
+    `v3.0.1-verified-20261019`; every store reports "remaining nothing,
+    finalized". Run logs in TESTING.md, Tier 3.
+  - **The old geolocation store is backed up** in
+    `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat_backup_20261019/`.
+    Delete it only with the user's approval.
   - Its data-lake home is undecided, as for TROPOMI.
 
 ## Next task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3)
@@ -81,62 +82,38 @@ Read this first in a new session. Update it whenever work lands.
    on a codec the config does not set, and the build refuses compression of
    an unknown array, for each product).
 
-**Next steps, in order:**
-4. **Done in code (2026-10-19): `pressure` is a variable store in every
-   product.** The style guide's Level 2 rule changes, and `nomenclature_data.md`
-   gains a `pressure` row (style_guides, **awaiting the user's review**, not
-   yet committed). Both keys moved `pressure` from the coordinate key to the
-   variable key; every config lists it. The test passes 50 cases.
-   - **TROPOMI:** no geolocation rebuild. The bench and production build
-     the 6 new stores; the 19 finalized stores are no-ops.
-   - **GOSAT rework, before or alongside the TROPOMI bench:** its finalized
-     geolocation store holds `pressure`, so the structure phase now fails it
-     ("holds exactly its variables"). Move it aside as a backup, rebuild it
-     and build the `pressure` store from granule 0 (the 10 other stores are
-     no-ops), verify both, run `--phases structure,index` over all 12,
-     finalize the two with a new tag `v3.0.1-verified-<date>`, and delete the
-     backup only with approval. Show the job first (the whole GOSAT build
-     was ~0.2 core-hours).
-5. **Bench** (`config_zarr_bench.yaml`, 2020-07, 390 orbits), then production.
-   Show every job and its cost first.
-   - **Memory is the main risk.** At 60 granules per commit, the new arrays
-     are ~1 GB per orbit (~850k obs x 301 values x 4 B), so ~60 GB a batch
-     with two in flight. Develop has given 32 GB. The bench must set
-     `granules_per_commit` (per config; condition 3) or the queue (main has
-     the whole node and 12 h). The bench config is still at 20, which is
-     ~20 GB a batch, ~40 GB with two in flight: set it before submitting.
-   - **Codec cost:** blosc writes at ~300-1000 MiB/s on one thread, against
-     ~1000-1400 for the default. The bench measures what it adds to the
-     build.
-   - **Time:** the corner rebuild was ~3.7 h to build and ~3.3 h to verify
-     on develop. ~19 TiB of new data will take several times longer. Builds
-     resume, so chain them `afterany`. The verifier does not resume, and
-     cannot split one store. A `pressure` or kernel store verify (~3.3 TiB
-     each) may not fit develop's 6 h, so the bench must measure it.
-   - **Finalize:** the 6 new stores get the tag `v8.1-verified-<date>`.
-   - **File count (analysed 2026-10-19, awaiting the user's decision):**
-     - icechunk's local storage keeps every chunk object in one flat
-       `chunks/` directory. A store holds its data chunks plus, per commit,
-       one rewritten tail chunk per obs array and one rewritten chunk per
-       index array (7), and one manifest per array. Checked on TROPOMI's
-       geolocation store: 54,507 data chunks + 645 commits x 12 = 62,247
-       predicted, 62,204 on disk.
-     - Unsharded, each new store would hold ~249,000 data chunks, ~265,000
-       files at 20 granules per commit: ~1.6M for the six. Scratch allows
-       10.5M files (1.38M used), so it is not a quota problem.
-     - **Sharding tested** (scratch test through xarray + icechunk, uneven
-       appends): values exact, slices read correctly. A shard of 4,194,304
-       obs (= `chunks.obs`) around the 131,072-obs inner chunks gives 7,787
-       data files per store, as `lat` has.
-     - **Its cost:** each commit rewrites the partly filled last shard, and
-       the old copy stays reachable from earlier snapshots. Superseded bytes
-       ~= 2.5 / granules_per_commit of the data: ~12% (~2.3 TiB) at 20, ~4%
-       at 60. The scratch test predicted 188%, measured 176%.
-     - **Reclaiming it:** `expire_snapshots` then `garbage_collect` removed
-       every superseded shard in the test, leaving exactly the live bytes,
-       but collapses the commit history to the tip. finalize builds
-       `history` from that history, so expiry would be a new finalize step
-       after `--attrs` and `--tag`, with `--status` taught to accept it.
+4. **Done (2026-10-19): `pressure` is a variable store in every product**
+   (style_guides `65ac688`; repo `afbbac2`). TROPOMI's geolocation store is
+   not rebuilt; GOSAT's was (above).
+5. **Done (2026-10-19): shards and snapshot expiry** (user chose option C of
+   the file-count analysis; its full text is in this file at `5261f04`):
+   - `compression.shard_obs` packs the six arrays' 131,072-obs chunks into
+     shards of 4,194,304 obs (= `chunks.obs`): ~7,800 files per store
+     rather than ~249,000. The verifier checks the shard shape.
+   - Each commit rewrites the partly filled last shard (~2.5 /
+     `granules_per_commit` of the bytes stay superseded until expiry; ~12%
+     at 20). `finalize --expire`, after `--attrs` and `--tag`, drops the
+     build snapshots of a sharded store; `--gc` then deletes them. It
+     refuses an untagged store, and `--status` lists it as remaining.
+   - The test passes 59 cases.
+6. **Bench** (`config_zarr_bench.yaml`, 2020-07, 390 orbits; the 19 bench
+   stores from 2026-10-16 are complete, so only the 6 new ones are built),
+   approved by the user 2026-10-19:
+   - build: develop, 8 cores, 96 GB, 3 h, `granules_per_commit: 20`
+     (memory estimated ~60 GB: ~1 GB of 2-D sources per orbit, two batches
+     in flight, plus the float64 conversion of one store's batch);
+   - verify `--stores` the six, chained `afterany`: develop, 8 cores, 96 GB,
+     4 h;
+   - at most 56 core-hours, ~15-25 expected. It measures peak memory, write
+     rate, verify time per orbit, superseded bytes, and the files per store.
+7. **Production** after the bench, shown first with its cost.
+   - **Verify time is the main risk:** the verifier does not resume and
+     cannot split a store, and one 2-D store is ~3.3 TiB. If the bench
+     shows a store will not verify within develop's 6 h, the verifier needs
+     a granule-range split, or the main queue (12 h, whole node).
+   - Builds resume, so chain them `afterany`.
+   - **Finalize:** the 6 new stores get `v8.1-verified-<date>`, then
+     `--expire` and `--gc`.
 
 **Later:** multi-array variable stores for TES and IASI (N18), and the
 per-product open issues under Other open items.
@@ -279,6 +256,9 @@ per-product open issues under Other open items.
 - **Compression (2026-10-19):** blosc zstd 5 + byte shuffle for TROPOMI's six
   model-comparison arrays, set per array in config. Everything else keeps
   zarr's default zstd; the finalized stores are not rebuilt to match.
+- **Shards and expiry (2026-10-19):** the same six arrays are sharded at
+  4,194,304 obs, and their stores' build snapshots are expired at
+  finalization so `--gc` reclaims superseded shards.
 - **Pressure (2026-10-19, revises N3):** a profile product's pressure grid
   is a variable store named `pressure`, not part of the geolocation store,
   in every product. GOSAT is reworked to match.
@@ -289,8 +269,5 @@ per-product open issues under Other open items.
 
 ## Open questions
 
-- **Chunk file count of the 2-D stores:** ~250,000 files per store, or
-  sharding, with or without snapshot expiry (step 5 above). The bench waits
-  for this, so it tests the final layout.
-- **TROPOMI scale for the 2-D stores:** `granules_per_commit` and the queue,
-  from the bench (step 5).
+- **TROPOMI scale for the 2-D stores:** `granules_per_commit`, memory and
+  the verify split, from the bench (steps 6-7).
