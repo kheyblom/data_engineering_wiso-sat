@@ -503,8 +503,15 @@ def resolve_attrs(repository, settings, store, evidence, supplied=None, strict=T
             f'in a run over {covered} of the {total} stores of this product, '
             f'this one included'
         )
+        # like the history, a verification record is kept once it describes
+        # this verifier run: it names the product's store count at the time,
+        # which grows when a store is added and must not rewrite the record
+        existing = current.get('verification', '')
+        same_run = existing.startswith(f'Verified {evidence["when"][:10]} ') and (
+            f'{evidence["checks"]} checks, {evidence["failures"]} failures' in existing
+        )
         merged |= coverage_attrs(dataset, evidence) | provenance | {
-            'verification': (
+            'verification': existing if same_run else (
                 f'Verified {evidence["when"][:10]} against the source files by '
                 f'verify_wisosat_zarr.py: {evidence["checks"]} checks, '
                 f'{evidence["failures"]} failures across '
