@@ -41,7 +41,8 @@ Progress: TESTING.md written 2026-10-14. Tiers 0-1 pass (fixtures for TROPOMI an
 One product at a time, starting with TROPOMI.
 
 Progress: TROPOMI production built, verified and finalized on 2026-10-18.
-- 17 stores, 32,657,526,234 observations, 1.3 TiB.
+- 17 stores, 32,657,526,234 observations, 1.3 TiB. Two index stores and the
+  corners joined on 2026-10-18: 19 stores, ~1.8 TiB.
 - Tag `v8.1-verified-20261018`.
 - See STATE.md and TESTING.md (Tier 3, findings 9-10).
 - Their data-lake location is still to be decided.
@@ -65,9 +66,11 @@ needed eventually; all were deferred from the first production subset.
   - Measure the compression first, and settle the 2-D chunking (the obs
     chunk must shrink for 50 layers).
 - **Other possible stores** are listed with size estimates in
-  `docs/products/tropomi.md` (Variable inventory). The user is deciding on
-  scanline/ground_pixel and the pixel corners; build any of them only when
+  `docs/products/tropomi.md` (Variable inventory). Build any of them only when
   asked.
+- **Done 2026-10-18:** pixel corners in the geolocation store, and
+  `scanline_index` and `ground_pixel_index` stores (19 TROPOMI stores in
+  all).
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).

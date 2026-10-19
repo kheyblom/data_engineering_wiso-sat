@@ -381,7 +381,7 @@ to the record's 32,657,526,234 obs.
 | --- | --- | --- | --- | --- |
 | `diagnostics/chi_squared_band` | obs float32 | 122 | 82 |  |
 
-**4. File bookkeeping.** Why: see "Swath position" above.
+**4. File bookkeeping.** `scanline` and `ground_pixel` **are stored** (2026-10-18) as `scanline_index` and `ground_pixel_index`. The other two are left out. See "Swath position" above.
 
 | source | shape | raw GiB | est. store GiB | notes |
 | --- | --- | --- | --- | --- |
@@ -390,7 +390,7 @@ to the record's 32,657,526,234 obs.
 | `instrument/pixel_id` | obs int32 | 122 | 82 | row + 1 |
 | `instrument/l1b_file` | 1 string per file | - | - | one string per file, not per obs |
 
-**5. Pixel corners (not chosen; see "Pixel corners" above).** Why: not derivable exactly from the centres.
+**5. Pixel corners: stored** (2026-10-18) in the geolocation store as `lat_corners` and `lon_corners`, on `corner`, because they cannot be derived exactly from the centres. See "Pixel corners" above.
 
 | source | shape | raw GiB | est. store GiB | notes |
 | --- | --- | --- | --- | --- |

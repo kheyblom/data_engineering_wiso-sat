@@ -179,7 +179,22 @@ Read this first in a new session. Update it whenever work lands.
          scanline_index,ground_pixel_index`), each `afterany`.
        - The user agreed that only the new stores need value verification;
          the 16 old ones get the structure,index check.
-     - **Production plan:**
+     - **Production result (2026-10-18):**
+       - B1: 3 h 43 min, exit 0, peak 10.49 GiB. B2 was a no-op.
+       - V: 3 h 47 min, 129 checks, 0 failures.
+       - The structure,index check over all 19 stores: 429 checks, 0
+         failures. Every store's index is identical to the new geolocation
+         store's.
+       - The new stores were stamped `e743105-dirty`, because untracked
+         marimo notebooks sat in the tree (TESTING.md finding 11). They were
+         finalized with `--dirty-notes` (exact text in the finalize log),
+         and the tree is now enforced clean for builds.
+       - A verification-text fix (`7925c4b`) keeps the 16 older stores'
+         records unchanged.
+       - **All 19 stores are finalized, tag `v8.1-verified-20261018`.**
+       - **Open:** delete the backup at
+         `.../zarr/tropomi_backup_20261018/`. It needs the user's approval.
+     - **Production plan (done):**
        1. Move the current geolocation store aside as a renamed backup; do
           not delete it.
        2. Build geolocation, scanline_index and ground_pixel_index from
