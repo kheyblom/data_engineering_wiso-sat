@@ -53,6 +53,7 @@ from utils.zarr_utils import (
     log_key,
     open_repository,
     resolve_chunks,
+    resolve_compression,
     row_rule,
     store_sources,
     time_source,
@@ -159,6 +160,7 @@ def build(settings):
     reader = load_reader(settings)
     num_workers, per_commit = configure_runtime(settings)
     chunks = resolve_chunks(settings)
+    compressors = resolve_compression(settings)
     stores = run_stores(settings)
     log_key(product)
     # stamped on every commit, so finalize can say which code wrote what;
@@ -257,7 +259,9 @@ def build(settings):
                     # the first commit creates the arrays, so it carries the
                     # encoding and the store's global attributes
                     observations.attrs = global_attrs(settings, store, versions)
-                    encoding = build_encoding(observations, index, chunks, fills, product)
+                    encoding = build_encoding(
+                        observations, index, chunks, fills, product, compressors
+                    )
                 message = COMMIT_MESSAGE.format(
                     first=subset[0].granule.id, last=subset[-1].granule.id,
                     count=len(subset), revision=revision,

@@ -46,6 +46,13 @@ variables:
   # the pixel's address on the Level 1B grid (user decision 2026-10-18)
   - scanline_index
   - ground_pixel_index
+  # model comparison, on layer (named 2026-10-19); pressure, on level, goes in
+  # the geolocation store
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
 
 # 2020-07 has an orbit directory on every day
 expected_missing_days: []
@@ -88,6 +95,21 @@ source_fill_values:
   diagnostics/chi_squared_prefit: [9.96921e+36]
   diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
   diagnostics/number_of_spectral_points_in_prefit: [-2147483647]
+  # the kernels only: the priors, dry air and pressure hold fill only in
+  # partial files (checked 2026-10-19), and 2020 has none
+  target_product/h2o_column_averaging_kernel: [9.96921e+36]
+  target_product/hdo_column_averaging_kernel: [9.96921e+36]
+
+# As in config_zarr.yaml: lossless blosc for the 50- and 51-wide arrays
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_column_h2o_averaging_kernel
+    - water_vapor_column_hdo_averaging_kernel
+    - water_vapor_partial_column_h2o_apriori
+    - water_vapor_partial_column_hdo_apriori
+    - dry_air_partial_column
+    - pressure
 
 # Scale settings (design condition 3: per product, never in code). Starting
 # points only, to be measured by the bench:

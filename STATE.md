@@ -2,10 +2,10 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-19)
+## Where we are (2026-10-19, updated after task 7 step 3)
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place. The fixture test passes 46 cases
+  testing tiers (`TESTING.md`) are in place. The fixture test passes 50 cases
   over TROPOMI and GOSAT.
 - **TROPOMI production is finished** (task 6, first product).
   - 19 stores in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`,
@@ -48,40 +48,34 @@ Read this first in a new session. Update it whenever work lands.
   - `dry_air_partial_column` (x 1e4 / N_A).
 - `pressure` on `level` (51) in the geolocation store, in Pa as published
   (no conversion).
-- Set `VERTICAL_ORDER = 'top_first'` in `products/tropomi.py`: level 0 is
-  0 Pa. `DIMENSION_RENAMES` needs nothing, since `nlayer`/`nlevel` lose
-  their `n`.
-- **~29 TiB estimated**, against 1.8 TiB for the 19 existing stores.
+- **~19 TiB estimated** with the chosen codec (~20-21 TiB on disk), against
+  1.8 TiB for the 19 existing stores.
 
-**What GOSAT already proved in the shared code** (2026-10-19, `8398108`):
-- 2-D variable stores;
-- a coordinate with a unit conversion;
-- `vertical_order`, set by the build and checked by the verifier;
-- the chunk rule. 50 layers take 131,072 obs per chunk, and 51 levels the
-  same (25.5 MiB).
+**Steps 1-3 are done (2026-10-19):**
+1. **Compression measured** on orbits 14069 and 32414: ~29 TiB with the
+   default zstd, ~19 TiB with blosc zstd 5 + byte shuffle (lossless). **The
+   user approved blosc** for the six new arrays only. That is new shared
+   code: the config's `compression` block, applied in `build_encoding`, and
+   checked per array by the verifier (`compressor_matches`). Every other
+   array keeps the default, so the finalized stores are unchanged; GOSAT's
+   pass `--phases structure` with the new check (323 checks).
+2. **Key rows, configs and reader.** The 5 rows, the `pressure` coordinate
+   row and `VERTICAL_ORDER = 'top_first'` are in. All three configs list the
+   5 variables and the `compression` block.
+   - **Fill (scanned 2026-10-19, all 77 partial files, with the reader's own
+     row rule):** all six sources hold fill on kept rows, always whole rows.
+     Production and fixture declare all six. The bench declares only the
+     kernels, since the others hold fill only in partial files and 2020 has
+     none.
+   - **No new source is written on a row left out**, including finding
+     10's six rows, so `allowed_on_rows_left_out` is unchanged.
+   - **T22 (record only):** pressure near the North Pole reaches 1.2e8 Pa
+     in 4 pixels of orbit 14069; stored as published.
+3. **Fixture restaged; the test passes 50 cases** (4 new: the verifier fails
+   on a codec the config does not set, and the build refuses compression of
+   an unknown array, for each product).
 
-TROPOMI needs no new shared code, unless the steps below find some.
-
-**Steps, in order:**
-1. **Measure kernel compression** with a scratch script on a login node,
-   reusing the Variable inventory's method (one orbit, in-memory zarr,
-   zstd). The 29 TiB is an estimate; the kernels may compress better.
-   Report it to the user before going on.
-2. **Key rows and configs.** Add the 5 rows and the `pressure` coordinate
-   row to `nomenclature-key_tropomi.md` (the rows exist in style_guides
-   `fee64ec`). Add the 5 variables to all three TROPOMI configs.
-   - **Fill:** SRON declares none, so the new float sources will hold the
-     netCDF default 9.96921e+36 where unwritten. Declare each in
-     `source_fill_values` only where it occurs: the verifier fails a
-     declared value that never occurs over the record, and fails an
-     undeclared default fill.
-   - **Rows left out:** `meteo/*` may be written on rows that have no
-     position (the 6 rows of finding 10 hold SZA). If so the build fails,
-     with "cannot be left out". Check, then ask the user before adding to
-     `allowed_on_rows_left_out`.
-3. **Fixture:** `uv run python validation/stage_tropomi.py --restage`. It
-   copies only the sources in the key, so the new ones arrive only on a
-   restage. Then run the pipeline test (both products).
+**Next steps, in order:**
 4. **Decide with the user how `pressure` reaches the geolocation store.**
    A finalized store's index is complete, so a normal build writes nothing
    to it, and the verifier would fail it for a missing array.
@@ -98,7 +92,11 @@ TROPOMI needs no new shared code, unless the steps below find some.
      are ~1 GB per orbit (~850k obs x 301 values x 4 B), so ~60 GB a batch
      with two in flight. Develop has given 32 GB. The bench must set
      `granules_per_commit` (per config; condition 3) or the queue (main has
-     the whole node and 12 h).
+     the whole node and 12 h). The bench config is still at 20, which is
+     ~20 GB a batch, ~40 GB with two in flight: set it before submitting.
+   - **Codec cost:** blosc writes at ~300-1000 MiB/s on one thread, against
+     ~1000-1400 for the default. The bench measures what it adds to the
+     build.
    - **Time:** the corner rebuild was ~3.7 h to build and ~3.3 h to verify
      on develop. ~29 TiB of new data will take several times longer. Builds
      resume, so chain them `afterany`. The verifier does not resume, and
@@ -245,6 +243,9 @@ per-product open issues under Other open items.
   That keeps every store's chunk boundaries aligned (2026-10-18).
 - **Scale (TROPOMI):** 8 workers, 60 granules per commit, develop queue
   (2026-10-16).
+- **Compression (2026-10-19):** blosc zstd 5 + byte shuffle for TROPOMI's six
+  model-comparison arrays, set per array in config. Everything else keeps
+  zarr's default zstd; the finalized stores are not rebuilt to match.
 - **Filtering guidance** in the metadata is Table 1 in full, plus the
   inferred reduced chi-squared.
 - **Naming rule:** the quantity first, then qualifiers general to specific.

@@ -42,6 +42,7 @@ import numpy as np
 import xarray as xr
 import zarr
 from icechunk.xarray import to_icechunk
+from zarr.codecs import BloscCodec
 
 from .granules import (
     GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, LOCATION_COORDINATES, RowRule, index_entries,
@@ -53,7 +54,7 @@ from .nomenclature import (
     key_path,
     variable as key_variable,
 )
-from .path_utils import GEOLOCATION, format_attrs, load_reader, template_fields
+from .path_utils import GEOLOCATION, format_attrs, load_reader, run_stores, template_fields
 
 LOG = logging.getLogger(__name__)
 
@@ -282,6 +283,70 @@ def resolve_chunks(settings):
             f'never split secondary dimensions'
         )
     return {'obs': int(chunks['obs']), GRANULE_DIM: int(chunks[GRANULE_DIM])}
+
+
+# what every array the config's compression block does not name is written
+# with: zarr's default, zstd with no shuffle
+DEFAULT_COMPRESSOR = 'zstd'
+
+
+def resolve_compression(settings):
+    """The compressors for the arrays the config names, checked.
+
+    A scale setting, so it lives in config (condition 3). Byte-shuffled blosc
+    stores TROPOMI's 50-layer kernels, priors and pressure ~34% smaller than
+    zarr's default zstd, losslessly (measured on two orbits, 2026-10-19).
+    Every array not named keeps the default, so stores built before this are
+    unchanged.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        dict: Array name -> ``[BloscCodec]``; empty if the config sets none.
+
+    Raises:
+        ValueError: If the block has keys other than ``blosc`` and ``arrays``,
+            lacks either, or names an array no store of the config holds.
+    """
+    config = settings.get('compression') or {}
+    if not config:
+        return {}
+    extra = sorted(set(config) - {'blosc', 'arrays'})
+    if extra or not config.get('blosc') or not config.get('arrays'):
+        raise ValueError(
+            f'compression must set blosc and arrays and nothing else; it sets {sorted(config)}'
+        )
+    product = settings['product']
+    known = {name for store in run_stores(settings) for name in store_sources(product, store)}
+    unknown = sorted(set(config['arrays']) - known)
+    if unknown:
+        raise ValueError(f'compression names arrays no store of this config holds: {unknown}')
+    # one codec per array: a codec instance is immutable, but each array's
+    # typesize is filled in from its own dtype when it is created
+    return {name: [BloscCodec(**config['blosc'])] for name in config['arrays']}
+
+
+def compressor_matches(array, compressors):
+    """Whether a stored array carries the compressor the config gives it.
+
+    Args:
+        array (zarr.Array): The stored array.
+        compressors (dict): From ``resolve_compression``.
+
+    Returns:
+        tuple: ``(ok, detail)``, the detail naming what is stored.
+    """
+    stored = [codec.to_dict() for codec in array.compressors]
+    names = [entry['name'] for entry in stored]
+    expected = compressors.get(array.basename)
+    if expected is None:
+        return names == [DEFAULT_COMPRESSOR], f'{names}'
+    want = expected[0].to_dict()['configuration']
+    ok = names == ['blosc'] and all(
+        stored[0]['configuration'].get(key) == want[key] for key in ('cname', 'clevel', 'shuffle')
+    )
+    return ok, f'{stored}'
 
 
 # the style guide's ceiling on one uncompressed chunk
@@ -717,7 +782,7 @@ def global_attrs(settings, store, versions):
     return derived | format_attrs(settings, store)
 
 
-def build_encoding(observations, index, chunks, fills, product):
+def build_encoding(observations, index, chunks, fills, product, compressors):
     """Zarr encoding for every variable of a first write.
 
     Args:
@@ -726,6 +791,8 @@ def build_encoding(observations, index, chunks, fills, product):
         chunks (dict): From ``resolve_chunks``.
         fills (dict): Integer variable -> the ``_FillValue`` it declares.
         product (str): The product, whose key sets the time units.
+        compressors (dict): From ``resolve_compression``; an array not in it
+            keeps zarr's default.
 
     Returns:
         dict: Encoding for ``to_icechunk``.
@@ -743,6 +810,8 @@ def build_encoding(observations, index, chunks, fills, product):
                 leading = obs_chunk(leading, itemsize, tuple(variable.shape[1:]))
             shape = (leading,) + tuple(variable.shape[1:])
             encoding[name] = {'chunks': shape}
+            if name in compressors:
+                encoding[name]['compressors'] = compressors[name]
             if np.issubdtype(variable.dtype, np.datetime64):
                 encoding[name].update(
                     {'units': units, 'calendar': TIME_CALENDAR, 'dtype': 'int64',

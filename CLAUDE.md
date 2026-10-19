@@ -97,6 +97,11 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   granule index.
 - **Granule index:** six coordinates on a `granule` dimension in every store,
   appended in the same commit as the data.
+- **Compression is per array, in config** (user decision 2026-10-19). A
+  config's `compression` block names a blosc setting and the arrays it applies
+  to. Every other array keeps zarr's default zstd, and the verifier checks each
+  array's codec against the config. TROPOMI uses it for its 50- and 51-wide
+  arrays, ~34% smaller, lossless.
 - **Multi-file granules** (GOSAT: each day's DED and H2O files merged onto one
   obs axis):
   - the reader marks where a variable is absent, and shared code fills it

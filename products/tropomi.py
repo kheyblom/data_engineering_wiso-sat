@@ -77,6 +77,9 @@ FILE_RE = re.compile(r'^s5p_l2_hdo_(?P<product_version>\d{4})_(?P<orbit>\d{5})\.
 # does not cover (none here: nlayer -> layer, nlevel -> level, ncorner -> corner)
 OBSERVATION_DIM = 'nobs'
 DIMENSION_RENAMES = {}
+# index 0 of level is the top of the atmosphere, 0 Pa, and the last level is
+# the surface (naming pass N7)
+VERTICAL_ORDER = 'top_first'
 
 # the root attribute holding the processor version the stores are named by
 VERSION_ATTR = 'version'

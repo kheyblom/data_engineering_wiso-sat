@@ -46,6 +46,13 @@ variables:
   # the pixel's address on the Level 1B grid (user decision 2026-10-18)
   - scanline_index
   - ground_pixel_index
+  # model comparison, on layer (named 2026-10-19); pressure, on level, goes in
+  # the geolocation store
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
 
 # Days between the first and last orbit (2017-11-08 .. 2025-11-29) with no day
 # directory upstream: each returned 404 from tropomi.grid.surfsara.nl (58
@@ -540,6 +547,30 @@ source_fill_values:
   instrument/ground_pixel: [-2147483647]
   instrument/latitude_corners: [9.96921e+36]
   instrument/longitude_corners: [9.96921e+36]
+  # model comparison (checked 2026-10-19), always whole rows: the kernels
+  # wherever the retrieval wrote nothing (~29% of rows in a complete orbit);
+  # the priors, dry air and pressure only on kept rows of partial files (158,
+  # 161, 68 and 48 rows), never in the complete orbits sampled
+  target_product/h2o_column_averaging_kernel: [9.96921e+36]
+  target_product/hdo_column_averaging_kernel: [9.96921e+36]
+  target_product/h2o_profile_apriori: [9.96921e+36]
+  target_product/hdo_profile_apriori: [9.96921e+36]
+  meteo/dry_air_subcolumns: [9.96921e+36]
+  meteo/pressure_levels: [9.96921e+36]
+
+# Lossless blosc (zstd level 5, byte shuffle) for the 50- and 51-wide arrays:
+# ~19 TiB against ~29 TiB with zarr's default zstd, which every other array
+# keeps (two orbits measured 2026-10-19; user decision 2026-10-19). Level 9
+# saves ~3% more but writes at 15-40 MiB/s.
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_column_h2o_averaging_kernel
+    - water_vapor_column_hdo_averaging_kernel
+    - water_vapor_partial_column_h2o_apriori
+    - water_vapor_partial_column_hdo_apriori
+    - dry_air_partial_column
+    - pressure
 
 # Scale settings (design condition 3: per product, never in code). Set with the
 # user 2026-10-16 from the Tier 2 bench (TESTING.md), which ran at 20 granules

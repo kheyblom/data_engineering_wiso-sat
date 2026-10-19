@@ -39,6 +39,11 @@ Columns are matched by header name: reorder them freely, but do not rename them.
 | `diagnostics/chi_squared_prefit` | `1` | `chi_squared_prefit` | `unitless` | unreduced chi-squared of the retrieval pre-fit residual | none | unreduced, as published |
 | `diagnostics/number_of_spectral_points_in_retrieval` | `1` | `spectral_point_count_retrieval` | `unitless` | number of spectral points used in the final retrieval fit | none | int32; `nwin` squeezed |
 | `diagnostics/number_of_spectral_points_in_prefit` | `1` | `spectral_point_count_prefit` | `unitless` | number of spectral points used in the retrieval pre-fit | none | int32; `nwin` squeezed |
+| `target_product/h2o_column_averaging_kernel` | `1` | `water_vapor_column_h2o_averaging_kernel` | `unitless` | column averaging kernel of the total column of water vapor (H2O), with respect to layer partial columns | none | on `layer` (50), top first; model comparison (named 2026-10-19) |
+| `target_product/hdo_column_averaging_kernel` | `1` | `water_vapor_column_hdo_averaging_kernel` | `unitless` | column averaging kernel of the total column of HDO water vapor, with respect to layer partial columns | none | on `layer` (50), top first; model comparison |
+| `target_product/h2o_profile_apriori` | `molec. cm-2` | `water_vapor_partial_column_h2o_apriori` | `mol m-2` | a priori layer partial column of water vapor (H2O) | x 1e4 / N_A | on `layer` (50), top first; SRON's "profile" is a partial column per layer |
+| `target_product/hdo_profile_apriori` | `molec. cm-2` | `water_vapor_partial_column_hdo_apriori` | `mol m-2` | a priori layer partial column of HDO water vapor | x 1e4 / N_A | on `layer` (50), top first; SRON's "profile" is a partial column per layer |
+| `meteo/dry_air_subcolumns` | `molec. cm-2` | `dry_air_partial_column` | `mol m-2` | layer partial column of dry air | x 1e4 / N_A | on `layer` (50), top first; model comparison |
 
 - **δD** is published as a fraction (`ratio / standard_ratio - 1`, with
   `standard_ratio` 0.00031153). It becomes per mil, the canonical `1e-3`.
@@ -49,6 +54,11 @@ Columns are matched by header name: reorder them freely, but do not rename them.
 - **Reduced chi-squared** is not stored. It is `chi_squared` divided by the
   matching spectral point count, which is inferred (no source defines it; see
   `docs/products/tropomi.md`). Both inputs are stored so users can form it.
+- **Model-comparison variables** (named 2026-10-19; mapping in
+  `docs/products/tropomi.md`): the two column kernels, the two a priori
+  partial columns and the dry-air partial column above, and `pressure` in the
+  coordinate key. The partial columns take the same x 1e4 / N_A as the
+  columns.
 
 ## Coordinate Key
 
@@ -63,6 +73,7 @@ does this product.
 | `instrument/longitude_center` | `degrees east` | `lon` | `degrees_east` | none | pixel centre; respelled only |
 | `instrument/latitude_corners` | `degrees north` | `lat_corners` | `degrees_north` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
 | `instrument/longitude_corners` | `degrees east` | `lon_corners` | `degrees_east` | none | the pixel's 4 corners on `corner` (decided 2026-10-18); respelled only |
+| `meteo/pressure_levels` | `Pa` | `pressure` | `Pa` | none | on `level` (51), the boundaries of the 50 layers, top first: level 0 is 0 Pa and the last level is the surface pressure (named 2026-10-19) |
 
 ## Temporal Frequency Key
 
@@ -80,7 +91,7 @@ so `observation` is this project's own word for it, used in the configs.
 | `nobs` | `obs` | the L1B swath flattened scanline then ground pixel; concatenated over orbits in orbit order |
 | `nwin` | (squeezed) | length 1 |
 | `ncorner` | `corner` | the 4 pixel corners, in the geolocation store's `lat_corners` and `lon_corners`. Corners 0-1 are the back edge (toward the previous scanline) and 2-3 the front; a pixel's corners 1 and 2 are exactly the next ground pixel's corners 0 and 3 (measured 2026-10-18) |
-| `nlayer`, `nlevel` | `layer`, `level` | none in the current subset |
+| `nlayer`, `nlevel` | `layer`, `level` | 51 pressure levels bounding 50 layers. Top first, recorded as `vertical_order: top_first` (`VERTICAL_ORDER` in the reader) |
 
 ## Store naming (decided 2026-10-14)
 

@@ -90,10 +90,12 @@ from utils.zarr_utils import (
     TIME_FILL,
     VERTICAL_DIMS,
     absent_fill,
+    compressor_matches,
     declared_fill,
     obs_chunk,
     open_existing_repository,
     resolve_chunks,
+    resolve_compression,
     store_sources,
     time_source,
     time_units,
@@ -372,7 +374,7 @@ def open_groups(settings, stores):
     return opened
 
 
-def check_structure(report, settings, store, group, chunks):
+def check_structure(report, settings, store, group, chunks, compressors):
     """Check one store's layout, encoding and attributes from metadata.
 
     Args:
@@ -381,6 +383,7 @@ def check_structure(report, settings, store, group, chunks):
         store (str): The store's variable slot.
         group (zarr.Group): Its root group.
         chunks (dict): The configured chunks.
+        compressors (dict): The configured compressors.
     """
     product = settings['product']
     names = set(group.array_keys())
@@ -405,6 +408,8 @@ def check_structure(report, settings, store, group, chunks):
             and array.chunks == (length,) + tuple(array.shape[1:]),
             f'{dims} {array.chunks}',
         )
+        ok, detail = compressor_matches(array, compressors)
+        report.check(f'{store}/{name}: compressed as the config sets', ok, detail)
 
     for name in sorted(expected_vars & names):
         array, attrs = group[name], dict(group[name].attrs)
@@ -937,13 +942,14 @@ def main(settings, args):
     LOG.info(f'stores: {stores}')
     report = Report()
     chunks = resolve_chunks(settings)
+    compressors = resolve_compression(settings)
     opened = open_groups(settings, stores)
     groups = {store: group for store, (_, group) in opened.items()}
 
     if 'structure' in phases:
         LOG.info('--- structure')
         for store, group in groups.items():
-            check_structure(report, settings, store, group, chunks)
+            check_structure(report, settings, store, group, chunks, compressors)
 
     granules, index = None, None
     if {'index', 'values'} & set(phases):

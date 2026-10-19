@@ -129,6 +129,7 @@ lists of what was missing are in git history (`0b0a3d7`,
 | T18 | `processing_quality_flags == 0` still passes unphysical δD: -0.99 to +13 as a fraction (p1/p99), with extremes of -67,429 and +55,177. `h2o_column` reaches 1.7e26 molec cm-2. SRON's Table 1 filters are needed on top of the flag, and are recorded in every store's `quality_filtering`. In orbit 16820, 71% of `nobs` have an `hdo_column` and 65% have flag 0. |
 | T19 | Flag-0 pixels reach negative surface albedo (p1 -0.95, minimum -1.97). The albedo >= 0.02 clear-sky cut removes them. |
 | T20 | Column averaging kernels reach p99 ~700 in some layers. This is unexplained and not a unit issue; it matters once kernels are stored. |
+| T22 | **Pressure is unphysical within ~0.1 deg of the North Pole.** In orbit 14069, 4 pixels at 89.91-89.98 N have a surface pressure of 5.2e5 to 1.2e8 Pa (the orbit's p99.9 is 1.03e5). `pressure_levels` still increases downward and its last level equals `meteo/surface_pressure`, and `dry_air_subcolumns` scales up with it, so this looks like SRON's meteo interpolation at the pole, not a read error. Orbit 32414 (January, polar night) has none. Stored as published (checked 2026-10-19). |
 
 ## Outside the Level 2 scope
 
@@ -241,7 +242,9 @@ variables below.
 
 Named in the cross-product naming pass. The grammar and decisions are in
 `docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
-(style_guides `fee64ec`). Units are after conversion. Not built yet.
+(style_guides `fee64ec`). Units are after conversion. The key rows and the
+three configs carry them (2026-10-19), and the fixture builds and verifies
+them. Not built at bench or production scale yet.
 
 - **Dims:** `nlayer` (50) becomes `layer`; `nlevel` (51) becomes `level`, the
   layer interfaces.
@@ -263,10 +266,45 @@ Named in the cross-product naming pass. The grammar and decisions are in
 - **Stores:** 5 new variable stores on the existing obs axis and granule
   index, and `pressure` added to the existing geolocation store, as the
   corners were. The 19 existing stores are not rebuilt.
-- **Size:** ~29 TiB estimated (Variable inventory, group 1).
-  - Measure kernel compression with a scratch script before building.
-  - The chunk rule gives 50 layers 131,072 obs per chunk.
+- **Size: ~19 TiB with byte-shuffled blosc**, against ~29 TiB with zarr's
+  default zstd (Variable inventory, group 1). Expect ~20-21 TiB on disk, since
+  the method runs 5-10% low on floats.
+  - The chunk rule gives 50 and 51 levels 131,072 obs per chunk.
+  - **Compression measured 2026-10-19**, on orbits 14069 (2020-07-01) and
+    32414 (2024-01-15): values prepared as the build prepares them, written
+    at the production chunk to an in-memory zarr store under lossless
+    zarr v3 codecs, every round trip exact. The two orbits agree within 2%.
+
+    | est. TiB over the record | default zstd | blosc zstd 3 + shuffle | **blosc zstd 5 + shuffle** | blosc zstd 9 + shuffle |
+    | --- | --- | --- | --- | --- |
+    | H2O kernel | 3.7-3.8 | 3.15 | **3.1-3.2** | 2.9 |
+    | HDO kernel | 3.6-3.7 | 2.7 | **2.6-2.7** | 2.5 |
+    | H2O a priori | 5.5 | 4.0 | **3.6** | 3.5 |
+    | HDO a priori | 5.5 | 4.0 | **3.6** | 3.5 |
+    | dry-air partial column | 5.4 | 3.6 | **3.1-3.2** | 3.1 |
+    | `pressure` | 5.4 | 3.5 | **3.1-3.2** | 3.0 |
+    | total | 29.2-29.3 | 21.1 | **19.2** | 18.6 |
+
+    - **Chosen (user, 2026-10-19): blosc zstd 5 + shuffle**, set per array in
+      the configs' `compression` block. It writes at ~300-1000 MiB/s and
+      reads as fast as the default.
+    - Level 9 writes at 15-38 MiB/s, which would cost hundreds of core-hours
+      over the record. zstd 9 without shuffle gains nothing. Bitshuffle, and
+      transposing the chunk to layer-major, do worse.
+    - Every other TROPOMI array keeps the default, including the rest of the
+      geolocation store, so the 19 finalized stores are unchanged.
+- **Fill (checked 2026-10-19), always whole rows:**
+  - the kernels are fill wherever the retrieval wrote nothing: ~29% of rows
+    in a complete orbit, and 1,356,955 kept rows of the partial files;
+  - the priors, dry air and pressure are fill only on kept rows of partial
+    files: 158, 161, 68 and 48 rows. They have none in the complete orbits
+    sampled (14069, 32414).
+  - None of the six is written on any row left out. That includes the six
+    rows of finding 10, so `allowed_on_rows_left_out` is unchanged.
+  - Method: the reader's own `read_granule` and row rule over all 77 partial
+    files.
 - **T20:** column kernels reach p99 ~700 in some layers. Record only.
+- **T22:** pressure near the North Pole is unphysical. Record only.
 
 ## Variable inventory (2026-10-18)
 
@@ -368,7 +406,7 @@ to the record's 32,657,526,234 obs.
 | `instrument/longitude_center` | obs float32 | 122 | 101 | stored as geolocation `lon` |
 | `instrument/time` | obs x 7 int32 | 852 | (in geolocation) | int64 ms in the store |
 
-**1. Model comparison (named 2026-10-19; see Model-comparison variables).** Why: needed for model comparison; not built yet.
+**1. Model comparison (named 2026-10-19; see Model-comparison variables).** Why: needed for model comparison; not built yet. The estimates below use the default zstd. The chosen blosc + shuffle brings the six to ~19 TiB.
 
 | source | shape | raw GiB | est. store GiB | notes |
 | --- | --- | --- | --- | --- |

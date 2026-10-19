@@ -15,9 +15,11 @@ Per product:
 2. a re-run, which must be a no-op;
 3. resume: one store reset to empty and one to its first commit, as a run
    killed partway would leave them, then rebuilt and re-verified;
-4. the verifier must fail on a tampered value, naming the store;
+4. the verifier must fail on a tampered value, naming the store, and on a
+   store compressed other than as its config says;
 5. guards: an undeclared missing day, a wrong processor version, a run that
-   omits the quality flags, an unknown variable, and (where the product has
+   omits the quality flags, an unknown variable, compression of an unknown
+   array, and (where the product has
    them) an undeclared empty granule directory or unreadable file;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
@@ -236,6 +238,21 @@ def test_product(results, config, scratch):
     )
     repo.reset_branch(BRANCH, tip)
 
+    # ... and a store compressed other than as the config says: the config
+    # loses its compression block, or gains one where it had none
+    if settings.get('compression'):
+        changes = {'compression': None}
+    else:
+        changes = {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},
+                                   'arrays': [target]}}
+    path = write_config(settings, scratch, f'{product}_codec.yaml', **changes)
+    status, output = run('verify_wisosat_zarr.py', '--config', path, '--phases', 'structure')
+    results.check(
+        f'{product}: verifier fails on a codec the config does not set',
+        status != 0 and 'compressed as the config sets' in output,
+        last_line(output, 'compressed as the config sets'),
+    )
+
     # 5. guards that must stop a build before it writes
     guards = {
         'an undeclared missing day': ({'expected_missing_days': []}, 'not declared'),
@@ -245,6 +262,11 @@ def test_product(results, config, scratch):
             'quality flags',
         ),
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
+        'compression of an unknown array': (
+            {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},
+                             'arrays': ['no_such_array']}},
+            'no store of this config holds',
+        ),
     }
     if settings.get('expected_unreadable_granules'):
         # only the last declared file is undeclared: a file that crashes HDF5

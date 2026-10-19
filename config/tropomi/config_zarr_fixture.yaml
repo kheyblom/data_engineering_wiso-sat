@@ -50,6 +50,11 @@ variables:
   # the pixel's address on the Level 1B grid (user decision 2026-10-18)
   - scanline_index
   - ground_pixel_index
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
 
 expected_missing_days:
   - 2020-06-18
@@ -95,6 +100,25 @@ source_fill_values:
   # partial orbit 8532 has no scanline indices on its processed rows
   instrument/scanline: [-2147483647]
   instrument/ground_pixel: [-2147483647]
+  # the kernels in every window; the priors, dry air and pressure on the
+  # processed rows of partial orbit 8532
+  target_product/h2o_column_averaging_kernel: [9.96921e+36]
+  target_product/hdo_column_averaging_kernel: [9.96921e+36]
+  target_product/h2o_profile_apriori: [9.96921e+36]
+  target_product/hdo_profile_apriori: [9.96921e+36]
+  meteo/dry_air_subcolumns: [9.96921e+36]
+  meteo/pressure_levels: [9.96921e+36]
+
+# as in config_zarr.yaml, so the fixture exercises a configured codec
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_column_h2o_averaging_kernel
+    - water_vapor_column_hdo_averaging_kernel
+    - water_vapor_partial_column_h2o_apriori
+    - water_vapor_partial_column_hdo_apriori
+    - dry_air_partial_column
+    - pressure
 
 chunks:
   obs: 5000
