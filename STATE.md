@@ -58,8 +58,11 @@ A TROPOMI-only name would fix the pattern too early.
    F1-F6). Second review 2026-10-19:
    - approved: N1-N13, with covariances and the IASI temperature
      cross-kernel added (now 43 rows);
-   - open: N14-N17, and the row tables (sections 4-5), which the user has
-     not reviewed yet;
+   - third review: N14 and N15 approved. N10 revised to one store per SVD
+     kernel (needs a style-guide amendment), N16 revised to leave the
+     TROPESS ratio covariance out, and N17 explained (sections 2.10-2.12).
+     These three are open, and so are the row tables (sections 4-5), which
+     the user has not reviewed yet;
    - N13 is applied: the two XH2O rows are renamed in `style_guides/nomenclature_data.md`
      (**uncommitted there, for the user's review**), and in the GOSAT key and
      configs. The fixture test passes 46 cases.

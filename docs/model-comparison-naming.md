@@ -24,14 +24,14 @@ survey), and the checks under Findings.
 | N7 | **Vertical order** | keep each source's order; record it in a `vertical_order` attribute | **approved** |
 | N8 | **Log-space kernels** | `_log` after `averaging_kernel` | **approved** |
 | N9 | **TES block splits** | the row species leads the name; `_cross_<species>` names the true-state species of an off-diagonal block (2.4) | **approved** |
-| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). **Every component is its own store** | **approved** |
+| N10 | **IASI SVD** | split the singular vectors per proxy state; pad `rank` to the record maximum with NaN (2.5). **Revised: one store per SVD kernel**, holding its components as arrays (2.10) | split and padding approved; one store per kernel open (needs a style-guide amendment) |
 | N11 | **GOSAT `dry_column`** | hold until its unit is resolved (2.6). Noted for later in STATE.md and `gosat.md` G7 | **approved** (held) |
 | N12 | **Error covariances and the IASI temperature cross-kernel** | added to this pass (2.7): 19 more rows | **approved** |
 | N13 | **Rename two existing rows** | `water_vapor_column_mole_fraction_dry_air[_standard_error]` become `water_vapor_column_h2o_mole_fraction_dry_air[_standard_error]` (2.9) | **approved; applied**, uncommitted for your review |
-| N14 | **Error role names** (new, from N12) | `<type>_error_covariance` for the three TES matrices (`observation`, `measurement`, `total`: established terms, kept whole), and `observation_standard_error` for a 1-sigma observation error, after the existing `_standard_error` (2.7) | open |
-| N15 | **TES covariance cross blocks** (new) | store both, though `S_HD` is exactly `S_DH` transposed (F8): ~3.4 GB each, the guide's rule as written, and the same four-block set as the kernel (2.7) | open |
-| N16 | **TROPESS `observation_error` is not a valid covariance** (new, F7) | store it as published, under the covariance name, with the defect in the metadata. Re-check across processor versions at the TROPESS reader (2.7) | open |
-| N17 | **IASI cross-kernel units** (new, F9) | the singular values take `K-1`, a corrected source unit (the files say `1`), with no value change. The vectors stay `unitless` (2.7) | open |
+| N14 | **Error role names** (new, from N12) | `<type>_error_covariance` for the three TES matrices (`observation`, `measurement`, `total`: established terms, kept whole), and `observation_standard_error` for a 1-sigma observation error, after the existing `_standard_error` (2.7) | **approved** |
+| N15 | **TES covariance cross blocks** (new) | store both, though `S_HD` is exactly `S_DH` transposed (F8): ~3.4 GB each, the guide's rule as written, and the same four-block set as the kernel (2.7) | **approved** |
+| N16 | **TROPESS `observation_error` is not a valid covariance** (new, F7) | **revised: leave it out**, and add no row for it. It has negative variances in every processor version sampled, at the levels the retrieval is sensitive to. Revisit if TROPESS documents or fixes it (2.11) | open |
+| N17 | **IASI cross-kernel units** (new, F9) | the singular values take `K-1`, a corrected source unit (the files say `1`), with no value change. The vectors stay `unitless` (2.12) | open |
 
 ## 2. Answers to the reviews
 
@@ -395,6 +395,169 @@ Only in the SRON products, plus GOSAT's held `dry_column`:
 
   No code names them. The fixture test passes 46 cases over both products.
 
+### 2.10 N10, third review: one store per SVD kernel
+
+**Are the components always opened together?** Yes. No component is useful
+alone:
+- Any block of the kernel, `A_kl = L_k diag(s) R_l^T`, needs a left-vector
+  array, the singular values and a right-vector array. The δD-proxy block,
+  the one δD comparisons use, needs `L_δD`, s and `R_δD`.
+- The vectors carry NaN past each obs's rank, so the rank is needed to slice
+  them (or the NaN must be zeroed).
+- The singular values alone are at most a diagnostic. The vectors alone mean
+  nothing.
+
+That separates them from the TES blocks, each of which is a usable kernel by
+itself (e.g. H2O-H2O for H2O comparisons). So the TES blocks stay separate
+stores.
+
+**A clean single-store layout.** It follows the pattern the geolocation store
+already uses, one store holding several arrays on the same `obs` axis and
+granule index:
+
+```
+wisosat.iasi.<version>.inst.native_swath.water_vapor_proxy_averaging_kernel_svd.zarr
+  water_vapor_proxy_humidity_averaging_kernel_svd_left_vectors   (obs, rank, level)
+  water_vapor_proxy_delta_d_averaging_kernel_svd_left_vectors    (obs, rank, level)
+  water_vapor_proxy_humidity_averaging_kernel_svd_right_vectors  (obs, rank, level)
+  water_vapor_proxy_delta_d_averaging_kernel_svd_right_vectors   (obs, rank, level)
+  water_vapor_proxy_averaging_kernel_svd_singular_values         (obs, rank)
+  water_vapor_proxy_averaging_kernel_svd_rank                    (obs)
+
+wisosat.iasi.<version>.inst.native_swath.water_vapor_proxy_averaging_kernel_cross_air_temperature_svd.zarr
+  (the five temperature cross-kernel arrays, on rank_temperature)
+```
+
+- **The arrays keep their canonical names and rows**, unchanged. Only the
+  store name is new, the factorization's name.
+- **The proxy split stays**, as the stacked-array rule requires. Keeping a
+  `proxy` dim inside the store instead (4 arrays, not 6) would need a second
+  exception.
+- **Chunks:** each array is chunked by the existing rule, halving
+  `chunks.obs` per array until it fits 40 MiB. Boundaries stay aligned across
+  arrays, as they are between `time` and the corners in the geolocation
+  store.
+- **Gains:**
+  - one store to open per kernel;
+  - one icechunk commit covers every component, so the components can never
+    be at different granules;
+  - 2 stores instead of 11.
+- **Costs:**
+  - **A style-guide amendment.** The guide says "one store per data
+    variable", and the geolocation store is its only multi-array store. The
+    proposed wording: "a matrix published as a factorization (e.g. a
+    truncated SVD) is one store, named for the factorization, holding its
+    components as arrays, each with its own canonical name." The edit is
+    shown to you before commit.
+  - **A store-name rule.** The variable slot holds the factorization's name,
+    which gets its own row in `nomenclature_data.md` (2 more rows).
+    `geolocation` is the precedent for a store name that no single array
+    takes.
+  - **A shared-code change.** Today every variable store has one source; a
+    store with several sources is new outside geolocation. The build,
+    verifier and config gain it, and every product's fixture tests it.
+- **Recommendation: adopt it**, for these two IASI kernels only.
+
+### 2.11 N16, third review: the TROPESS ratio covariance
+
+**What it is meant to be.**
+- MUSES retrieves ln HDO and ln H2O together, as TES does. Its observation
+  error covariance has the same four blocks: `S_dd`, `S_hh`, `S_hd`, `S_dh`.
+- TROPESS publishes the ratio's covariance instead, and its `source`
+  attribute gives the formula: `obs_dd + obs_hh - obs_hd - obs_dh`. That is
+  the covariance of ln HDO - ln H2O = ln(HDO/H2O), the quantity the FS kernel
+  and prior describe.
+- Users would apply it to weight model-minus-retrieval differences, or in
+  assimilation.
+
+**Why what is published cannot be that.** Any covariance has two properties:
+- **Symmetry.** cov(i, j) = cov(j, i). The formula keeps it, since
+  `S_dh = S_hd^T`.
+- **Non-negative variances.** The diagonal is var(ln HDO_i - ln H2O_i), a
+  variance, which cannot be below zero. A transposed or swapped block cannot
+  make it negative either: `S_hd` and `S_dh` share their diagonal.
+
+What the files hold, in three versions:
+
+| file | targets | symmetric? | targets with a negative variance, 750 / 681 / 619 hPa |
+| --- | --- | --- | --- |
+| AIRS FS 2021-02-10, R1p11 F0p1 | 21,129 | yes (to 7e-9) | 22% / 20% / 20%, and 99-100% above 180 hPa |
+| CrIS-JPSS1 FS 2022-07-10, R1p17 F0p4 | 25,335 | **no**: median asymmetry 1.6x the median variance | 30% / 28% / 18% |
+| AIRS FS 2023-06-15, R1p20 F0p6 | 29,650 | **no**: median asymmetry 1.0x the median variance | 31% / 28% / 16% |
+
+- The negative variances sit where the retrieval is sensitive. The
+  kernel's diagonal peaks at 511 hPa in all three files, and is largest from
+  750 to 420 hPa.
+- So the defect cannot be avoided by using only some levels.
+- The asymmetry appears in versions after R1p11. The negative variances are
+  in every version.
+- No legitimate matrix form matches: a factor of a covariance (e.g.
+  Cholesky) would have a positive diagonal.
+
+**Options.**
+- **Leave it out (recommended).**
+  - Variable selection is ours to make; the guide forbids dropping
+    observations, not variables. The TROPOMI subset already leaves out 50.
+  - A matrix that is wrong at every level and in every version, in a way
+    users cannot repair, adds risk and no value.
+  - It saves ~80 GB.
+  - Its row is not added. The name stays reserved in this document, and the
+    defect is recorded in `tropess.md` R11.
+  - Revisit if TROPESS documents or fixes it. Reporting it to the TROPESS
+    team is worth doing; the evidence is in the table above.
+- **Store it as published**, with the defect in its metadata: the guide's
+  default for a flawed variable. A user who misses the warning gets negative
+  error weights.
+- Masking the bad values is not an option: it would alter the data.
+
+`observation_error_h2o` is unaffected. Its values are positive throughout
+(p10 0.024), so it stays in.
+
+### 2.12 N17, third review: the IASI cross-kernel units
+
+**What it is.** The temperature cross-kernel says how the retrieved water
+vapour proxies respond to an error in the true temperature profile:
+
+```
+delta proxy_retrieved[i] = sum_j A_xT[i, j] * delta T_true[j]
+```
+
+- The proxies are natural logs of mixing ratios: dimensionless.
+- T is in K.
+- So `A_xT` must be in **K-1**: a change in ln mixing ratio per kelvin.
+
+The file's own description says the same: "natural logarithms of mixing
+ratios in ppmv ... with respect to atmospheric temperature in K".
+
+**Which component carries the K-1.** The file stores `A_xT = L diag(s) R^T`
+and labels all four components `1`. Only one of them can carry the unit:
+- **L and R are orthonormal**: `L^T L = I` and `R^T R = I`, exact to 4
+  decimals on the obs checked (F9). An identity matrix is dimensionless, so
+  L and R are dimensionless.
+- **So s carries all of it: K-1.** The rank is a count.
+- For the main kernel, ln over ln, s is dimensionless, and `unitless` is
+  right.
+
+**Plausibility.** The largest singular value on the obs checked is
+0.198 K-1. A 1 K temperature error then moves the ln humidity proxy by at most
+~0.2, i.e. up to ~20% in humidity. That is plausible for a thermal-infrared
+retrieval, where humidity and temperature are strongly coupled.
+
+**Why correct it.**
+- The guide: "if a source units attribute is demonstrably wrong, record the
+  corrected source unit and the evidence for it" in the key and metadata.
+- The evidence here is the description, the dimensions and the orthonormality.
+- Only the units attribute changes, `1` to `K-1`; no value does. A `1`
+  invites a user to read the kernel as normalized, and their temperature
+  errors would then come out scaled wrongly.
+- The nomenclature row has to state a true unit. `unitless` would be wrong
+  for the singular values.
+
+**Alternatives.**
+- Keep `unitless` as published. That puts a wrong unit in the row.
+- Attach the unit to the vectors. That is arbitrary, and contradicts their
+  orthonormality.
+
 ## 3. The grammar, applied
 
 - **Quantity**: `water_vapor` (as in the 2026-10-14 rows), `dry_air`,
@@ -424,6 +587,13 @@ built, not now. They show that the pattern holds for the profile products:
 | `water_vapor_proxy_humidity`, `water_vapor_proxy_delta_d` | IASI (`musica_wvp`, split) |
 
 ## 4. Proposed rows for `nomenclature_data.md` (43 new, 2 renamed)
+
+If N16 and N10 are approved as revised, the count changes:
+- N16 drops `water_vapor_hdo_h2o_ratio_observation_error_covariance_log`;
+- N10 adds the two store names `water_vapor_proxy_averaging_kernel_svd` and
+  `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`.
+
+That makes 44 new rows.
 
 | canonical_name | canonical_units | long_name |
 | --- | --- | --- |
@@ -562,7 +732,7 @@ prior; RS (Summary) has neither.
 | --- | --- | --- | --- | --- | --- |
 | `observation_ops/xa` | FS | `water_vapor_hdo_h2o_ratio_apriori` | unitless | (obs, level) | none |
 | `observation_ops/averaging_kernel` | FS | `water_vapor_hdo_h2o_ratio_averaging_kernel_log` | unitless | (obs, level, level_2) | none; "logarithmic_averaging_kernel_hdo_to_h2o_ratio" |
-| `observation_ops/observation_error` | FS | `water_vapor_hdo_h2o_ratio_observation_error_covariance_log` | unitless | (obs, level, level_2) | none; not a valid covariance as published (F7, N16) |
+| `observation_ops/observation_error` | FS | `water_vapor_hdo_h2o_ratio_observation_error_covariance_log` | unitless | (obs, level, level_2) | none; not a valid covariance as published; left out if N16 is approved (F7) |
 | `observation_ops/observation_error_h2o` | FS | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | unitless | (obs, level) | none; 1-sigma inferred; never scaled |
 | `pressure` | FS, RS | geolocation `pressure` | Pa | (obs, level) | x 100 from `hPa` |
 
@@ -609,9 +779,9 @@ truncated SVD over the 2 x 29 proxy state (2.5).
 | F2 | **GOSAT `dry_column` is ~1/4 of the hydrostatic dry column.** In molec cm-2, dp / (g M_dry) x N_A per layer, divided by `dry_column`, gives p1 / p50 / p99 = 3.97 / 3.99-4.00 / 4.04. Two days, 2011-01-15 and 2015-06-01 (2,984 soundings). The units say `no. of molecules`. | gosat.md G7 |
 | F3 | **IASI `wv_avk_rank` varies by file**: 12 or 13 in seven files sampled 2014-2020. Within a file, components past each obs's own rank (5-12 in one file) are NaN. | iasi.md I6 |
 | F4 | **IASI changes processor version and platforms in 2019.** `IASIAB_MUSICA_030201` runs through 2019; `IASIAB_MUSICA_030300` and `IASIABC_MUSICA_030300` start in 2019 (MetOp-C joins). The store name carries one version. | iasi.md I7 |
-| F5 | **TROPESS FS `pressure` level 0 is -999** on the targets sampled (one 2023 file). RS level 0 holds the surface pressure. | tropess.md R10 |
+| F5 | **TROPESS FS `pressure` level 0 is -999** in R1p17 (CrIS-JPSS1 2022-07-10) and R1p20 (AIRS 2023-06-15), but holds the surface pressure in R1p11 (AIRS 2021-02-10), as it does in RS. | tropess.md R10 |
 | F6 | **The TES kernel is in ln(vmr) space**, rows retrieved and columns true, per its own attribute. | N8, tes.md |
-| F7 | **TROPESS FS `observation_error` is not a valid covariance.** In AIRS FS 2023-06-15 (R1p20, 29,650 targets), every target is asymmetric (median max \|S - S^T\| 0.052), and 99.4% have at least one negative variance, down to -14 at upper levels. Its `source` attribute says it is `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. | N16, tropess.md R11 |
+| F7 | **TROPESS FS `observation_error` is not a valid covariance.** Negative variances appear in all three versions sampled (R1p11, R1p17, R1p20), in 16-31% of targets at 750-619 hPa (2.11). R1p17 and R1p20 are also asymmetric, by as much as the variances themselves. In R1p20 (29,650 targets) 99.4% of targets have a negative variance somewhere, down to -14. Its `source` attribute says it is `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. | N16, tropess.md R11 |
 | F8 | **TES covariance cross blocks are exact transposes.** `S_HD == S_DH^T` with zero difference, for all three matrices in 3,000 targets (2008-07). Each matrix is symmetric to float rounding (at most 6e-8). | N15, tes.md |
 | F9 | **IASI singular vectors are orthonormal** (max \|L^T L - I\| and \|R^T R - I\| = 0 to 4 decimals, for both the kernel and the temperature cross-kernel, one obs each). So the singular values carry a kernel's units: K-1 for the temperature cross-kernel, whose files say `1`. | N17, iasi.md I8 |
 
