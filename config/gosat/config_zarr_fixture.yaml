@@ -22,8 +22,8 @@ variables:
   - water_vapor_column_delta_d
   - water_vapor_column_delta_d_standard_error
   - quality_flags_retrieval_delta_d
-  - water_vapor_column_mole_fraction_dry_air
-  - water_vapor_column_mole_fraction_dry_air_standard_error
+  - water_vapor_column_h2o_mole_fraction_dry_air
+  - water_vapor_column_h2o_mole_fraction_dry_air_standard_error
   - quality_flags_retrieval_h2o
   - solar_zenith_angle
 

@@ -1,13 +1,11 @@
 # Model-comparison naming pass (TASKS.md task 7, step 1)
 
-**Status: every decision approved (N1-N18), 2026-10-19. Next: review the
-row tables (sections 4-5).** Review in place with `#@CLAUDE` comments.
-- Uncommitted in `style_guides`, for your review:
-  - the N13 rename in `nomenclature_data.md`;
-  - the amendment in the style guide's Level 2 section (N18, and N5/N6).
-- The GOSAT key and configs carry the N13 rename. The fixture test passes 46
-  cases.
-- None of the 48 new rows is in `nomenclature_data.md` yet.
+**Status: done, 2026-10-19.** Every decision (N1-N18) and the row tables
+(sections 4-5) are approved and committed in `style_guides`:
+- `a585066`: the N13 rename, and the Level 2 amendment (N18, N5/N6);
+- `fee64ec`: the 48 new rows.
+
+Each product's key maps onto these rows as its reader is built.
 
 Scope: every product's column averaging kernels, a priori profiles, dry-air
 partial columns and pressure grid, named once across all products. Evidence:

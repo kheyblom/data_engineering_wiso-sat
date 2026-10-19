@@ -20,60 +20,39 @@ Read this first in a new session. Update it whenever work lands.
 - **GOSAT** has a reader and a fixture only. Its production waits on the
   naming pass below.
 
-## Next task: the cross-product naming pass (TASKS.md task 7, first step)
+## Next task: the model-comparison stores (TASKS.md task 7, step 3)
 
-**Goal:** canonical names, units and layouts for every product's model
-comparison variables, decided once across all products:
-- column averaging kernels;
-- a priori profiles;
-- dry-air partial columns;
-- the vertical grid, pressure.
+**The naming pass is done (2026-10-19).** Every product's kernels, priors,
+dry-air columns, covariances and pressure grid are named in
+`docs/model-comparison-naming.md`. Read it before writing any key rows:
+- section 5 gives every product's sources, names, units, dims and splits;
+- section 1 has the decisions (N1-N18).
 
-GOSAT production waits on it, so that its kernel and prior stores are built
-with the rest.
+**What it settled, in short:**
+- `pressure` is a geolocation coordinate, in Pa.
+- Vertical dims are `level` / `layer`; a matrix's second axis is `level_2`.
+- Each source keeps its vertical order, recorded in `vertical_order`.
+- A matrix published in pieces is one store (TES, IASI). That needs
+  multi-array variable stores in the shared code, which does not exist yet.
+- Left out: GOSAT `dry_column` (held, G7) and the TROPESS ratio covariance
+  (R11).
 
-**Read first:**
-- the style guide's Level 2 section. Split stacked arrays into one store per
-  quantity, and split matrices into blocks, keeping the cross blocks. The
-  vertical grid goes in the geolocation store;
-- `nomenclature_data.md`, and the naming rule under Decisions below;
-- `docs/l2-survey.md`: units per product, and the kernel and covariance
-  layouts (TES 34 x 34 HDO/H2O blocks, TROPESS log-space ratio kernels);
-- `docs/products/<product>.md` for each product. TROPOMI has the full
-  variable inventory with size estimates (deferred group: ~29 TiB).
+**Next, in order:**
+1. GOSAT: add the kernel, prior, pressure weight and pressure rows to its
+   key and config, then extend the reader and fixture. Then fixture, bench
+   and production, as for TROPOMI.
+2. TROPOMI: measure kernel compression first (scratch script, login node).
+   Then build 5 new stores, plus `pressure` in the geolocation store.
 
-**The layouts differ by product:**
-- column kernels: TROPOMI, SCIAMACHY, GOSAT;
-- block matrices: TES;
-- log-space ratio kernels: TROPESS (AIRS, CrIS);
-- SVD components: IASI;
-- priors as partial columns (TROPOMI) or mole fractions.
-
-A TROPOMI-only name would fix the pattern too early.
+### History of the naming pass
 
 **Deliverable, in order:**
-1. A proposal for the user. For each product and source: canonical name,
-   units, dims, and how it is split. **Written 2026-10-19:
-   `docs/model-comparison-naming.md`** (decisions N1-N12, 24 rows, findings
-   F1-F6). Second review 2026-10-19:
-   - approved: N1-N13, with covariances and the IASI temperature
-     cross-kernel added (now 43 rows);
-   - third and fourth reviews: N14-N17 approved (N16 leaves the TROPESS
-     ratio covariance out; recorded in `tropess.md`);
-   - N18 approved: one store per matrix in every product (TES, IASI). It
-     needs multi-array variable stores in the shared code, built and
-     tested on every fixture before any TES or IASI build;
-   - **every decision is approved (N1-N18). Next: the user reviews the row
-     tables** (sections 4-5: 48 new rows, 2 renamed);
-   - **uncommitted in `style_guides`, for the user's review:** the N13
-     rename in `nomenclature_data.md`, and the Level 2 amendment in the style
-     guide (N18's matrix-store sentence, plus a `level`/`layer`/`level_2`
-     line for N5/N6). Commit the GOSAT key and configs with it;
-   - N13 is applied: the two XH2O rows are renamed in `style_guides/nomenclature_data.md`
-     (**uncommitted there, for the user's review**), and in the GOSAT key and
-     configs. The fixture test passes 46 cases.
-2. The agreed rows in `nomenclature_data.md`. The user reviews before
-   commit (see How we work).
+1. A proposal for the user. **Done 2026-10-19:
+   `docs/model-comparison-naming.md`**: decisions N1-N18, all approved.
+2. The agreed rows in `nomenclature_data.md`. **Done 2026-10-19**
+   (style_guides `a585066` for the N13 rename and the Level 2 amendment,
+   `fee64ec` for 48 rows). The GOSAT key and configs use the renamed XH2O
+   rows; the fixture test passes 46 cases.
 3. Then the stores: GOSAT production; the TROPOMI model-comparison stores on
    the existing obs axis, without rebuilding the 19.
    - Before any 2-D store, measure kernel compression with a scratch script

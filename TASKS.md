@@ -56,7 +56,7 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
-Next: the naming pass of task 7, then GOSAT production.
+Next: GOSAT production, with the model-comparison stores named in task 7.
 
 
 # 7. Model-comparison stores: kernels, priors, dry-air columns, pressure grid
@@ -83,6 +83,14 @@ what to read, the layouts per product, and the deliverables in order.
 - **Done 2026-10-18:** pixel corners in the geolocation store, and
   `scanline_index` and `ground_pixel_index` stores (19 TROPOMI stores in
   all).
+- **Naming pass done 2026-10-19:** `docs/model-comparison-naming.md`
+  (N1-N18). 48 rows and the XH2O rename are in style_guides `fee64ec` /
+  `a585066`, along with the Level 2 rules for matrix stores and vertical
+  dims.
+  - Next: GOSAT's kernel, prior, pressure weight and pressure grid, then
+    the TROPOMI stores.
+  - TES and IASI first need multi-array variable stores in the shared
+    code (N18).
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).

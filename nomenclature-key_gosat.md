@@ -22,8 +22,8 @@ one obs per distinct sounding** (decided 2026-10-14; see
 | `xded` | `1e-3` | `water_vapor_column_delta_d` | `1e-3` | delta D of the total water vapor column | none | DED file. Column-averaged δD: XHDO and XH2O share the dry-air column, so this is δD of the total column, as TROPOMI's |
 | `xded_uncertainty` | `1e-3` | `water_vapor_column_delta_d_standard_error` | `1e-3` | standard error of delta D of the total water vapor column | none | DED file |
 | `xded_quality_flag` | (none) | `quality_flags_retrieval_delta_d` | `unitless` | quality flags of the delta D retrieval, where a product retrieves delta D and H2O separately | none | DED file; int32, 0 good, 1 potentially bad |
-| `xh2o` | `1e-6` | `water_vapor_column_mole_fraction_dry_air` | `1e-6` | column-averaged dry-air mole fraction of water vapor (XH2O) | none | H2O file; dry-air by definition |
-| `xh2o_uncertainty` | `1e-6` | `water_vapor_column_mole_fraction_dry_air_standard_error` | `1e-6` | standard error of the column-averaged dry-air mole fraction of water vapor (XH2O) | none | H2O file; 1-sigma |
+| `xh2o` | `1e-6` | `water_vapor_column_h2o_mole_fraction_dry_air` | `1e-6` | column-averaged dry-air mole fraction of water vapor (H2O) | none | H2O file; dry-air by definition |
+| `xh2o_uncertainty` | `1e-6` | `water_vapor_column_h2o_mole_fraction_dry_air_standard_error` | `1e-6` | standard error of the column-averaged dry-air mole fraction of water vapor (H2O) | none | H2O file; 1-sigma |
 | `xh2o_quality_flag` | (none) | `quality_flags_retrieval_h2o` | `unitless` | quality flags of the H2O retrieval, where a product retrieves delta D and H2O separately | none | H2O file; int32, 0 good, 1 potentially bad |
 | `solar_zenith_angle` | `degree` | `solar_zenith_angle` | `degree` | solar zenith angle | none | both files, identical where both hold a sounding |
 
