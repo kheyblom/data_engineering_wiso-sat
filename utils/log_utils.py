@@ -34,7 +34,17 @@ def log_peak_memory(logger):
     """
     import resource
 
+    main = resource.getrusage(resource.RUSAGE_SELF)
+    pool = resource.getrusage(resource.RUSAGE_CHILDREN)
     # ru_maxrss is KiB on Linux
-    own = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**2
-    children = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024**2
-    logger.info(f'peak memory: {own:.2f} GiB main process, {children:.2f} GiB largest worker')
+    logger.info(
+        f'peak memory: {main.ru_maxrss / 1024**2:.2f} GiB main process, '
+        f'{pool.ru_maxrss / 1024**2:.2f} GiB largest worker'
+    )
+    # what the job is billed for, split by where it went: PBS reports only
+    # the total, and the TROPOMI 2-D bench (2026-10-19) used ~4x the CPU its
+    # stages account for. sys is kernel time: page faults, I/O, pipes
+    logger.info(
+        f'cpu time: main {main.ru_utime / 3600:.2f} h user + {main.ru_stime / 3600:.2f} h sys; '
+        f'workers {pool.ru_utime / 3600:.2f} h user + {pool.ru_stime / 3600:.2f} h sys'
+    )
