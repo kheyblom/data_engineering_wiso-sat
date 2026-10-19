@@ -68,9 +68,13 @@ nomenclature-key_<product>.md # machine read: variable, coordinate and frequency
 validation/stage_<product>.py, validation/test_pipeline.py
 ```
 
-Finalization is typed by hand, one action per invocation, from the repo root
-on a login node (metadata only). Nothing is written without `--apply`.
-`--status` first: it reports which steps each store still needs.
+Finalization is one action per invocation, from the repo root on a login
+node (metadata only). Nothing is written without `--apply`. `--status` first:
+it reports which steps each store still needs.
+- **Claude runs the steps; the user signs off on each one** (user decision
+  2026-10-19). Run the dry run, show what it reports, and run `--apply` only
+  once the user approves that step.
+- Never chain the steps in a wrapper (reverted `77e7f0d`).
 
 ```bash
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --status

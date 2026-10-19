@@ -27,11 +27,10 @@ Read this first in a new session. Update it whenever work lands.
     the kernel, the a priori and the pressure weight.
   - 8,856,028 observations, 946 MB. 359 checks, 0 failures.
   - **Not yet finalized.** Run `--attrs` then `--tag
-    v3.0.1-verified-20261019`, each as a dry run and then with `--apply`
-    (commands in CLAUDE.md). `--status` shows nothing unreachable, so no
-    `--gc` is needed. The run log is in TESTING.md, Tier 3. Check
-    `--status` at the start of the next session: the user may have run
-    them.
+    v3.0.1-verified-20261019`, each as a dry run and then with `--apply` on
+    the user's sign-off (commands in CLAUDE.md). `--status` shows nothing
+    unreachable, so no `--gc` is needed. The run log is in TESTING.md,
+    Tier 3. Check `--status` first: this may already be done.
 
 ## Next task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3)
 
@@ -169,11 +168,13 @@ per-product open issues under Other open items.
   marker. Example: `docs/model-comparison-naming.md` up to `e87a8e1`. Once
   agreed, move the result to where it is used and keep the discussion in
   git.
-- **Finalize is typed by hand**, one action per call (`CLAUDE.md`). `--gc
-  --apply` is irreversible and needs approval. So does any `rm -rf`.
-  - On 2026-10-19 the auto-mode permission check refused even the GOSAT
-    `--attrs` dry run. Unless the user adds a permission rule, list the
-    commands for the user to run.
+- **Claude runs finalize, one action per call; the user signs off on each**
+  (2026-10-19; `CLAUDE.md`). Show the dry run, then `--apply` on approval.
+  `--gc --apply` is irreversible. Any `rm -rf` needs approval too.
+  - The auto-mode permission check refused finalize on 2026-10-19, even a
+    dry run, so the user is adding a permission rule for it. If a call is
+    still refused, list the command for the user, and do not work around
+    the check.
 - **Long or irreversible login-node steps** run detached (`setsid nohup`),
   so a dropped connection cannot stop them.
 - **Verify only new or changed stores.** A cheap `--phases structure,index`
