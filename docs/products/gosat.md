@@ -92,8 +92,42 @@ raw/GOSAT-2/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYY>-v3.0.1/v3.0.1/<YYYY>/IUP-GHG
   - So GOSAT time is int64 nanoseconds since 1900. The time unit is per
     product, from the key's coordinate table.
 - **The subset at fixture level:** δD and XH2O, their uncertainties, both
-  flags, and SZA. The kernel, a priori, dry column and pressure grid wait for
-  the cross-product naming pass.
+  flags, and SZA. The model-comparison variables are named (below) but not
+  yet built.
+
+## Model-comparison variables (named 2026-10-19)
+
+Named in the cross-product naming pass. The grammar and decisions are in
+`docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
+(style_guides `fee64ec`). Units are after conversion. Not built yet.
+
+- **Dims:** `layer_dim` (5) becomes `layer`; `level_dim` (6) becomes `level`,
+  the layer boundaries.
+- **Vertical order:** `surface_first` (the file's own comment: "Surface
+  pressure is represented by the 1st element").
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `xh2o_averaging_kernel` | `water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel` | unitless | (obs, layer) | none |
+| `h2o_profile_apriori` | `water_vapor_h2o_mole_fraction_dry_air_apriori` | 1e-6 | (obs, layer) | none; layer means |
+| `pressure_weight` | `pressure_weight_column_average` | unitless | (obs, layer) | none |
+| `pressure_levels` | geolocation `pressure` | Pa | (obs, level) | x 100 from `hPa`; layer boundaries |
+| `dry_column` | held (G7) | — | (obs, layer) | — |
+
+- **Which file:** the kernel and prior are in the H2O file only. DED has no
+  kernel or prior, so both are absent (NaN) on DED-only soundings.
+  `pressure_levels` and `pressure_weight` are in both files, identical where
+  both hold a sounding. So `pressure` is written for every sounding.
+- **The operator** these serve, from FOCAL:
+  `XH2O_sim = sum_j w_j (xa_j + a_j (x_model_j - xa_j))`, with w the pressure
+  weight, a the kernel and xa the prior. `dry_column` is not needed for it.
+- **`pressure_weight`** is within 0.0026 of dp / p_surface, but not equal. So
+  it is stored as published, not derived.
+- **`dry_column` is held** (G7). Resolve its unit from the GHG-CCI Product
+  Specification Document v3, or by asking IUP. It would then be
+  `dry_air_partial_column`, like TROPOMI's.
+- **Stores:** 3 variable stores, plus `pressure` in the geolocation store.
+  GOSAT-2 has the same format.
 
 ## Known data issues
 
@@ -107,5 +141,5 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | G4 | **The time variable carries `calendar: standard`**, which blocks xarray's time encoding. | handled: kept as `original_calendar`; stored as proleptic_gregorian |
 | G5 | **GOSAT: 138 days have no files, GOSAT-2: 51**, identical for DED and H2O. Not yet checked against upstream. | handled for GOSAT (`expected_missing_days`); GOSAT-2 not configured |
 | G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly |
-| G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit, and is **~1/4 of the hydrostatic dry column**. In molec cm-2, dp / (g M_dry) x N_A per layer over `dry_column` gives p1 / p50 / p99 3.97 / 3.99-4.00 / 4.04, on 2011-01-15 and 2015-06-01 (2,984 soundings; 2026-10-19). | open: held from the naming pass (`docs/model-comparison-naming.md` N11); not needed to apply the kernel |
+| G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit, and is **~1/4 of the hydrostatic dry column**. In molec cm-2, dp / (g M_dry) x N_A per layer over `dry_column` gives p1 / p50 / p99 3.97 / 3.99-4.00 / 4.04, on 2011-01-15 and 2015-06-01 (2,984 soundings; 2026-10-19). | open: held (user decision 2026-10-19; `docs/model-comparison-naming.md` N11). Not needed to apply the kernel. Resolve from the GHG-CCI PSD v3 or IUP |
 | G8 | `xh2o` holds negative values (minimum -116.6 ppm in one sampled day). | record only |

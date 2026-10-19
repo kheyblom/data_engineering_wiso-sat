@@ -172,9 +172,10 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
     granule. There is no product token.
   - Canonical units: δD in `1e-3`; columns in `mol m-2` (x 1e4 / N_A from
     molec cm-2); mole fractions in `1e-6`, dry-air basis.
-  - Model-comparison variables (kernels, priors, covariances, pressure): see
-    `docs/model-comparison-naming.md`. `pressure` is in Pa; vertical dims are
-    `level` / `layer`.
+  - Model-comparison variables (kernels, priors, covariances, pressure):
+    - the grammar and layout rules are in `docs/model-comparison-naming.md`;
+    - each product's mapping is in its `docs/products/<product>.md`;
+    - `pressure` is in Pa, and vertical dims are `level` / `layer`.
   - Never set `standard_name`; a source one is retained unchanged.
     `cdm_data_type: Point`.
 - **Nomenclature rows come first.** Every variable, unit and frequency needs an

@@ -230,31 +230,43 @@ raw files.
 | `diagnostics/number_of_spectral_points_in_retrieval` | `spectral_point_count_retrieval` | unitless | none (int32; squeeze `nwin`) |
 | `diagnostics/number_of_spectral_points_in_prefit` | `spectral_point_count_prefit` | unitless | none (int32; squeeze `nwin`) |
 
-**Deferred: model comparison.** These are 50 layers each, ~5.2 TB
-uncompressed. With the pressure grid they total ~31 TB.
-- Revisit after the bench measures how well kernels compress. A standalone
-  scratch script measures it; that needs no nomenclature rows.
-- No canonical names or nomenclature rows yet. At the second-reader step
-  (GOSAT or TES), the kernels, priors and dry-air columns are named in one
-  design pass across all products, following the naming rule.
-  - Every product has kernels and priors, in different layouts:
-    - column kernels: TROPOMI, SCIAMACHY, GOSAT;
-    - block matrices: TES;
-    - log-space ratio kernels: TROPESS;
-    - SVD components: IASI;
-    - priors as partial columns or as mole fractions.
-  - A TROPOMI-only name would fix the pattern too early.
-
-| source | units | conversion |
-| --- | --- | --- |
-| `target_product/h2o_column_averaging_kernel` | unitless | none |
-| `target_product/hdo_column_averaging_kernel` | unitless | none |
-| `target_product/h2o_profile_apriori` | mol m-2 | x 1e4 / N_A |
-| `target_product/hdo_profile_apriori` | mol m-2 | x 1e4 / N_A |
-| `meteo/dry_air_subcolumns` | mol m-2 | x 1e4 / N_A |
+**Model comparison:** kernels, priors, dry-air partial columns and the
+pressure grid. Named 2026-10-19 and not built yet; see Model-comparison
+variables below.
 
 - **Left out unless asked:** every other variable. They are listed, with
   reasons and size estimates, under Variable inventory below.
+
+## Model-comparison variables (named 2026-10-19)
+
+Named in the cross-product naming pass. The grammar and decisions are in
+`docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
+(style_guides `fee64ec`). Units are after conversion. Not built yet.
+
+- **Dims:** `nlayer` (50) becomes `layer`; `nlevel` (51) becomes `level`, the
+  layer interfaces.
+- **Vertical order:** `top_first`. Level 0 is 0 Pa, and the last level is the
+  surface pressure.
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `target_product/h2o_column_averaging_kernel` | `water_vapor_column_h2o_averaging_kernel` | unitless | (obs, layer) | none |
+| `target_product/hdo_column_averaging_kernel` | `water_vapor_column_hdo_averaging_kernel` | unitless | (obs, layer) | none |
+| `target_product/h2o_profile_apriori` | `water_vapor_partial_column_h2o_apriori` | mol m-2 | (obs, layer) | x 1e4 / N_A from `molec. cm-2` |
+| `target_product/hdo_profile_apriori` | `water_vapor_partial_column_hdo_apriori` | mol m-2 | (obs, layer) | x 1e4 / N_A |
+| `meteo/dry_air_subcolumns` | `dry_air_partial_column` | mol m-2 | (obs, layer) | x 1e4 / N_A |
+| `meteo/pressure_levels` | geolocation `pressure` | Pa | (obs, level) | none; layer interfaces |
+
+- SRON calls the priors "profile", but they are partial columns: "A-priori
+  vertically integrated partial column of water in layers", in molec cm-2
+  per layer. Hence `partial_column`.
+- **Stores:** 5 new variable stores on the existing obs axis and granule
+  index, and `pressure` added to the existing geolocation store, as the
+  corners were. The 19 existing stores are not rebuilt.
+- **Size:** ~29 TiB estimated (Variable inventory, group 1).
+  - Measure kernel compression with a scratch script before building.
+  - The chunk rule gives 50 layers 131,072 obs per chunk.
+- **T20:** column kernels reach p99 ~700 in some layers. Record only.
 
 ## Variable inventory (2026-10-18)
 
@@ -356,7 +368,7 @@ to the record's 32,657,526,234 obs.
 | `instrument/longitude_center` | obs float32 | 122 | 101 | stored as geolocation `lon` |
 | `instrument/time` | obs x 7 int32 | 852 | (in geolocation) | int64 ms in the store |
 
-**1. Deferred: model comparison (cross-product naming pass, TASKS.md task 7).** Why: needed for model comparison; named across products before GOSAT production.
+**1. Model comparison (named 2026-10-19; see Model-comparison variables).** Why: needed for model comparison; not built yet.
 
 | source | shape | raw GiB | est. store GiB | notes |
 | --- | --- | --- | --- | --- |

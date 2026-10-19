@@ -52,6 +52,79 @@ raw/IASI/IASI_L2/<YYYY>/IASIAB_MUSICA_030201_L2pp_H2Oiso_v2_<YYYYMMDD>_{morning,
 - Record the MUSICA L2pp flag guidance from Diekmann et al. (2021). This has
   not been read yet.
 
+## Model-comparison variables (named 2026-10-19)
+
+Named in the cross-product naming pass. The grammar and decisions are in
+`docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
+(style_guides `fee64ec`). Units are after conversion. Not built yet.
+
+- **Dims:**
+  - `atmospheric_levels` (29) becomes `level`. Levels beyond `musica_nol`
+    (18-29 per obs) are NaN.
+  - `wv_avk_rank` becomes `rank`, and `wv_xavkat_rank` becomes
+    `rank_temperature`, so the two SVDs never share a dim name with two
+    sizes.
+- **Vertical order:** `top_first` (level 0 at ~46 Pa).
+- **The proxy state.** MUSICA retrieves two ln-space proxies per level:
+  - humidity, 0.5 (ln H2O + ln HDO);
+  - δD, ln HDO - ln H2O (`musica_species_id` 0 and 1).
+
+  The kernel is a 58 x 58 matrix over them.
+- **How the kernel is published.** As a truncated SVD, `A = L diag(s) R^T`,
+  with L and R orthonormal. Block (k, l), retrieved proxy k against true
+  proxy l, is `L_k diag(s) R_l^T`.
+  - L and R split per proxy, which loses nothing.
+  - The δD-proxy block that δD comparisons use needs `L_δD`, s and `R_δD`.
+  - Rebuilding A would be a derivation, and 2.2 times larger, so the
+    components are stored as published.
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `musica_h2o_apriori` | `water_vapor_h2o_mole_fraction_dry_air_apriori` | 1e-6 | (obs, level) | none (respell `ppmv`) |
+| `musica_deltad_apriori` | `water_vapor_delta_d_apriori` | 1e-3 | (obs, level) | none |
+| `musica_wvp_apriori[:, 0]` | `water_vapor_proxy_humidity_apriori` | unitless | (obs, level) | none; ln space, never scaled |
+| `musica_wvp_apriori[:, 1]` | `water_vapor_proxy_delta_d_apriori` | unitless | (obs, level) | none; ln space |
+| `musica_wvp_avk_lvec[:, 0]` | `water_vapor_proxy_humidity_averaging_kernel_svd_left_vectors` | unitless | (obs, rank, level) | none; rank padded (I6) |
+| `musica_wvp_avk_lvec[:, 1]` | `water_vapor_proxy_delta_d_averaging_kernel_svd_left_vectors` | unitless | (obs, rank, level) | none |
+| `musica_wvp_avk_rvec[:, 0]` | `water_vapor_proxy_humidity_averaging_kernel_svd_right_vectors` | unitless | (obs, rank, level) | none |
+| `musica_wvp_avk_rvec[:, 1]` | `water_vapor_proxy_delta_d_averaging_kernel_svd_right_vectors` | unitless | (obs, rank, level) | none |
+| `musica_wvp_avk_val` | `water_vapor_proxy_averaging_kernel_svd_singular_values` | unitless | (obs, rank) | none |
+| `musica_wvp_avk_rank` | `water_vapor_proxy_averaging_kernel_svd_rank` | unitless | (obs) | none (int8) |
+| `musica_wvp_xavkat_lvec[:, 0]` | `water_vapor_proxy_humidity_averaging_kernel_cross_air_temperature_svd_left_vectors` | unitless | (obs, rank_temperature, level) | none; rank padded |
+| `musica_wvp_xavkat_lvec[:, 1]` | `water_vapor_proxy_delta_d_averaging_kernel_cross_air_temperature_svd_left_vectors` | unitless | (obs, rank_temperature, level) | none |
+| `musica_wvp_xavkat_rvec` | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_right_vectors` | unitless | (obs, rank_temperature, level) | none; temperature side, so no proxy dim |
+| `musica_wvp_xavkat_val` | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_singular_values` | K-1 | (obs, rank_temperature) | none; corrected source unit `1` -> `K-1` (I8) |
+| `musica_wvp_xavkat_rank` | `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd_rank` | unitless | (obs) | none (int8) |
+| `musica_pressure_levels` | geolocation `pressure` | Pa | (obs, level) | none |
+
+- **Priors:**
+  - The proxy priors are what the kernel applies to.
+  - The H2O and δD priors are the physical ones. The proxies follow from them
+    only through ln and a reference ratio, so not exactly in float32.
+  - Both pairs are stored.
+- **Padding (I6):**
+  - Each file pads its rank dim with NaN past each obs's own rank.
+  - The stores pad to the record maximum in the same way, recorded in the
+    metadata.
+  - Find the maximum of both rank dims from the headers before building.
+- **Stores: 6.** A matrix published in pieces is one store (style guide,
+  Level 2).
+  - The four priors are one store each.
+  - The six `musica_wvp_avk_*` arrays share
+    `water_vapor_proxy_averaging_kernel_svd`.
+  - The five `musica_wvp_xavkat_*` arrays share
+    `water_vapor_proxy_averaging_kernel_cross_air_temperature_svd`.
+  - This needs multi-array variable stores in the shared code first.
+- **Sizes:**
+  - each kernel vector array is ~2.4 TB uncompressed (1.6e9 obs x 13 x 29 x
+    4 B), ~9.7 TB for the four;
+  - the temperature cross-kernel is ~4.5 TB.
+- **Not here:** `musica_h2o_error`, `musica_deltad_error` and
+  `musica_wvp_error` are 1-sigma retrieval errors. They are named with the
+  retrieved quantities when the reader is built (e.g.
+  `water_vapor_h2o_mole_fraction_dry_air_standard_error`).
+- **Before building:** the store version (I7).
+
 ## Known data issues
 
 Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).

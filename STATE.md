@@ -27,9 +27,11 @@ Read this first in a new session. Update it whenever work lands.
 
 **The naming pass is done (2026-10-19).** Every product's kernels, priors,
 dry-air columns, covariances and pressure grid are named in
-`docs/model-comparison-naming.md`. Read it before writing any key rows:
-- section 5 gives every product's sources, names, units, dims and splits;
-- section 1 has the decisions (N1-N18).
+the docs. Read both before writing any key rows:
+- each product's sources, names, units, dims, conversions and stores are in
+  the Model-comparison variables section of `docs/products/<product>.md`;
+- the grammar, the layout rules and the decisions (N1-N18) are in
+  `docs/model-comparison-naming.md`.
 
 **What it settled, in short:**
 - `pressure` is a geolocation coordinate, in Pa.
@@ -69,9 +71,9 @@ dry-air columns, covariances and pressure grid are named in
 
 ### History of the naming pass
 
-- **The proposal:** four review rounds on 2026-10-19, recorded in
-  `docs/model-comparison-naming.md` (sections 2.1-2.13 answer each
-  comment).
+- **The proposal:** four review rounds on 2026-10-19. The full discussion is
+  in the git history of `docs/model-comparison-naming.md`, up to `e87a8e1`.
+  The file is now a short reference.
 - **Rows:** 48 new and 2 renamed in style_guides `fee64ec` and `a585066`.
 - **The rename:** `water_vapor_column_mole_fraction_dry_air[_standard_error]`
   became `water_vapor_column_h2o_mole_fraction_dry_air[_standard_error]`.
@@ -121,7 +123,9 @@ dry-air columns, covariances and pressure grid are named in
   in place, with `#@CLAUDE` comments.
 - **Proposals for the user** go in a repo doc, which they review in place
   with `#@CLAUDE` comments. Answer each comment in the doc, then remove its
-  marker. Example: `docs/model-comparison-naming.md`.
+  marker. Example: `docs/model-comparison-naming.md` up to `e87a8e1`. Once
+  agreed, move the result to where it is used and keep the discussion in
+  git.
 - **Finalize is typed by hand**, one action per call (`CLAUDE.md`). `--gc
   --apply` is irreversible and needs approval. So does any `rm -rf`.
 - **Long or irreversible login-node steps** run detached (`setsid nohup`),

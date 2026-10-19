@@ -32,8 +32,9 @@ one obs per distinct sounding** (decided 2026-10-14; see
 - **Every sounding is flag 0** in the files sampled: FOCAL publishes only
   soundings that pass its quality control (Sarkar et al. 2026). The flags are
   stored anyway, since quality flags are mandatory.
-- **Deferred:** the kernel, a priori, dry column and pressure grid. They wait
-  for the cross-product naming pass.
+- **Next:** the kernel, a priori, pressure weight and pressure grid. Their rows
+  exist (2026-10-19), and the mapping is in `docs/products/gosat.md`
+  (Model-comparison variables). `dry_column` is held (G7).
 
 ## Coordinate Key
 

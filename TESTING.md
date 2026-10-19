@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-16): 38 cases, TROPOMI and GOSAT |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: waits on the kernel naming pass |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: next. Its model-comparison variables were named 2026-10-19 |
 
 ## Tier 0 and 1: the fixture test
 
@@ -571,8 +571,8 @@ the production run, in order.
    - the develop queue: 8 cores, 32 GB, 6 h limit (NCAR docs), at ~125
      core-hours estimated, against ~670+ on main.
 3. Later, not blocking TROPOMI:
-   - the cross-product naming pass for kernels, priors and dry-air columns,
-     which GOSAT production waits on;
+   - the cross-product naming pass for kernels, priors and dry-air columns
+     (done 2026-10-19);
    - GOSAT-2 configs (`product: gosat2`), which need a small shared change so
      the reader and key can be named apart from the product;
    - task 6, the other products.
@@ -580,7 +580,7 @@ the production run, in order.
 Blockers:
 - **TROPOMI:** done. All 19 stores were finalized 2026-10-18 (run log above).
 - **GOSAT:** the whole record is ~9,000 small files, so a single develop job
-  covers build and verification. It waits on the cross-product naming pass,
-  so that its kernel and a priori stores are built with the rest.
+  covers build and verification. Its kernel, a priori and pressure-weight
+  stores are named (2026-10-19), and are built with the rest.
   - Building them later is possible: a new store resumes from zero on the same
     obs axis while the others are no-ops.

@@ -77,6 +77,60 @@ raw/TES/TL2HDOLN_6-20241006_030112/TES-Aura_L2-HDO-Nadir_<YYYY-MM>_v006_Litev01.
 - Strict: COD <= 0.5 and DOF >= 1.
 - Relaxed: COD <= 3.6 and DOF >= 0.5.
 
+## Model-comparison variables (named 2026-10-19)
+
+Named in the cross-product naming pass. The grammar and decisions are in
+`docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
+(style_guides `fee64ec`). Units are after conversion. Not built yet.
+
+- **Dims:** `Grid_Pressure_Composite` (34) holds HDO levels 0-16, then H2O
+  17-33, on the same 17 pressures. It splits into `level` (17), the grid the
+  file's own `Grid_Pressure` (17) describes. A matrix's second axis is
+  `level_2`.
+- **Rows and columns:** rows are the retrieved state, columns the true state.
+  The file's `AveragingKernel` description says: "sensitivity of retrieved
+  ln(vmr) to the true ln(vmr)".
+- **Vertical order:** `surface_first`.
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `ConstraintVector[0:17]` | `water_vapor_hdo_mole_fraction_dry_air_apriori` | 1e-6 | (obs, level) | x 1e6 from `mole/mole` |
+| `ConstraintVector[17:34]` | `water_vapor_h2o_mole_fraction_dry_air_apriori` | 1e-6 | (obs, level) | x 1e6 |
+| `AveragingKernel[0:17, 0:17]` | `water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log` | unitless | (obs, level, level_2) | none |
+| `AveragingKernel[0:17, 17:34]` | `water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log_cross_h2o` | unitless | (obs, level, level_2) | none |
+| `AveragingKernel[17:34, 0:17]` | `water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log_cross_hdo` | unitless | (obs, level, level_2) | none |
+| `AveragingKernel[17:34, 17:34]` | `water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log` | unitless | (obs, level, level_2) | none |
+| `ObservationErrorCovariance`, 4 blocks | `water_vapor_{hdo,h2o}_mole_fraction_dry_air_observation_error_covariance_log[_cross_{h2o,hdo}]` | unitless | (obs, level, level_2) | none; no `Units` attribute, declared `ln(vmr)^2` |
+| `Characterization/MeasurementErrorCovariance`, 4 blocks | `water_vapor_{hdo,h2o}_mole_fraction_dry_air_measurement_error_covariance_log[_cross_{h2o,hdo}]` | unitless | (obs, level, level_2) | none; `ln(vmr)^2` |
+| `Characterization/TotalErrorCovariance`, 4 blocks | `water_vapor_{hdo,h2o}_mole_fraction_dry_air_total_error_covariance_log[_cross_{h2o,hdo}]` | unitless | (obs, level, level_2) | none; `ln(vmr)^2` |
+| `Pressure[0:17]` | geolocation `pressure` | Pa | (obs, level) | x 100 from `hPa`; the build checks that both halves are equal on every obs |
+
+- **Blocks:** every matrix maps as the kernel does.
+  - `[0:17, 0:17]` is the HDO block; `[0:17, 17:34]` is HDO `_cross_h2o`.
+  - `[17:34, 0:17]` is H2O `_cross_hdo`; `[17:34, 17:34]` is the H2O block.
+  - Both cross blocks are kept, though in each covariance `S_HD` is exactly
+    `S_DH` transposed.
+- **The error budgets:**
+  - `observation`: measurement + systematic + cross-state. The file says it
+    is "for comparisons with other measurements and for assimilation".
+  - `measurement`: propagated radiance noise.
+  - `total`: smoothing + systematic + measurement.
+- **Stores: 6.** A matrix published in pieces is one store (style guide,
+  Level 2).
+  - The two priors are one store each.
+  - The kernel's 4 blocks are arrays in
+    `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log`.
+  - Each covariance's 4 blocks are arrays in
+    `water_vapor_hdo_and_h2o_mole_fraction_dry_air_{observation,measurement,total}_error_covariance_log`.
+  - This needs multi-array variable stores in the shared code first.
+- **Sizes:** ~40 GB uncompressed for the 12 covariance blocks, ~3.4 GB each.
+- **Left out:**
+  - `AirDensity`, a number density on levels; no dry-air partial column is
+    published.
+  - The 67-level forward-model grid (`Grid_Pressure_FM`: `Altitude_FM`,
+    `Pressure_FM`, `Map`). If it is ever stored, it needs its own dim name
+    (e.g. `level_fm`).
+
 ## Known data issues
 
 Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
