@@ -97,5 +97,6 @@ Thumbs.db
 # ---- EDrafting ----
 draft*
 
-# exploratory notebooks, not part of the pipeline
-testing*.ipynb
+# exploratory notebooks (Jupyter, marimo and their caches), not part of the
+# pipeline
+notebooks/
