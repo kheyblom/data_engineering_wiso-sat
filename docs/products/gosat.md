@@ -107,5 +107,5 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | G4 | **The time variable carries `calendar: standard`**, which blocks xarray's time encoding. | handled: kept as `original_calendar`; stored as proleptic_gregorian |
 | G5 | **GOSAT: 138 days have no files, GOSAT-2: 51**, identical for DED and H2O. Not yet checked against upstream. | handled for GOSAT (`expected_missing_days`); GOSAT-2 not configured |
 | G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly |
-| G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit. | open: value-check it before storing |
+| G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit, and is **~1/4 of the hydrostatic dry column**. In molec cm-2, dp / (g M_dry) x N_A per layer over `dry_column` gives p1 / p50 / p99 3.97 / 3.99-4.00 / 4.04, on 2011-01-15 and 2015-06-01 (2,984 soundings; 2026-10-19). | open: held from the naming pass (`docs/model-comparison-naming.md` N11); not needed to apply the kernel |
 | G8 | `xh2o` holds negative values (minimum -116.6 ppm in one sampled day). | record only |

@@ -86,3 +86,4 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R7 | **`x_h2o` reaches 0.44 mol mol-1**, which is unphysical. | record only |
 | R8 | **`observation_error_h2o` is a ln-space relative error** with units `1`, sitting next to mole-fraction variables. | open: must never be scaled x 1e6 (project rule) |
 | R9 | **RS (Summary) files are pre-filtered**; FS files are not. | record only |
+| R10 | **FS `pressure` level 0 is -999** on the targets sampled (AIRS FS 2023-06-15); RS level 0 holds the surface pressure (2026-10-19). | open: check across the record; the fill is masked as usual |

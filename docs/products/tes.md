@@ -47,6 +47,8 @@ raw/TES/TL2HDOLN_6-20241006_030112/TES-Aura_L2-HDO-Nadir_<YYYY-MM>_v006_Litev01.
      `Characterization/*ErrorCovariance` (ln(vmr)^2) are stacked the same
      way. Each splits into **four 17 x 17 blocks** (HDO-HDO, HDO-H2O,
      H2O-HDO, H2O-H2O), keeping the cross blocks (style guide rule).
+   - The kernel is in ln(vmr) space, rows the retrieved state and columns
+     the true state, per its own `LongName` (2026-10-19).
    - Split HDO: p50 4.7e-8. Split H2O: p50 2.2e-4. HDO/H2O p50 2.2e-4. Implied
      δD runs from -82 per mil at the surface to -650 aloft, which is physical.
 2. **`Characterization/TotalColumnDensity` is mislabelled.** It says

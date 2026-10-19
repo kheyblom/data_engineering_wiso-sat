@@ -53,7 +53,9 @@ A TROPOMI-only name would fix the pattern too early.
 
 **Deliverable, in order:**
 1. A proposal for the user. For each product and source: canonical name,
-   units, dims, and how it is split.
+   units, dims, and how it is split. **Written 2026-10-19:
+   `docs/model-comparison-naming.md`** (decisions N1-N12, 24 rows, findings
+   F1-F6). Awaiting the user's review, in place with `#@CLAUDE` comments.
 2. The agreed rows in `nomenclature_data.md`. The user reviews before
    commit (see How we work).
 3. Then the stores: GOSAT production; the TROPOMI model-comparison stores on
@@ -151,4 +153,5 @@ No compute is needed for steps 1-2.
 
 - **Coordinate naming in the geolocation store.** `pressure` follows the
   `time`/`lat`/`lon` convention (no nomenclature row) unless the user says
-  otherwise. Settle it in the naming pass.
+  otherwise. Proposed as N3, units Pa as N4, in
+  `docs/model-comparison-naming.md`.

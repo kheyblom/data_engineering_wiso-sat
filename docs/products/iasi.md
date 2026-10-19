@@ -63,3 +63,5 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | I3 | **Averaging kernels are stored as a truncated SVD** (rank <= 13). | open: store the components as published; reconstructing is a derivation |
 | I4 | **`IASIAB`** presumably combines MetOp-A and -B; not confirmed. `raw/IASI/trash` and the L3 data bag sit beside the L2 files. | open: confirm from metadata; exclude both folders |
 | I5 | **WISO-SAT itself gridded the MUSICA L3**, not these L2pp files. | record only |
+| I6 | **`wv_avk_rank` varies by file**: 12 or 13 in seven files sampled 2014-2020 (2026-10-19). | open: pad `rank` to the record maximum with NaN (`docs/model-comparison-naming.md` N10); find the maximum before building |
+| I7 | **The processor version changes in 2019**: `IASIAB_MUSICA_030201` to 2019, then `IASIAB_MUSICA_030300` and `IASIABC_MUSICA_030300` (MetOp-C joins). File counts: 2019 holds 362 AB 030201, 230 AB 030300 and 138 ABC 030300; 2020 is all ABC 030300 (2026-10-19). The store name carries one version. | open: decide the store version and naming before building |
