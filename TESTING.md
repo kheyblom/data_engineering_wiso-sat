@@ -372,6 +372,27 @@ from 2026-10-16 were complete and skipped. Blosc zstd 5 + shuffle, shards of
 The test passes 63 cases with the same check counts as before. The re-bench
 measures the result.
 
+**Re-bench with the fixes (2026-10-19, at `3753d14`, the
+bench at 10 granules per commit).** The six bench stores were deleted first
+(user approval).
+
+| job | what | wall | CPU used | peak memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7877506 | build, six processes of their own | 23 min 27 s | 3.06 h (workers 2.10 user + 0.95 sys) | 15.6 GiB per store process | 390 granules each; masking as before |
+| 7877507 | verify `--stores` the six, 48 scans x 8 processes | 20 min 52 s | 2.83 h (workers 1.02 user + 1.80 sys) | 2.5 GiB per scan | **297 checks, 0 failures** |
+
+- **Cost:** 5.9 core-hours billed, against 11.2 (-48%). Wall -37% build, -55%
+  verify.
+- **Production at these rates:** build ~37 h wall (~295 core-hours), verify
+  ~33 h (~262): **~555 core-hours**, against ~1,050 before the fixes.
+- **Still ~2.5x the stage profile:** the build uses ~28 s of CPU per orbit
+  against ~11. Kernel time is large, and dominates the verifier (1.8 of 2.8
+  h): likely page faults, since glibc maps every allocation over 32 MB
+  fresh, so each multi-GB array is zeroed again every batch or granule.
+  Untested remedies: reusing buffers, or transparent huge pages.
+- **Memory:** six store processes at 15.6 GiB can approach 94 GB; production
+  should request ~128 GB at 10 granules per commit.
+
 ## Tier 3: production
 
 Per product:

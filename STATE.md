@@ -115,10 +115,13 @@ Read this first in a new session. Update it whenever work lands.
      for the six; the verifier scans (group x granule range) in parallel,
      returning counts only, and `--stores` no longer re-compares
      geolocation. Test: 63 cases.
-   - **Next: re-bench** (show the jobs first): delete the six bench stores
-     (needs approval), rebuild with `granules_per_commit` 10 (six processes
-     each hold one batch), verify `--stores` the six; then a production plan
-     with a firm cost.
+   - **Re-bench done** (jobs 7877506, 7877507; TESTING.md Tier 2b): 297
+     checks, 0 failures; 5.9 core-hours against 11.2. **Production at these
+     rates: ~555 core-hours** (build ~295, verify ~262), against ~1,050.
+   - **Awaiting the user:** production now at ~555, or one more diagnostic
+     (~1-2 core-hours) on the remaining kernel time (page faults on
+     multi-GB arrays; buffer reuse or huge pages), maybe toward 350-450.
+     Production should request ~128 GB at 10 granules per commit.
 8. **Production**, chained `afterany`; finalize the 6 stores with
    `v8.1-verified-<date>`, then `--expire` and `--gc`.
 
