@@ -125,9 +125,15 @@ Read this first in a new session. Update it whenever work lands.
 8. **Production build RUNNING (submitted 2026-10-19 20:48, user approved):**
    chain B1-B7 = jobs 7877706-7877712, develop, 8 cores, 128 GB, 6 h,
    `afterany`; at `4945839`, `granules_per_commit` 10, 3,865 batches per
-   store. B1 committed all six stores' first batch by 20:50. Expected ~37 h
-   wall, ~295 core-hours; later jobs are no-ops once all 38,645 granules are
-   written.
+   store. B1 committed all six stores' first batch by 20:50.
+   - **Slower than the bench (2026-10-20 09:05):** ~680 orbits/h per store
+     against ~1,000 in the bench month, flat over five hours (contention on
+     shared develop nodes, probably). 27-28% of obs done after 13 h; the
+     build now looks like ~52 h wall, ~420 core-hours (estimate was 295),
+     and production as a whole ~780 if the verify is slowed alike.
+   - **B8-B10 appended** (user approved): jobs 7882022-7882024, same
+     settings, `afterany` B7; ~2 expected to be needed. Later jobs are
+     no-ops (~1 min) once all 38,645 granules are written.
    - **When the chain ends:** check every job's `Exit_status` (`qstat -xf
      <id>.desched1`) and that each of the six stores holds 38,645 granules.
    - **Then verify (approved):** two jobs, `--stores` the two kernels and
