@@ -598,8 +598,15 @@ compression:
 chunks:
   obs: 4194304
   granule: 65536
-granules_per_commit: 60
+granules_per_commit: 10
 num_workers: 8
+# The six 2-D stores (2026-10-19, re-bench in TESTING.md Tier 2b): the 19
+# other stores are complete, so granules_per_commit now sizes only the six
+# store processes' batches: 10 granules is ~15.6 GiB per process at peak, ~94
+# GB for six, so builds ask for 128 GB. Superseded shards (~25% at 10) are
+# reclaimed by finalize --expire. verify_num_workers: scan processes; each
+# peaked at 2.5 GiB in the re-bench.
+verify_num_workers: 64
 
 # The six 2-D stores are each built, and verified, in a process of their own
 # that reads only their sources: shipping ~1.1 GB per orbit from read workers

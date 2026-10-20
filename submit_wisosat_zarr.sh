@@ -154,15 +154,20 @@ echo "queue    ${PBS_QUEUE:-unset}"
 # The cpu count comes from the affinity mask rather than $NCPUS or nproc, both of
 # which lie here: on a shared develop node PBS reports NCPUS=1 whatever it
 # granted, and nproc reports OMP_NUM_THREADS, which this script pins to 1.
+# A verify job runs verify_num_workers scan processes when the config sets it.
 read -r workers available < <(uv run python -c "
 import os
 from utils.path_utils import load_config
-print(load_config('${CONFIG}').get('num_workers') or 0, len(os.sched_getaffinity(0)))
+settings = load_config('${CONFIG}')
+workers = settings.get('num_workers') or 0
+if '${VERIFY:-}':
+    workers = settings.get('verify_num_workers', workers)
+print(workers, len(os.sched_getaffinity(0)))
 ")
-echo "workers  num_workers=${workers:-unset}, cpus available=${available}"
+echo "workers  ${workers:-unset} processes, cpus available=${available}"
 if (( workers > available )); then
-    echo "error: num_workers=${workers} in ${CONFIG} exceeds the ${available} cpus" >&2
-    echo "       this job can use; raise ncpus or lower num_workers" >&2
+    echo "error: ${workers} worker processes from ${CONFIG} exceed the ${available} cpus" >&2
+    echo "       this job can use; raise ncpus or lower num_workers / verify_num_workers" >&2
     exit 1
 fi
 
