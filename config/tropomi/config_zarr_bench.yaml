@@ -123,13 +123,16 @@ compression:
 #   is also what a walltime kill can lose. With the six 2-D stores (2026-10-19)
 #   a batch of 20 is ~20 GB of reads, ~60 GB in the main process with two in
 #   flight, so the bench asks for 96 GB; it also sets the superseded shard
-#   bytes (~2.5 / 20 = ~12% until finalize --expire).
+#   bytes (~2.5 / 20 = ~12% until finalize --expire). Since each 2-D store has a process of
+#   its own (finding 12), each holds its own batch: 10 granules is ~10 GB per
+#   process, ~60 GB for the six (re-bench 2026-10-19; ~25% superseded until
+#   --expire).
 # - num_workers: read processes. HDF5 is not thread safe, so reads are spread
 #   over processes, never threads.
 chunks:
   obs: 4194304
   granule: 65536
-granules_per_commit: 20
+granules_per_commit: 10
 num_workers: 8
 
 # The six 2-D stores are each built, and verified, in a process of their own
