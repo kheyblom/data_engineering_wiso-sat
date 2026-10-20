@@ -22,6 +22,16 @@ Each store resumes on its own from its granule index, so a run killed between
 two stores' commits picks up exactly where each left off. Before anything is
 read, the listing is checked: granules unique, and the days without one exactly
 the config's ``expected_missing_days``.
+
+**Stores with a process of their own** (``own_process_stores``, user decision
+2026-10-19; TESTING.md finding 12). A store whose sources no other store reads,
+such as TROPOMI's 50-layer kernels, gains nothing from the shared pass: its
+~170 MB per orbit would be read by a worker only to be pickled, piped and
+unpickled into this process, which cost more CPU than the reading. Each such
+store runs the same pass in a process of its own, reading its sources there,
+alongside the shared pass for the other stores. Its large sources are still
+read once; only the small location sources (time, lat, lon) are read again
+per store.
 """
 
 import argparse
@@ -147,21 +157,46 @@ class Reader:
             self.pool.shutdown()
 
 
-def build(settings):
-    """Run the pass.
+def own_process_stores(settings):
+    """The stores the config builds each in a process of its own, checked.
 
     Args:
         settings (dict): The loaded configuration.
 
     Returns:
-        dict: Store -> granules written by this run.
+        list: Store variable slots, in the config's order.
+
+    Raises:
+        ValueError: If one is not a variable store of this config, or is
+            listed twice. The geolocation store always takes the shared pass,
+            which the time checks run on.
+    """
+    own = list(settings.get('own_process_stores') or [])
+    variable_stores = run_stores(settings)[1:]
+    bad = [store for store in own if store not in variable_stores]
+    if bad or len(set(own)) != len(own):
+        raise ValueError(
+            f'own_process_stores must name variable stores of this config, once '
+            f'each; {bad or own} is not'
+        )
+    return own
+
+
+def prepare(settings):
+    """Check everything a pass relies on, once, before anything is written.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        tuple: The granule listing and the code revision.
     """
     product = settings['product']
     reader = load_reader(settings)
-    num_workers, per_commit = configure_runtime(settings)
-    chunks = resolve_chunks(settings)
-    codecs = resolve_compression(settings)
-    stores = run_stores(settings)
+    configure_runtime(settings)
+    resolve_chunks(settings)
+    resolve_compression(settings)
+    own_process_stores(settings)
     log_key(product)
     # stamped on every commit, so finalize can say which code wrote what;
     # checked before anything is listed or written
@@ -192,8 +227,30 @@ def build(settings):
     time = time_source(product)
     rule = row_rule(settings)
     check_versions([reader.read_granule(granules[0], [time], time, rule)], settings)
-
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
+    return granules, revision
+
+
+def run_pass(settings, granules, revision, stores, num_workers):
+    """One pass over the granules, writing a set of stores.
+
+    Args:
+        settings (dict): The loaded configuration.
+        granules (list): From ``prepare``.
+        revision (str): From ``prepare``, stamped on every commit.
+        stores (list): The stores this pass writes.
+        num_workers (int): Read processes; 1 reads in this process.
+
+    Returns:
+        dict: Store -> granules written by this pass.
+    """
+    product = settings['product']
+    reader = load_reader(settings)
+    _, per_commit = configure_runtime(settings)
+    chunks = resolve_chunks(settings)
+    codecs = resolve_compression(settings)
+    time = time_source(product)
+    rule = row_rule(settings)
     repositories, states = {}, {}
     for store in stores:
         path = store_path(settings, store)
@@ -205,8 +262,9 @@ def build(settings):
         )
 
     start = min(state['n_granules'] for state in states.values())
+    label = ', '.join(stores) if len(stores) == 1 else f'{len(stores)} stores'
     if start >= len(granules):
-        LOG.info('every store is already complete, nothing to write')
+        LOG.info(f'{label}: every store is already complete, nothing to write')
         return {store: 0 for store in stores}
 
     # the seam with what is already written is checked against the last time
@@ -218,7 +276,7 @@ def build(settings):
         (begin, min(begin + per_commit, len(granules)))
         for begin in range(start, len(granules), per_commit)
     ]
-    LOG.info(f'{len(batches)} batches from granule {start}')
+    LOG.info(f'{label}: {len(batches)} batches from granule {start}')
 
     # every source of every store not yet complete. A store ahead of the
     # restart point needs nothing from the first batches but everything after,
@@ -276,8 +334,8 @@ def build(settings):
                     masked[store][name] = masked[store].get(name, 0) + count
                 LOG.info(f'{store}: committed {message} as {snapshot}')
             LOG.info(
-                f'batch {position + 1}/{len(batches)}: granules {begin}-{end - 1} '
-                f'({sum(data.n_obs for data in datas)} obs)'
+                f'{label}: batch {position + 1}/{len(batches)}: granules '
+                f'{begin}-{end - 1} ({sum(data.n_obs for data in datas)} obs)'
             )
     finally:
         source_reader.close()
@@ -287,6 +345,70 @@ def build(settings):
             f'{store}: wrote {written[store]} granules this run; masked '
             f'{masked[store] or "nothing"}'
         )
+    return written
+
+
+def own_pass(settings, granules, revision, store):
+    """One store's pass, in a process of its own; see the module docstring.
+
+    A top-level function of picklable arguments, so it runs in a spawned
+    process. It logs to the run's log, as the main process does.
+
+    Args:
+        settings (dict): The loaded configuration.
+        granules (list): From ``prepare``.
+        revision (str): From ``prepare``.
+        store (str): The store.
+
+    Returns:
+        dict: Store -> granules written.
+    """
+    setup_logging(log_path(settings))
+    return run_pass(settings, granules, revision, [store], num_workers=1)
+
+
+def build(settings):
+    """Build every store of the config: the shared pass, and one process per
+    store in ``own_process_stores``, all at once.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        dict: Store -> granules written by this run.
+
+    Raises:
+        Exception: The first failure of any pass, once every pass has ended.
+    """
+    granules, revision = prepare(settings)
+    num_workers, _ = configure_runtime(settings)
+    own = own_process_stores(settings)
+    shared = [store for store in run_stores(settings) if store not in own]
+    if own:
+        LOG.info(f'{len(own)} stores in processes of their own: {own}')
+    written, errors = {}, []
+    pool = (
+        concurrent.futures.ProcessPoolExecutor(
+            max_workers=len(own), mp_context=multiprocessing.get_context('spawn')
+        ) if own else None
+    )
+    try:
+        futures = [pool.submit(own_pass, settings, granules, revision, store) for store in own]
+        try:
+            written |= run_pass(settings, granules, revision, shared, num_workers)
+        except Exception as error:
+            errors.append(error)
+        for store, future in zip(own, futures):
+            try:
+                written |= future.result()
+            except Exception as error:
+                LOG.error(f'{store}: its pass failed: {error!r}')
+                errors.append(error)
+    finally:
+        if pool is not None:
+            pool.shutdown()
+    if errors:
+        raise errors[0]
     return written
 
 

@@ -9,7 +9,7 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 59 cases, TROPOMI and GOSAT, with both products' 2-D model-comparison stores, the per-array codec and shards, and `finalize --expire` |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 63 cases, TROPOMI and GOSAT, with both products' 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
 | 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized |
 
@@ -360,6 +360,17 @@ from 2026-10-16 were complete and skipped. Blosc zstd 5 + shuffle, shards of
   of reading, and the main process ~5 s more user time than its stages.
 - The verifier has the same shape, dominated by kernel time (16 of 24 s).
 - Floor from the stage profile: ~11 s per orbit.
+
+**Finding 12, fixed (2026-10-19, user approval of all three changes):**
+1. the submit script no longer sets `MALLOC_TRIM_THRESHOLD_=0`;
+2. `own_process_stores`: each 2-D store is built in a process of its own that
+   reads only its sources, so nothing large crosses between processes;
+3. the verifier's values phase runs as scans (a group of stores over a range
+   of `verify_granules_per_task` granules) in `verify_num_workers` processes,
+   each returning only counts, so one store's record spreads over as many
+   cores as the job has; `--stores` no longer re-compares geolocation.
+The test passes 63 cases with the same check counts as before. The re-bench
+measures the result.
 
 ## Tier 3: production
 

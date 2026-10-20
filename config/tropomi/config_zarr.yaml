@@ -601,6 +601,20 @@ chunks:
 granules_per_commit: 60
 num_workers: 8
 
+# The six 2-D stores are each built, and verified, in a process of their own
+# that reads only their sources: shipping ~1.1 GB per orbit from read workers
+# to one writer cost more CPU than reading it (TESTING.md finding 12; user
+# decision 2026-10-19). The other stores keep the shared one-pass build.
+own_process_stores:
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
+  - pressure
+# verify: granules per scan; each scan is one group of stores over one range
+verify_granules_per_task: 100
+
 # The upstream filtering guidance recorded in every store's quality_filtering
 # attribute. Recorded, never applied: every observation is kept.
 filtering_guidance: >-

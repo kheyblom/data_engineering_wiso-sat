@@ -99,6 +99,17 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   are mandatory. Each granule is read once, in a `spawn` process pool, and
   appended to every store. Each store is its own repo and resumes from its own
   granule index.
+- **Wide stores get a process of their own** (`own_process_stores`, user
+  decision 2026-10-19; TESTING.md finding 12). Shipping TROPOMI's ~1.1 GB per
+  orbit of 2-D sources from read workers to one writer cost more CPU than the
+  reading. Each listed store runs the same pass in its own process, reading
+  only its sources; the others keep the shared pass. The verifier scans the
+  same groups over ranges of `verify_granules_per_task` granules in
+  `verify_num_workers` processes, each returning only counts. `--stores`
+  compares only the stores named; geolocation is opened for the index but
+  its values are compared only when named.
+- **The submit script leaves `MALLOC_TRIM_THRESHOLD_` unset** (finding 12): at
+  0 it cost the 2-D build 22% of its CPU in kernel time.
 - **Granule index:** six coordinates on a `granule` dimension in every store,
   appended in the same commit as the data.
 - **Compression and shards are per array, in config** (user decisions

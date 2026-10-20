@@ -5,8 +5,14 @@ and needs no paths of its own. Nothing here writes: every session is read
 only.
 
 **Every observation is checked, not a sample** (project rule, 2026-10-14). The
-values phase makes one pass over every granule, as the build does, and compares
-every value of every store with what the raw file says it should be.
+values phase covers every granule and compares every value of every store with
+what the raw file says it should be. It runs as scans of one group of stores
+over one range of granules (``verify_granules_per_task``), in
+``verify_num_workers`` processes; each scan reads raw and stored values itself
+and returns only counts, so one store's record can be spread over many cores
+(TESTING.md finding 12). ``--stores`` compares only the stores it names: the
+geolocation store is opened for the index and placement, and its own values
+are compared only when it is named.
 
 **The raw side is read independently of the build.** The build reads with
 netCDF4 through the product's reader; this reads with h5py, straight from the
@@ -181,8 +187,8 @@ def parse_args():
         type=str,
         default=None,
         help='Comma separated subset of the stores the config builds. Defaults '
-        'to all of them; the geolocation store is always included, since the '
-        'index check is against it.',
+        'to all of them. The geolocation store is always opened, since the '
+        'index check is against it, but its values are compared only if named.',
     )
     return parser.parse_args()
 
@@ -576,6 +582,7 @@ class Pass:
         decreasing (int): Places where time decreases.
         dtypes (dict): Source -> dtypes seen.
         attrs (dict): Source -> the first granule's attributes.
+        first_time, last_time: The stored times at either end of a range.
     """
 
     def __init__(self):
@@ -598,6 +605,8 @@ class Pass:
         self.decreasing = 0
         self.dtypes = {}
         self.attrs = {}
+        self.first_time = None
+        self.last_time = None
 
 
 def observation_keys(columns):
@@ -659,20 +668,96 @@ def place_files(files, stored_keys, match_sources, seen):
     return placed
 
 
-def check_values(report, settings, groups, granules, index, num_workers, batch):
-    """Compare every value of every store with raw, one granule batch at a time.
+def value_targets(settings, stores):
+    """Every array whose values are compared: ``(store, name, source, factor)``.
 
     Args:
-        report (Report): Where to record outcomes.
         settings (dict): The loaded configuration.
-        groups (dict): Store -> zarr.Group.
-        granules (list): The raw listing, which the index phase matched.
-        index (dict): The geolocation store's index.
-        num_workers (int): Read processes.
-        batch (int): Granules per batch.
+        stores (list): The stores compared.
 
     Returns:
-        Pass: What the pass saw, for the evidence lines.
+        list: The targets, in store order.
+    """
+    product = settings['product']
+    targets = []
+    for store in stores:
+        for name, source in store_sources(product, store).items():
+            factor = (
+                coordinate_factor(coordinates(product)[name]) if store == GEOLOCATION
+                else conversion_factor(key_variable(product, name).unit_conversion)
+            )
+            targets.append((store, name, source, factor))
+    return targets
+
+
+def value_items(settings, targets):
+    """The sources a scan reads: ``(source, fill, factor, absent)``.
+
+    The targets' sources, plus time, lat, lon and the reader's match sources,
+    which the index, bounds and placement checks need for every granule
+    whether or not the geolocation store's values are compared.
+
+    Args:
+        settings (dict): The loaded configuration.
+        targets (list): From ``value_targets``.
+
+    Returns:
+        list: Sorted by source.
+    """
+    product = settings['product']
+    key = coordinates(product)
+    by_source = {entry.original: entry for entry in key.values()}
+    match_sources = tuple(getattr(load_reader(settings), 'MATCH_SOURCES', ()))
+    factors = {source: factor for _, _, source, factor in targets}
+    for source in [key[name].original for name in LOCATION_COORDINATES] + list(match_sources):
+        factors.setdefault(source, coordinate_factor(by_source[source]))
+    return [
+        (source, declared_fill(settings, source), factors[source], absent_fill(settings, source))
+        for source in sorted(factors)
+    ]
+
+
+def value_groups(settings, stores):
+    """The compared stores, grouped for scanning.
+
+    A store in ``own_process_stores`` is scanned on its own, as it is built
+    (TESTING.md finding 12): its sources are read only for it. The others are
+    scanned together, each file read once for all of them.
+
+    Args:
+        settings (dict): The loaded configuration.
+        stores (list): The stores compared.
+
+    Returns:
+        list: Lists of stores; the shared group, if any, first.
+    """
+    own = [store for store in settings.get('own_process_stores') or [] if store in stores]
+    shared = [store for store in stores if store not in own]
+    return ([shared] if shared else []) + [[store] for store in own]
+
+
+def scan_values(settings, stores, begin, granules, primary, counted):
+    """Compare a group of stores with raw over one range of granules.
+
+    A top-level function of picklable arguments, so it runs in a process
+    pool. It reads the raw files and the stored slices itself, and returns
+    only what it saw, so no array crosses between processes (TESTING.md
+    finding 12).
+
+    Args:
+        settings (dict): The loaded configuration.
+        stores (list): The stores whose values this scan compares.
+        begin (int): The first granule's position in the listing.
+        granules (list): The granules of the range, in order.
+        primary (bool): Whether this scan also checks what does not depend on
+            the stores (the index entries, layout, versions, time order, rows
+            left out, merges, bounds), which one group of scans does for all.
+        counted (set): The sources whose fill, dtype and attributes this scan
+            tallies, so each source is tallied by one group only.
+
+    Returns:
+        Pass: What the scan saw; ``first_time`` and ``last_time`` are the
+            stored times at either end, for the seams between ranges.
     """
     product = settings['product']
     reader = load_reader(settings)
@@ -681,144 +766,252 @@ def check_values(report, settings, groups, granules, index, num_workers, batch):
     coordinate_names = {entry.original: name for name, entry in coordinates(product).items()}
     location = tuple(coordinates(product)[name].original for name in LOCATION_COORDINATES)
     allowed = tuple(settings.get('allowed_on_rows_left_out') or [])
-    targets = []
-    for store in groups:
-        for name, source in store_sources(product, store).items():
-            factor = (
-                coordinate_factor(coordinates(product)[name]) if store == GEOLOCATION
-                else conversion_factor(key_variable(product, name).unit_conversion)
-            )
-            targets.append((store, name, source, factor))
-    items = sorted(
-        {(source, tuple(declared_fill(settings, source)), factor, absent_fill(settings, source))
-         for _, _, source, factor in targets},
-        key=lambda item: item[0],
-    )
-    items = [(source, list(fill), factor, absent) for source, fill, factor, absent in items]
+    targets = value_targets(settings, stores)
+    items = value_items(settings, targets)
     match_sources = tuple(getattr(reader, 'MATCH_SOURCES', ()))
+
+    groups = {}
+    for store in dict.fromkeys([GEOLOCATION, *stores]):
+        session = open_existing_repository(store_path(settings, store)).readonly_session(branch=BRANCH)
+        groups[store] = zarr.open_group(session.store, mode='r')
+    index = read_index(groups[GEOLOCATION])
     starts = index['granule_obs_start']
     counts = index['granule_obs_count']
     stored_start = index['granule_time_start']
     stored_end = index['granule_time_end']
     source_rows = index['granule_source_rows']
+    # the geolocation arrays every granule needs, compared or not
+    reference = sorted({'time'} | {coordinate_names[source] for source in match_sources})
 
     seen = Pass()
     previous = None
+    for offset, granule in enumerate(granules):
+        position = begin + offset
+        files = read_expected(granule, product, items, time, unit, location, allowed)
+        lo = int(starts[position])
+        hi = lo + int(counts[position])
+        stored = {(store, name): np.asarray(groups[store][name][lo:hi]) for store, name, _, _ in targets}
+        for name in reference:
+            stored.setdefault((GEOLOCATION, name), np.asarray(groups[GEOLOCATION][name][lo:hi]))
+
+        for entry in files:
+            seen.leaked += entry['leaked']
+            if primary:
+                seen.versions.add(entry['version'])
+                seen.problems += [(granule.id, problem) for problem in entry['problems']]
+                seen.unprocessed += entry['n_rows'] - entry['n_obs']
+                seen.timed += entry['timed']
+        if primary and sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
+            seen.index['granule_source_rows'] += 1
+
+        # how many observations the granule should hold: every distinct one
+        # across its files, found from raw alone
+        if len(files) == 1:
+            n_expected = files[0]['n_obs']
+        else:
+            n_expected = len(set().union(*(
+                observation_keys([entry['sources'][s]['expected'] for s in match_sources])
+                for entry in files
+            )))
+        if n_expected != int(counts[position]):
+            # the values cannot be lined up; the primary scan's count failure
+            # says why
+            seen.index['granule_obs_count'] += int(primary)
+            continue
+
+        stored_time = stored[(GEOLOCATION, 'time')]
+        if primary:
+            if not stored_time.size:
+                # a granule with no observations has no time span
+                seen.index['granule_time_start'] += int(stored_start[position] != TIME_FILL)
+                seen.index['granule_time_end'] += int(stored_end[position] != TIME_FILL)
+            else:
+                times = [entry['sources'][time]['expected'] for entry in files]
+                seen.index['granule_time_start'] += int(
+                    min(t.min() for t in times if t.size) != stored_start[position]
+                )
+                seen.index['granule_time_end'] += int(
+                    max(t.max() for t in times if t.size) != stored_end[position]
+                )
+                seen.decreasing += int((np.diff(stored_time) < 0).sum())
+                if previous is not None and stored_time[0] < previous:
+                    seen.decreasing += 1
+                previous = stored_time[-1]
+                if seen.first_time is None:
+                    seen.first_time = stored_time[0]
+                seen.last_time = stored_time[-1]
+
+        stored_keys = (
+            observation_keys([
+                stored[(GEOLOCATION, coordinate_names[source])] for source in match_sources
+            ]) if len(files) > 1 else None
+        )
+        placement = Pass()
+        placed = place_files(files, stored_keys, match_sources, placement)
+        if primary:
+            for kind, count in placement.placement.items():
+                seen.placement[kind] += count
+
+        for store, name, source, _ in targets:
+            key = (store, name)
+            values = stored[key]
+            covered = np.zeros(values.shape[0], dtype=bool)
+            holders = 0
+            for entry, positions in zip(files, placed):
+                if source not in entry['sources'] or positions is None:
+                    continue
+                holders += 1
+                found = entry['sources'][source]
+                seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(
+                    values[positions], found['expected']
+                )
+                covered[positions] = True
+            if not holders:
+                seen.missing[source] = seen.missing.get(source, 0) + 1
+                continue
+            # where no file holds the observation, the store must say so: NaN,
+            # or the declared absent fill for an integer
+            rest = values[~covered]
+            if rest.size:
+                if rest.dtype.kind == 'f':
+                    wrong = int((~np.isnan(rest)).sum())
+                else:
+                    wrong = int((rest != absent_fill(settings, source)).sum())
+                seen.mismatches[key] = seen.mismatches.get(key, 0) + wrong
+
+        for entry in files:
+            for source, found in entry['sources'].items():
+                if source not in counted:
+                    continue
+                seen.fill[source] = seen.fill.get(source, 0) + found['fill']
+                seen.undeclared[source] = seen.undeclared.get(source, 0) + found['undeclared']
+                seen.absent[source] = seen.absent.get(source, 0) + found['absent']
+                seen.dtypes.setdefault(source, set()).add(found['dtype'])
+                seen.attrs.setdefault(source, found['attrs'])
+            if primary:
+                for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
+                    values = entry['sources'][coordinates(product)[name].original]['expected']
+                    finite = values[np.isfinite(values)]
+                    if finite.size:
+                        seen.bounds[low] = min(seen.bounds[low], float(finite.min()))
+                        seen.bounds[high] = max(seen.bounds[high], float(finite.max()))
+    return seen
+
+
+def merge_pass(total, part):
+    """Fold one scan's ``Pass`` into the running total, in granule order.
+
+    Args:
+        total (Pass): The total so far.
+        part (Pass): The next range's scan.
+    """
+    for field in ('mismatches', 'fill', 'undeclared', 'absent', 'missing'):
+        tally = getattr(total, field)
+        for key, count in getattr(part, field).items():
+            tally[key] = tally.get(key, 0) + count
+    for field in ('index', 'placement'):
+        tally = getattr(total, field)
+        for key, count in getattr(part, field).items():
+            tally[key] += count
+    total.problems += part.problems
+    total.leaked += part.leaked
+    total.unprocessed += part.unprocessed
+    total.timed += part.timed
+    total.decreasing += part.decreasing
+    total.versions |= part.versions
+    total.bounds = [
+        min(total.bounds[0], part.bounds[0]), max(total.bounds[1], part.bounds[1]),
+        min(total.bounds[2], part.bounds[2]), max(total.bounds[3], part.bounds[3]),
+    ]
+    for source, dtypes in part.dtypes.items():
+        total.dtypes.setdefault(source, set()).update(dtypes)
+    for source, attrs in part.attrs.items():
+        total.attrs.setdefault(source, attrs)
+    # the seam between two ranges: time must not step back across it
+    if part.first_time is not None:
+        if total.last_time is not None and part.first_time < total.last_time:
+            total.decreasing += 1
+        total.first_time = total.first_time if total.first_time is not None else part.first_time
+        total.last_time = part.last_time
+
+
+def check_values(report, settings, groups, compared, granules, index, num_workers, task_granules):
+    """Compare every value of every compared store with raw.
+
+    The work is split into scans of one group of stores (``value_groups``)
+    over one range of ``task_granules`` granules, run in ``num_workers``
+    processes. Each scan reads what it needs itself and returns only counts,
+    which are merged here in granule order before the record-wide checks.
+
+    Args:
+        report (Report): Where to record outcomes.
+        settings (dict): The loaded configuration.
+        groups (dict): Store -> zarr.Group, every store opened.
+        compared (list): The stores whose values are compared.
+        granules (list): The raw listing, which the index phase matched.
+        index (dict): The geolocation store's index.
+        num_workers (int): Scan processes.
+        task_granules (int): Granules per scan.
+
+    Returns:
+        Pass: What the scans saw, for the evidence lines.
+    """
+    product = settings['product']
+    counts = index['granule_obs_count']
+    targets = value_targets(settings, compared)
+    items = value_items(settings, targets)
+    scan_groups = value_groups(settings, compared)
+    # each source is tallied by the group that compares it; the coordinates
+    # every scan reads, by the first group
+    owner = {source: 0 for source, _, _, _ in items}
+    for number, stores in enumerate(scan_groups):
+        for _, _, source, _ in value_targets(settings, stores):
+            owner[source] = number
+    counted = [
+        {source for source, number in owner.items() if number == group}
+        for group in range(len(scan_groups))
+    ]
+    ranges = [
+        (begin, min(begin + task_granules, len(granules)))
+        for begin in range(0, len(granules), task_granules)
+    ]
+    tasks = [
+        (number, begin, end) for number in range(len(scan_groups)) for begin, end in ranges
+    ]
+    LOG.info(
+        f'{len(tasks)} scans: {len(scan_groups)} groups {scan_groups} x {len(ranges)} '
+        f'ranges of {task_granules} granules, {num_workers} processes'
+    )
+
+    def arguments(task):
+        number, begin, end = task
+        return (settings, scan_groups[number], begin, granules[begin:end], number == 0,
+                counted[number])
+
+    parts = {}
     pool = (
         concurrent.futures.ProcessPoolExecutor(
             max_workers=num_workers, mp_context=multiprocessing.get_context('spawn')
         ) if num_workers > 1 else None
     )
     try:
-        for begin in range(0, len(granules), batch):
-            end = min(begin + batch, len(granules))
-            chunk = granules[begin:end]
-            arguments = (chunk, [product] * len(chunk), [items] * len(chunk),
-                         [time] * len(chunk), [unit] * len(chunk),
-                         [location] * len(chunk), [allowed] * len(chunk))
-            results = list((pool.map if pool else map)(read_expected, *arguments))
-            obs0 = int(starts[begin])
-            obs1 = int(starts[end - 1] + counts[end - 1])
-            stored = {
-                (store, name): np.asarray(groups[store][name][obs0:obs1])
-                for store, name, _, _ in targets
-            }
-            for offset, (granule, files) in enumerate(zip(chunk, results)):
-                position = begin + offset
-                lo = int(starts[position]) - obs0
-                hi = lo + int(counts[position])
-                for entry in files:
-                    seen.versions.add(entry['version'])
-                    seen.problems += [(granule.id, problem) for problem in entry['problems']]
-                    seen.leaked += entry['leaked']
-                    seen.unprocessed += entry['n_rows'] - entry['n_obs']
-                    seen.timed += entry['timed']
-                if sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
-                    seen.index['granule_source_rows'] += 1
-
-                # how many observations the granule should hold: every
-                # distinct one across its files, found from raw alone
-                if len(files) == 1:
-                    n_expected = files[0]['n_obs']
-                else:
-                    n_expected = len(set().union(*(
-                        observation_keys([entry['sources'][s]['expected'] for s in match_sources])
-                        for entry in files
-                    )))
-                if n_expected != int(counts[position]):
-                    seen.index['granule_obs_count'] += 1
-                    continue
-
-                stored_time = stored[(GEOLOCATION, 'time')][lo:hi]
-                if not stored_time.size:
-                    # a granule with no observations has no time span
-                    seen.index['granule_time_start'] += int(stored_start[position] != TIME_FILL)
-                    seen.index['granule_time_end'] += int(stored_end[position] != TIME_FILL)
-                else:
-                    times = [entry['sources'][time]['expected'] for entry in files]
-                    seen.index['granule_time_start'] += int(
-                        min(t.min() for t in times if t.size) != stored_start[position]
-                    )
-                    seen.index['granule_time_end'] += int(
-                        max(t.max() for t in times if t.size) != stored_end[position]
-                    )
-                    seen.decreasing += int((np.diff(stored_time) < 0).sum())
-                    if previous is not None and stored_time[0] < previous:
-                        seen.decreasing += 1
-                    previous = stored_time[-1]
-
-                stored_keys = (
-                    observation_keys([
-                        stored[(GEOLOCATION, coordinate_names[source])][lo:hi]
-                        for source in match_sources
-                    ]) if len(files) > 1 else None
-                )
-                placed = place_files(files, stored_keys, match_sources, seen)
-
-                for store, name, source, _ in targets:
-                    key = (store, name)
-                    values = stored[key][lo:hi]
-                    covered = np.zeros(values.shape[0], dtype=bool)
-                    holders = 0
-                    for entry, positions in zip(files, placed):
-                        if source not in entry['sources'] or positions is None:
-                            continue
-                        holders += 1
-                        found = entry['sources'][source]
-                        seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(
-                            values[positions], found['expected']
-                        )
-                        covered[positions] = True
-                        seen.dtypes.setdefault(source, set()).add(found['dtype'])
-                        seen.attrs.setdefault(source, found['attrs'])
-                    if not holders:
-                        seen.missing[source] = seen.missing.get(source, 0) + 1
-                        continue
-                    # where no file holds the observation, the store must say
-                    # so: NaN, or the declared absent fill for an integer
-                    rest = values[~covered]
-                    if rest.size:
-                        if rest.dtype.kind == 'f':
-                            wrong = int((~np.isnan(rest)).sum())
-                        else:
-                            wrong = int((rest != absent_fill(settings, source)).sum())
-                        seen.mismatches[key] = seen.mismatches.get(key, 0) + wrong
-
-                for entry in files:
-                    for source, found in entry['sources'].items():
-                        seen.fill[source] = seen.fill.get(source, 0) + found['fill']
-                        seen.undeclared[source] = seen.undeclared.get(source, 0) + found['undeclared']
-                        seen.absent[source] = seen.absent.get(source, 0) + found['absent']
-                    for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
-                        values = entry['sources'][coordinates(product)[name].original]['expected']
-                        finite = values[np.isfinite(values)]
-                        if finite.size:
-                            seen.bounds[low] = min(seen.bounds[low], float(finite.min()))
-                            seen.bounds[high] = max(seen.bounds[high], float(finite.max()))
-            LOG.info(f'checked granules {begin}-{end - 1} of {len(granules)}')
+        if pool is None:
+            for done, task in enumerate(tasks, 1):
+                parts[task] = scan_values(*arguments(task))
+                LOG.info(f'scanned {done} of {len(tasks)}: group {task[0]}, granules {task[1]}-{task[2] - 1}')
+        else:
+            futures = {pool.submit(scan_values, *arguments(task)): task for task in tasks}
+            for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                task = futures[future]
+                parts[task] = future.result()
+                LOG.info(f'scanned {done} of {len(tasks)}: group {task[0]}, granules {task[1]}-{task[2] - 1}')
     finally:
         if pool is not None:
             pool.shutdown()
+
+    seen = Pass()
+    for task in sorted(parts):
+        merge_pass(seen, parts[task])
 
     for store, name, _, _ in targets:
         count = seen.mismatches.get((store, name), 0)
@@ -931,15 +1124,23 @@ def main(settings, args):
     if unknown:
         raise ValueError(f'unknown phases {unknown}; choose from {list(PHASES)}')
     stores = run_stores(settings)
+    compared = stores
     if args.stores:
         chosen = [s.strip() for s in args.stores.split(',') if s.strip()]
         bad = [s for s in chosen if s not in stores]
         if bad:
             raise ValueError(f'{bad} are not stores of this config; choose from {stores}')
-        stores = [GEOLOCATION] + [s for s in chosen if s != GEOLOCATION]
+        # the geolocation store is always opened, since the index and the
+        # values are checked against it, but its own values are compared only
+        # when it is named (finding 12: not again for every store added)
+        compared = [s for s in stores if s in chosen]
+        stores = [GEOLOCATION] + [s for s in compared if s != GEOLOCATION]
 
     LOG.info(f'phases: {phases}')
-    LOG.info(f'stores: {stores}')
+    # the stores this run verifies, which finalize reads as its evidence
+    LOG.info(f'stores: {compared}')
+    if compared != stores:
+        LOG.info(f'opened besides, for the index and placement: {[s for s in stores if s not in compared]}')
     report = Report()
     chunks = resolve_chunks(settings)
     codecs = resolve_compression(settings)
@@ -972,9 +1173,9 @@ def main(settings, args):
             report.check('values phase skipped: the index does not match raw', False)
         else:
             seen = check_values(
-                report, settings, groups, granules, index,
+                report, settings, groups, compared, granules, index,
                 settings.get('verify_num_workers', settings['num_workers']),
-                settings['granules_per_commit'],
+                settings.get('verify_granules_per_task', settings['granules_per_commit']),
             )
             LOG.info(
                 f'geospatial bounds: lat [{seen.bounds[0]}, {seen.bounds[1]}] '

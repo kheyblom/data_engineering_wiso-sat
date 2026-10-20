@@ -119,9 +119,11 @@ mkdir -p "$TMPDIR" logs
 
 # dask supplies the parallelism; a threaded BLAS underneath it would oversubscribe
 export OMP_NUM_THREADS=1
-# return freed chunk buffers to the OS rather than holding them in the heap,
-# which matters when the job is sized close to its high water mark
-export MALLOC_TRIM_THRESHOLD_=0
+# MALLOC_TRIM_THRESHOLD_=0 (carried over from GLEAM) is deliberately not set:
+# with multi-GB arrays freed and reallocated every batch it cost the TROPOMI
+# 2-D build ~8 s of kernel time per orbit, 22% of its CPU (TESTING.md finding
+# 12). glibc's default trim keeps the memory for the next batch
+unset MALLOC_TRIM_THRESHOLD_
 
 # No default. Each product's config builds every store of that product, and a
 # wrong default would silently start building the wrong ones -- hours of

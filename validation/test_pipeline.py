@@ -240,6 +240,17 @@ def test_product(results, config, scratch):
     )
     repo.reset_branch(BRANCH, tip)
 
+    # --stores compares only the stores it names: the geolocation store is
+    # opened for the index, but its values are not compared again
+    status, output = run('verify_wisosat_zarr.py', '--config', base, '--stores', target)
+    results.check(
+        f'{product}: verify --stores compares only the stores named',
+        status == 0 and f"stores: ['{target}']" in output
+        and f'{target}/{target}: every observation matches raw' in output
+        and 'geolocation/lat: every observation' not in output,
+        last_line(output, 'checks,'),
+    )
+
     # ... and a store compressed other than as the config says: the config
     # loses its compression block, or gains one where it had none
     if settings.get('compression'):
@@ -269,6 +280,9 @@ def test_product(results, config, scratch):
                              'shard_obs': settings['chunks']['obs'] + 1,
                              'arrays': [settings['variables'][0]]}},
             'positive multiple of chunks.obs',
+        ),
+        'a process of its own for the geolocation store': (
+            {'own_process_stores': ['geolocation']}, 'own_process_stores must name',
         ),
         'compression of an unknown array': (
             {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},

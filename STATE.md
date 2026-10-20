@@ -107,15 +107,18 @@ Read this first in a new session. Update it whenever work lands.
      (~38 s per orbit against ~11 s profiled). Kernel time was 3x user time
      in a login-node probe: memory churn suspected, possibly
      `MALLOC_TRIM_THRESHOLD_=0`. Since `b94038c` runs log their CPU split.
-7. **Before production** (each shown to the user first):
-   - a small diagnostic job on ~40 orbits: the CPU split, and the build with
-     and without `MALLOC_TRIM_THRESHOLD_=0`;
-   - fix what it finds; consider blosc 3 (write CPU 4.0 s against 6.4 s per
-     orbit, ~10% larger);
-   - a verifier that can split by granule range and skip re-verifying a
-     finalized store's values, with finalize accepting the pieces as
-     evidence;
-   - then a production plan with a firm cost.
+7. **Cost work (2026-10-19, all approved by the user):**
+   - **Diagnostic job 7877379** (~2 core-hours): `MALLOC_TRIM_THRESHOLD_=0`
+     cost ~22% of the build's CPU; the rest of the excess was shipping ~1.1
+     GB per orbit between processes (TESTING.md finding 12).
+   - **Fixed in code:** no `MALLOC_TRIM_THRESHOLD_`; `own_process_stores`
+     for the six; the verifier scans (group x granule range) in parallel,
+     returning counts only, and `--stores` no longer re-compares
+     geolocation. Test: 63 cases.
+   - **Next: re-bench** (show the jobs first): delete the six bench stores
+     (needs approval), rebuild with `granules_per_commit` 10 (six processes
+     each hold one batch), verify `--stores` the six; then a production plan
+     with a firm cost.
 8. **Production**, chained `afterany`; finalize the 6 stores with
    `v8.1-verified-<date>`, then `--expire` and `--gc`.
 
