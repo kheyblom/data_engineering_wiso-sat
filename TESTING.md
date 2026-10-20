@@ -339,6 +339,28 @@ from 2026-10-16 were complete and skipped. Blosc zstd 5 + shuffle, shards of
   run over the six would take ~73 h; one store alone would not fit develop's
   6 h either.
 
+**Finding 12, diagnosed (job 7877379, 2026-10-19, 15 min, ~2 core-hours).**
+36 orbits (2020-07-01..03), the bench's settings, the CPU split from
+`b94038c` (per orbit, from rusage):
+
+| run | wall | CPU | main user / sys | workers user / sys |
+| --- | --- | --- | --- | --- |
+| A: as the bench (`MALLOC_TRIM_THRESHOLD_=0`, 20 per commit) | 243 s | 34 s/orbit | 12 / 13 s | 5 / 5 s |
+| B: glibc's default trim, 20 per commit | 177 s | 27 s/orbit | 12 / 5 s | 5 / 5 s |
+| C: default trim, 5 per commit (main peak 17 GiB) | 200 s | 24 s/orbit | 11 / 6 s | 5 / 3 s |
+| verify of A (trim 0) | 273 s | 24 s/orbit | 2 / 10 s | 5 / 6 s |
+
+- A reproduces the bench (34 against 38 s per orbit).
+- **`MALLOC_TRIM_THRESHOLD_=0` costs the main process ~8 s of kernel time
+  per orbit**: freed multi-GB arrays go back to the OS and are faulted in and
+  zeroed again on the next batch. Default trim: -22% CPU, -27% wall.
+- **What remains is moving the data between processes.** Each orbit's ~1.1
+  GB of 2-D sources is pickled by a worker, pushed through a pipe and
+  unpickled by the main process: workers spend ~10 s per orbit against ~3 s
+  of reading, and the main process ~5 s more user time than its stages.
+- The verifier has the same shape, dominated by kernel time (16 of 24 s).
+- Floor from the stage profile: ~11 s per orbit.
+
 ## Tier 3: production
 
 Per product:
