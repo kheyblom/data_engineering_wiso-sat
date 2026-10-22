@@ -10,9 +10,10 @@ Read this first in a new session. Update it whenever work lands.
 - **Decided 2026-10-22** (`docs/products/sciamachy.md`, Production subset):
   `v_8_1`, δD left out, 22 stores aligned with TROPOMI's, the S8 repeats and
   S9 overlap rows left out (see Decisions in force).
-- **Awaiting the user:** P3a (the RMS name), P3b (CH4 final only) and P3c
-  (`pixel_id` not stored if the verifier confirms it is row + 1).
-- **Then:** the 6 new rows to style_guides (user review), the shared
+- **Awaiting the user:** review of the 6 new rows, drafted uncommitted in
+  style_guides `nomenclature_data.md` (2 total-column water priors, 2
+  methane, `rms_residual_retrieval`, `albedo_surface_2360nm`).
+- **Then:** commit the rows, the shared
   declared-rows block (build and verifier; every fixture re-runs), the reader
   (from `products/tropomi.py`), the key, configs and fixture, then the
   bench.

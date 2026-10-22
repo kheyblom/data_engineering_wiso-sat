@@ -81,12 +81,11 @@ Named in the cross-product naming pass. The grammar and decisions are in
   case where `column` and `partial_column` tell two variables apart.
 - **Stores:** 5 variable stores, plus `pressure` as a store of its own.
 
-## Production subset (decided 2026-10-22; three points still open)
+## Production subset (decided 2026-10-22)
 
-Reviewed by the user in place, 2026-10-22. P1, P2, P4, P6 and most of P3 are
-approved. Still **open**, marked below: the RMS name (P3a), CH4 final only
-(P3b) and `pixel_id` (P3c). Review those with `#@CLAUDE` comments. The new
-rows go to style_guides for review before commit.
+Reviewed by the user in place and approved in full, 2026-10-22 (P3a-c in a
+second round). The 6 new rows are drafted in style_guides for review before
+commit.
 
 Facts behind it, from the audit of every file on 2026-10-22 (S2; TESTING.md
 finding 13), a fill-by-flag pass over the 756 files with fill, and one-file
@@ -147,7 +146,7 @@ the δD definition, so a user can form it for the -600 < δD < 0 cut. Why:
 - the plain ratio is very noisy per sounding (flag-0 medians of -27 to +92
   per mil and p1/p99 near ±3,000 in three files).
 
-### P3. The 1-D stores (approved, but for P3a-c)
+### P3. The 1-D stores (approved)
 
 The user's rule (2026-10-22): **align with the stores TROPOMI has**, plus
 what Sarkar et al. (2026) filter on. TROPOMI's 1-D set and its SCIAMACHY
@@ -193,7 +192,7 @@ counterpart:
 
 The precisions in the core serve the log-uncertainty cut.
 
-**P3a, open: why `rms_residual_retrieval` and not `rms_retrieval`.**
+**P3a, approved: `rms_residual_retrieval`, not `rms_retrieval`.**
 - A data-lake name must say what it measures without the product's context.
   RMS is a statistic of *something*: of a radiance, of noise, of an error.
   `rms_retrieval` would most naturally read as the RMS error of the retrieved
@@ -209,8 +208,7 @@ The precisions in the core serve the log-uncertainty cut.
   long_name keeps it: "root mean square of the final retrieval fit residual
   radiance, in photons".
 
-**P3b, open: store `ch4_column` and leave out `ch4_column_prefit`
-(recommended).**
+**P3b, approved: store `ch4_column` and leave out `ch4_column_prefit`.**
 - **The difference.** `ch4_column` is the CH4 retrieved in the same fit that
   gives the H2O and HDO columns. That is the c_CH4 of Schneider et al.'s
   cloud filter, "the retrieved columns c_CH4 and c_H2O", and so the one
@@ -227,8 +225,8 @@ The precisions in the core serve the log-uncertainty cut.
   out its `ch4_column_prefit`, and its other CH4 and CO side products.
 - Storing both is the alternative (one more store, ~300 MB, and a row).
 
-**P3c, open: `pixel_id`, no store (recommended), if the verifier confirms it
-on every file.**
+**P3c, approved: `pixel_id`, no store, while `check_granule` confirms it on
+every file.**
 - TROPOMI's `scanline_index` and `ground_pixel_index` exist only because 83
   of its granules had rows left out. There, an obs's position in the store no
   longer gave its source row (`tropomi.md`, Swath position).
