@@ -2,8 +2,8 @@
 #
 # One run builds the geolocation store plus one store per variable listed, in
 # a single pass over the days. Each day's DED and H2O files are merged onto one
-# obs axis (decided 2026-10-14; see products/gosat.py). NOT YET RUN: GOSAT is
-# the second reader of design condition 1, built at fixture level.
+# obs axis (decided 2026-10-14; see products/gosat.py). Built, verified and
+# finalized 2026-10-19, tag v3.0.1-verified-20261019 (TESTING.md Tier 3).
 product: gosat
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/GOSAT

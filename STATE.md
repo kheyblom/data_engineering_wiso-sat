@@ -4,9 +4,10 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-22)
 
-**Nothing is running and nothing is half done.** No batch jobs are queued; the
-tree is clean and pushed. The next task is not chosen yet: ask the user
-(candidates under Next).
+**Nothing is running and nothing is half done.** No batch jobs are queued.
+**Current task: GOSAT-2** (user, 2026-10-22), Next item 2. GOSAT was
+re-checked complete the same day: 12 stores, each with all 4,498 raw days
+in its index, one obs axis, the tag at the branch tip, and 0 verify failures.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 63 cases
@@ -40,18 +41,19 @@ tree is clean and pushed. The next task is not chosen yet: ask the user
 
 ## Next: candidates (ask the user which)
 
-1. **Data-lake home** for the TROPOMI and GOSAT stores. Scratch is purged;
-   ask before moving anything (~21.4 TiB TROPOMI, ~1 GB GOSAT).
-2. **The other products** (task 6): SCIAMACHY, AIRS and CrIS (TROPESS), IASI,
+The data-lake home for finished stores is not a candidate: the user will say
+when it is time (2026-10-22).
+
+1. **The other products** (task 6): SCIAMACHY, AIRS and CrIS (TROPESS), IASI,
    TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
-3. **GOSAT-2 configs** (`product: gosat2`): a small shared change so the
-   reader and key can be named apart from the product.
-4. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
+2. **GOSAT-2 configs** (`product: gosat2`): a small shared change so the
+   reader and key can be named apart from the product. **In progress.**
+3. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`.
-5. **Optional cost work before the next large product** (TESTING.md finding
+4. **Optional cost work before the next large product** (TESTING.md finding
    12): the build still uses ~2.5x the CPU its stages need, mostly kernel time
    from page faults on multi-GB arrays (glibc maps every allocation over 32
    MB fresh). Untested remedies: buffer reuse, transparent huge pages. Verify

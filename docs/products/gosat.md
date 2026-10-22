@@ -131,9 +131,9 @@ reader. The test passes 46 cases over both products.
   Specification Document v3, or by asking IUP. It would then be
   `dry_air_partial_column`, like TROPOMI's.
 - **Stores:** 4 variable stores, `pressure` among them. Until 2026-10-19
-  `pressure` was in the geolocation store, and the finalized production
-  geolocation store still holds it; it is to be rebuilt without it (user
-  decision 2026-10-19, so every product matches).
+  `pressure` was in the geolocation store; the production geolocation store
+  was rebuilt without it on 2026-10-19 (user decision, so every product
+  matches).
   GOSAT-2 has the same format.
 - **What the fixture showed** (4 days, 6,702 soundings):
   - `pressure` is (obs, level) float32 in Pa, as hPa x 100 in float64, and
