@@ -132,6 +132,11 @@ Read this first in a new session. Update it whenever work lands.
      (priors, dry air) -> S 7901064 (`--phases structure,index`, all 25).
      A first, parallel submission (7901053-7901055) was cancelled within a
      minute, before either wrote a verdict.
+   - Slower than estimated: ~3.5 h per job (CPU per granule-store ~2x the
+     re-bench, 64 processes contending), so verify ~450 core-hours and
+     production ~820 in all; **the user approved the extra** (2026-10-21).
+     V2's limit was raised to 6 h (`qalter`, approved) since the verifier
+     cannot resume.
 9. **Production finalize**, chained `afterany`; finalize the 6 stores with
    `v8.1-verified-<date>`, then `--expire` and `--gc`.
 
