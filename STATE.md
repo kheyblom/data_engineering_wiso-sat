@@ -4,9 +4,21 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-22)
 
-**Nothing is running and nothing is half done.** No batch jobs are queued;
-the tree is clean and pushed. The next task is not chosen yet: ask the user
-(candidates under Next).
+**Nothing is running.** No batch jobs are queued.
+- **Current task: AIRS, then CrIS (task 6), waiting on downloads.** On
+  2026-10-22 the user chose AIRS first and CrIS once AIRS is finalized.
+- The survey is done and recorded in `docs/products/tropess.md`: every
+  collection, the stream and product-type definitions, every version, and
+  issues R1-R21.
+- The user is fetching every missing AIRS and CrIS granule in a separate
+  data-access session, briefed by `docs/handoff-tropess-download.md`.
+- **Resume when the user returns with that session's report:**
+  1. update `tropess.md` (the collections table, R18, R19) from the
+     manifests;
+  2. draft the AIRS production subset in `tropess.md` for in-place review,
+     as `sciamachy.md`'s P1-P6;
+  3. then the reader at fixture level, the shared per-granule version change,
+     the bench, and production.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 132
@@ -71,6 +83,7 @@ when it is time (2026-10-22).
 1. **The other products** (task 6): AIRS and CrIS (TROPESS), IASI, TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
+   AIRS and CrIS are in progress (see above).
 2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`
@@ -225,3 +238,14 @@ when it is time (2026-10-22).
     out. Checked against 45263 and named in the metadata. Not a precedent.
 - **Naming rule:** the quantity first, then qualifiers general to specific.
   Established terms stay whole; unitless quantities use `unitless`.
+- **TROPESS products (2026-10-22; `tropess.md`, Product scheme):**
+  - one product per platform, stream, product type and collection version;
+  - the version slot follows the style guide's `v_3_5.nrt` form, e.g.
+    `wisosat.airs.v_1.rs_summary...` and `wisosat.airs.v_1.fs_standard...`;
+  - FS v2 (2026-06 on) is a separate `v_2.*` store set; Full products are
+    added when downloaded;
+  - per-granule algorithm, format and joint flag go in the granule index, a
+    shared change approved for every product that needs it;
+  - CrIS products carry the platform: `cris_snpp`, `cris_jpss1`.
+- **Downloads are done outside this repo** (2026-10-22): a separate
+  data-access session fetches raw data; this repo only reads it.

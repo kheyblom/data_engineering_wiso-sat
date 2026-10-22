@@ -44,8 +44,8 @@ stores.
 | TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production finalized: 19 stores 2026-10-18, tag `v8.1-verified-20261018` (findings 9-10); the 6 model-comparison stores 2026-10-22, tag `v8.1-verified-20261022` (finding 12) |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | production finalized 2026-10-22, tag `v8.1-verified-20261022` (22 stores; `docs/products/sciamachy.md`; TESTING.md findings 13-14) |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT: production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (12 stores; geolocation rebuilt without `pressure`, which has its own store). GOSAT-2: production finalized 2026-10-22, tag `v3.0.1-verified-20261022` (12 stores; `source: gosat`) |
-| AIRS (TROPESS RS; TROPESS FS) | `AIRS/TRPSYL2HDOAIRSORS_*`, `AIRS/TRPSDL2HDOAIRSFS_*` | daily file | later |
-| CrIS (SNPP RS; JPSS1 FS) | `CRIS/TRPSYL2HDOCRSRS_*`, `CRIS/TRPSDL2HDOCRS1FS_*` | daily file | later |
+| AIRS (TROPESS; one product per stream, product type and collection version) | `AIRS/TRPS?L2HDOAIRS*` (download folders; more coming, `docs/handoff-tropess-download.md`) | daily file | surveyed 2026-10-22, waiting on downloads (`docs/products/tropess.md`) |
+| CrIS (TROPESS; SNPP and JPSS1, as AIRS) | `CRIS/TRPS?L2HDOCRS*` | daily file | after AIRS |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
 | TES (L2 HDO Nadir Lite v006) | `TES/TL2HDOLN_6-*/` | monthly file | later |
 
