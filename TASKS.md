@@ -56,11 +56,16 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
+SCIAMACHY production built, verified and finalized 2026-10-22: 22 stores,
+78,666,297 observations, 0 failures, tag `v8.1-verified-20261022`; two
+upstream defects left out by declaration, one a one-time exception approved
+by the user (`docs/products/sciamachy.md` P6; TESTING.md, SCIAMACHY run log).
+
 GOSAT-2 production built, verified and finalized 2026-10-22: 12 stores,
 1,620,006 observations, 0 failures, tag `v3.0.1-verified-20261022`, read with
 the GOSAT reader and key (`source: gosat`; TESTING.md Tier 3).
 
-GOSAT production built, verified and finalized 2026-10-19: 11 stores,
+GOSAT production built, verified and finalized 2026-10-19: 12 stores,
 8,856,028 observations, 0 failures, tag `v3.0.1-verified-20261019`
 (TESTING.md Tier 3).
 
@@ -69,8 +74,6 @@ GOSAT production built, verified and finalized 2026-10-19: 11 stores,
 Added 2026-10-18 at the user's request, so these are not forgotten. They are
 needed eventually; all were deferred from the first production subset.
 
-**This is the next task.** Start with the brief in STATE.md ("Next task"):
-what to read, the layouts per product, and the deliverables in order.
 - **What:** each product's column averaging kernels, a priori profiles,
   dry-air partial columns and pressure grid. For TROPOMI that is six sources,
   each 50 or 51 layers: ~20 TiB with blosc + shuffle (~29 TiB with the

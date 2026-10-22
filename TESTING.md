@@ -819,6 +819,33 @@ bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/
   nothing unreachable, so no `--apply`. `--status`: all 12 stores "remaining
   nothing, finalized". 163 MB on disk.
 
+### SCIAMACHY run log (2026-10-22)
+
+22 stores from `config/sciamachy/config_zarr.yaml` after the audit (finding
+13), the fixture (132 cases over four products) and the bench (Tier 2c, run
+twice). Both jobs on develop, 8 cores, 32 GB, from a clean `5c49e04`:
+
+```bash
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/sciamachy/config_zarr.yaml QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=01:00:00 ./submit_wisosat_zarr.sh'
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/sciamachy/config_zarr.yaml VERIFY=1 AFTER=7909157 QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=02:00:00 ./submit_wisosat_zarr.sh'
+```
+
+| job | what | wall | CPU | peak memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7909157 | build, 84 commits | 25 min 45 s | 50 min | 4.99 GiB main process | 22 stores, 41,616 orbits, 78,666,297 obs; both declared blocks left out (656 rows) |
+| 7909161 | verify, 417 scans x 8 processes | 18 min 4 s | 2 h 50 min (workers 0.91 h user + 1.92 h sys) | 2.43 GiB per scan | **879 checks, 0 failures**; every obs bit for bit; the 656 declared rows confirmed from raw; `pixel_id` = row + 1 in every file |
+
+- **Cost:** ~5.8 core-hours reserved for both jobs (expected ~5). The build
+  ran ~1.5x the bench's rate per orbit: later commits are slower as the
+  stores grow.
+- **Listing:** 2003-01 to 2012-04, every month present. Bounds lat -86.35 to
+  84.53, lon -180 to 180; time 2003-01-11 to 2012-04-08.
+- **Finalized 2026-10-22** with the user's sign-off on each step: `--attrs
+  --apply`, `--tag v8.1-verified-20261022 --apply`. `--status` found nothing
+  unreachable (no `--gc`) and no store is sharded (no `--expire`). All 22
+  stores "remaining nothing, finalized", the tag at every tip. 87.5 GiB on
+  disk.
+
 ### TROPOMI model-comparison stores: production (2026-10-19 to 10-22)
 
 The six 2-D stores (both column kernels, both a priori partial columns,

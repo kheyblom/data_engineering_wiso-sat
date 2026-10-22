@@ -4,32 +4,13 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-22)
 
-**Current task: SCIAMACHY** (task 6; chosen by the user 2026-10-22).
-- **Nothing is running.** Done 2026-10-22: the file audit (TESTING.md
-  finding 13), the subset (`docs/products/sciamachy.md`, Production subset:
-  22 stores, `v_8_1`, no δD), the 6 nomenclature rows (style_guides
-  `c8ea0a6`), the reader, key, configs and fixture. The fixture test passes
-  132 cases over all four products.
-- **Shared code added 2026-10-22:** `declared_rows_left_out` (`DeclaredRows`
-  in `utils/granules.py`; the S8 repeats and the S9 overlap, checked by the
-  reader and the verifier) and a reader `COVERAGE_FREQUENCY` (SCIAMACHY is
-  monthly, `expected_missing_months`).
-- **The bench (Tier 2c) passed** 2026-10-22 (jobs 7908198 build, 7908201
-  verify; 879 checks, 0 failures; ~0.6 core-hours). Bench stores under
-  `/glade/derecho/scratch/$USER/data/wisosat_bench/zarr/sciamachy/`.
-- **Approved and done 2026-10-22:** blosc zstd 5 + shuffle for the six 2-D
-  stores (no shards), and `ChunkSpans` in the verifier (finding 14). The
-  fixture test passes 132 cases.
-- **Re-bench passed** 2026-10-22 (jobs 7909064, 7909065): the verify takes
-  ~10x less cpu (finding 14, fixed). Bench stores are throwaway.
-- **Next: production,** awaiting the user's approval of the jobs (build,
-  then verify chained `afterany`; ~5 core-hours expected); then finalize.
-- **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
-  in the raw tree (S5); the reader lists `YYYYMM` folders only.
+**Nothing is running and nothing is half done.** No batch jobs are queued;
+the tree is clean and pushed. The next task is not chosen yet: ask the user
+(candidates under Next).
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place. The fixture test passes 97 cases
-  over TROPOMI, GOSAT and GOSAT-2.
+  testing tiers (`TESTING.md`) are in place. The fixture test passes 132
+  cases over TROPOMI, GOSAT, GOSAT-2 and SCIAMACHY.
 - **TROPOMI is finished: 25 stores, all finalized**, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`, on one obs
   axis (32,657,526,234 obs, 38,645 orbits) and one granule index.
@@ -59,20 +40,35 @@ Read this first in a new session. Update it whenever work lands.
   failures. Read with the GOSAT reader and key through the config's `source`;
   `platform: GOSAT2` checked on every file (both user-approved 2026-10-22; the
   51 missing days declared as found). Run log: TESTING.md, GOSAT-2 run log.
+- **SCIAMACHY is finished: 22 stores, all finalized** 2026-10-22, tag
+  `v8.1-verified-20261022`, in
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/` (87.5 GiB):
+  geolocation (with corners), the 5 core stores (no δD is published), 10
+  filter and TROPOMI-aligned stores, 5 model-comparison stores and
+  `pressure`. 41,616 orbits, 78,666,297 obs, 879 checks and 0 failures.
+  - Decisions and evidence: `docs/products/sciamachy.md` (Production subset,
+    P1-P6; issues S1-S11). Audit, bench and run: TESTING.md finding 13, Tier
+    2c (finding 14) and the SCIAMACHY run log.
+  - Two defects left out by `declared_rows_left_out`: S8, orbit 15838's
+    repeats; S9, 45262's 32 overlap rows, **a one-time exception** to
+    keeping every observation.
+  - Shared code added for it: declared rows, a reader `COVERAGE_FREQUENCY`
+    (monthly for SCIAMACHY), and `ChunkSpans` in the verifier, which cut
+    its CPU ~10x on small granules (finding 14).
 - **The cross-product naming pass is done** (task 7, steps 1-2):
   `docs/model-comparison-naming.md` (N1-N18); rows in style_guides
   `a585066`, `fee64ec`, `65ac688` (the `pressure` row and rule).
 - **Compute used so far:** TROPOMI ~380 core-hours for the 19 stores, ~835
   for the 6 model-comparison stores (benches and diagnostic ~19, production
-  ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2.
+  ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2;
+  SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8).
 
 ## Next: candidates (ask the user which)
 
 The data-lake home for finished stores is not a candidate: the user will say
 when it is time (2026-10-22).
 
-1. **The other products** (task 6): SCIAMACHY, AIRS and CrIS (TROPESS), IASI,
-   TES. Each gets a reader at fixture level first, then bench, then
+1. **The other products** (task 6): AIRS and CrIS (TROPESS), IASI, TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
 2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
@@ -90,7 +86,16 @@ when it is time (2026-10-22).
 
 - **Throwaway data on scratch** (delete only with approval):
   `/glade/derecho/scratch/kheyblom/data/wisosat_bench/` (25 bench stores of
-  2020-07, roughly 280 GiB with the 2-D stores' superseded shards) and `wisosat_fixture/` (rebuilt by the test).
+  2020-07, roughly 280 GiB with the 2-D stores' superseded shards; and the 22
+  SCIAMACHY bench stores, 2.2 GiB, plus 3 raw symlinks) and
+  `wisosat_fixture/` (rebuilt by the test).
+- **SCIAMACHY raw-tree leftovers** (S5; delete only with approval): 24 hidden
+  `.ArchiveServiceTemp.sb-*` folders in `raw/SCIAMACHY/HDO_SICORv10/`, ~14
+  GB of duplicates (11 truncated), and a `.DS_Store`. The reader ignores
+  them.
+- **SCIAMACHY orbits were not checked against an upstream listing** (4525 to
+  52867 numbered, 41,616 present); stated in `known_data_gaps`. Possible if
+  the user knows the download source.
 - **Leftover small files:** each of the 6 TROPOMI 2-D stores keeps ~3,870
   transaction logs and ~3,870 `overwritten/` entries that `--gc` does not
   delete. Harmless; worth a look before moving to the data lake.

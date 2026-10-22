@@ -1,6 +1,6 @@
 # SCIAMACHY (SRON SICOR L2 H2O/HDO, file version 0110)
 
-In progress. 2026-10-22: every file audited, subset decided, reader, key, configs and fixture built (the test passes); bench next. First measured 2026-10-14 from header reads and one file's values.
+**Production finalized 2026-10-22**: 22 stores, 78,666,297 obs, tag `v8.1-verified-20261022`, in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/` (TESTING.md, SCIAMACHY run log). First measured 2026-10-14 from header reads and one file's values.
 
 ## Raw data
 
