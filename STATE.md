@@ -5,18 +5,19 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-22)
 
 **Current task: SCIAMACHY** (task 6; chosen by the user 2026-10-22).
-- **Nothing is running.** The full file audit is done (TESTING.md finding
-  13; job 7907283, ~0.8 core-hours): all 41,616 files good, 78,666,953 obs.
-- **Decided 2026-10-22** (`docs/products/sciamachy.md`, Production subset):
-  `v_8_1`, δD left out, 22 stores aligned with TROPOMI's, the S8 repeats and
-  S9 overlap rows left out (see Decisions in force).
-- **Awaiting the user:** review of the 6 new rows, drafted uncommitted in
-  style_guides `nomenclature_data.md` (2 total-column water priors, 2
-  methane, `rms_residual_retrieval`, `albedo_surface_2360nm`).
-- **Then:** commit the rows, the shared
-  declared-rows block (build and verifier; every fixture re-runs), the reader
-  (from `products/tropomi.py`), the key, configs and fixture, then the
-  bench.
+- **Nothing is running.** Done 2026-10-22: the file audit (TESTING.md
+  finding 13), the subset (`docs/products/sciamachy.md`, Production subset:
+  22 stores, `v_8_1`, no δD), the 6 nomenclature rows (style_guides
+  `c8ea0a6`), the reader, key, configs and fixture. The fixture test passes
+  132 cases over all four products.
+- **Shared code added 2026-10-22:** `declared_rows_left_out` (`DeclaredRows`
+  in `utils/granules.py`; the S8 repeats and the S9 overlap, checked by the
+  reader and the verifier) and a reader `COVERAGE_FREQUENCY` (SCIAMACHY is
+  monthly, `expected_missing_months`).
+- **Next: the bench (Tier 2c),** awaiting the user's approval of the jobs:
+  2010-09..11, 1,026 orbits, `config/sciamachy/config_zarr_bench.yaml`,
+  staged by `validation/stage_bench_sciamachy.py` (done). It measures time,
+  memory and compression; then production.
 - **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
   in the raw tree (S5); the reader lists `YYYYMM` folders only.
 
@@ -142,7 +143,8 @@ when it is time (2026-10-22).
   Background watchers end with the Claude session; re-check by hand after a
   reconnect.
 - **Commands** (repo root):
-  - test: `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`;
+  - test: `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`
+    (stage each product's fixture once first: `validation/stage_<product>.py`);
   - batch: `bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=... [VERIFY=1] [VERIFY_ARGS="..."] [AFTER=<jobid>] QUEUE=develop NCPUS=.. MEM=.. WALLTIME=.. ./submit_wisosat_zarr.sh'`
     (`bash -lc` for `PBS_ACCOUNT`). The wrapper checks `num_workers`, or
     `verify_num_workers` for a verify with the values phase, against the

@@ -69,6 +69,8 @@ from utils.granules import (
     LOCATION_COORDINATES,
     check_coverage,
     check_order,
+    declared_mask,
+    declared_rows,
     decode_text,
 )
 from utils.log_utils import log_peak_memory, setup_logging
@@ -229,7 +231,7 @@ def to_epoch(values, unit):
     return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
-def read_expected(granule, reader_name, items, time, unit, location, allowed):
+def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None):
     """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
@@ -249,9 +251,14 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
             observation only if all three are written (user decision
             2026-10-17).
         allowed (tuple): Sources that may hold values on a row left out.
+        declared (DeclaredRows | None): Rows the config leaves out of this
+            granule. They are left out here too, but only after this reads
+            for itself that they match as declared.
 
     Returns:
         list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
+            ``declared`` (rows left out as declared), ``declared_problems``
+            (where they do not match their declaration),
             ``timed`` (rows left out although their time is written),
             ``leaked`` (values on rows left out that may not be lost),
             ``version``, ``platform`` (None unless the reader names a
@@ -282,8 +289,16 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
             processed = np.ones(raw_location[time].shape[0], dtype=bool)
             for source, values in raw_location.items():
                 processed &= ~missing_rows(values, fills.get(source, ()))
+            # rows the config declares as repeats of others: observations,
+            # but left out once their declared match is seen here in raw
+            dropped = declared_mask(processed.size, declared)
+            kept = processed & ~dropped
             out['n_rows'] = int(processed.size)
-            out['n_obs'] = int(processed.sum())
+            out['n_obs'] = int(kept.sum())
+            out['declared'] = int(dropped.sum())
+            out['declared_problems'] = (
+                declared_problems(handle, declared, location, items) if declared else []
+            )
             out['timed'] = int(
                 (~processed & ~missing_rows(raw_location[time], fills.get(time, ()))).sum()
             )
@@ -293,10 +308,10 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
                     continue
                 dataset = handle[source]
                 raw = raw_location[source] if source in raw_location else dataset[...]
-                if not processed.all():
-                    if source not in location and source not in allowed:
-                        out['leaked'] += int((~missing_rows(raw[~processed], fill)).sum())
-                    raw = raw[processed]
+                if not processed.all() and source not in location and source not in allowed:
+                    out['leaked'] += int((~missing_rows(raw[~processed], fill)).sum())
+                if not kept.all():
+                    raw = raw[kept]
                 # the style guide's squeeze, done here without the build's helper
                 raw = raw.reshape(
                     [size for axis, size in enumerate(raw.shape) if axis == 0 or size != 1]
@@ -344,6 +359,51 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
                 out['sources'][source] = entry
         files.append(out)
     return files
+
+
+def declared_problems(handle, declared, location, items):
+    """Where a granule's declared rows do not match their declaration, from raw.
+
+    Read with h5py, apart from the build's check in the reader: a repeat must
+    equal its block bit for bit in every source read except those the
+    declaration exempts; an overlap must have exactly the other granule's
+    time, latitude and longitude.
+
+    Args:
+        handle (h5py.File): The granule's open file.
+        declared (DeclaredRows): Its declaration.
+        location (tuple): Source paths of time, lat and lon.
+        items (list): ``(source, fill, factor, absent)`` per source read.
+
+    Returns:
+        list: Problems, empty if the declaration holds.
+    """
+    rows = slice(declared.start, declared.stop)
+    problems = []
+    if declared.repeat_of is not None:
+        first, last = declared.repeat_of
+        sources = dict.fromkeys([*location, *(source for source, _, _, _ in items)])
+        for source in sources:
+            if source in declared.repeat_except or source not in handle:
+                continue
+            values = handle[source][...]
+            block = values[first:last]
+            copies = values[rows].reshape((-1,) + block.shape)
+            if not all(
+                np.array_equal(copy.view(np.uint8), block.view(np.uint8)) for copy in copies
+            ):
+                problems.append(
+                    f'{source} rows {declared.start}-{declared.stop - 1} are not copies of '
+                    f'rows {first}-{last - 1}'
+                )
+    if declared.location_of is not None:
+        other, first, last, path = declared.location_of
+        with h5py.File(path, 'r') as theirs:
+            for source in location:
+                ours = handle[source][rows].view(np.uint8)
+                if not np.array_equal(ours, theirs[source][first:last].view(np.uint8)):
+                    problems.append(f'{source} differs from orbit {other} rows {first}-{last - 1}')
+    return problems
 
 
 def same_values(stored, expected):
@@ -535,9 +595,10 @@ def check_index(report, settings, groups, granules):
     """
     try:
         check_order(granules)
-        missing = check_coverage(granules, settings)
+        frequency = getattr(load_reader(settings), 'COVERAGE_FREQUENCY', 'D')
+        missing = check_coverage(granules, settings, frequency)
         report.check('raw listing: unique granules, missing days as declared', True,
-                     f'{len(granules)} granules, {len(missing)} declared missing days')
+                     f'{len(granules)} granules, {len(missing)} declared missing periods')
     except ValueError as error:
         report.check('raw listing: unique granules, missing days as declared', False, str(error))
 
@@ -581,6 +642,9 @@ class Pass:
         absent (dict): Source -> raw values equal to its declared absent fill.
         missing (dict): Source -> granules where no file holds it.
         problems (list): ``(granule id, problem)`` from the layout check.
+        declared (int): Rows left out as the config declares.
+        declared_problems (list): ``(granule id, problem)`` where declared
+            rows do not match their declaration.
         index (dict): Index field -> mismatching granules.
         placement (dict): Merge failures in multi-file granules, by kind.
         versions (set): Processor versions seen.
@@ -605,6 +669,8 @@ class Pass:
         }
         self.leaked = 0
         self.unprocessed = 0
+        self.declared = 0
+        self.declared_problems = []
         self.timed = 0
         self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
@@ -744,7 +810,7 @@ def value_groups(settings, stores):
     return ([shared] if shared else []) + [[store] for store in own]
 
 
-def scan_values(settings, stores, begin, granules, primary, counted):
+def scan_values(settings, stores, begin, granules, primary, counted, declared):
     """Compare a group of stores with raw over one range of granules.
 
     A top-level function of picklable arguments, so it runs in a process
@@ -762,6 +828,7 @@ def scan_values(settings, stores, begin, granules, primary, counted):
             left out, merges, bounds), which one group of scans does for all.
         counted (set): The sources whose fill, dtype and attributes this scan
             tallies, so each source is tallied by one group only.
+        declared (dict): Granule id -> DeclaredRows, from the config.
 
     Returns:
         Pass: What the scan saw; ``first_time`` and ``last_time`` are the
@@ -795,7 +862,9 @@ def scan_values(settings, stores, begin, granules, primary, counted):
     previous = None
     for offset, granule in enumerate(granules):
         position = begin + offset
-        files = read_expected(granule, source_name, items, time, unit, location, allowed)
+        files = read_expected(
+            granule, source_name, items, time, unit, location, allowed, declared.get(granule.id)
+        )
         lo = int(starts[position])
         hi = lo + int(counts[position])
         stored = {(store, name): np.asarray(groups[store][name][lo:hi]) for store, name, _, _ in targets}
@@ -808,8 +877,10 @@ def scan_values(settings, stores, begin, granules, primary, counted):
                 seen.versions.add(entry['version'])
                 seen.platforms.add(entry['platform'])
                 seen.problems += [(granule.id, problem) for problem in entry['problems']]
-                seen.unprocessed += entry['n_rows'] - entry['n_obs']
+                seen.unprocessed += entry['n_rows'] - entry['n_obs'] - entry['declared']
                 seen.timed += entry['timed']
+                seen.declared += entry['declared']
+                seen.declared_problems += [(granule.id, p) for p in entry['declared_problems']]
         if primary and sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
             seen.index['granule_source_rows'] += 1
 
@@ -923,6 +994,8 @@ def merge_pass(total, part):
         for key, count in getattr(part, field).items():
             tally[key] += count
     total.problems += part.problems
+    total.declared += part.declared
+    total.declared_problems += part.declared_problems
     total.leaked += part.leaked
     total.unprocessed += part.unprocessed
     total.timed += part.timed
@@ -970,6 +1043,14 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     targets = value_targets(settings, compared)
     items = value_items(settings, targets)
     scan_groups = value_groups(settings, compared)
+    # rows the config leaves out by name, resolved against the listing; each
+    # scan confirms them from raw itself
+    declared = declared_rows(settings, granules)
+    if declared and not getattr(load_reader(settings), 'DECLARED_ROWS', False):
+        raise ValueError(
+            f'declared_rows_left_out is set, but the {source_product(settings)} reader '
+            f'does not apply declared rows'
+        )
     # each source is tallied by the group that compares it; the coordinates
     # every scan reads, by the first group
     owner = {source: 0 for source, _, _, _ in items}
@@ -995,7 +1076,7 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     def arguments(task):
         number, begin, end = task
         return (settings, scan_groups[number], begin, granules[begin:end], number == 0,
-                counted[number])
+                counted[number], declared)
 
     parts = {}
     pool = (
@@ -1055,6 +1136,14 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
         f'{seen.unprocessed} rows left out, {seen.timed} of them with a time; '
         f'{seen.leaked} values on them',
     )
+    if declared:
+        expected = sum(entry.stop - entry.start for entry in declared.values())
+        report.check(
+            'declared rows left out: each matches its declaration in raw',
+            not seen.declared_problems and seen.declared == expected,
+            f'{seen.declared} of {expected} declared rows left out, '
+            f'{len(seen.declared_problems)} problems {seen.declared_problems[:3]}',
+        )
     report.check(
         'every file has the documented layout', not seen.problems,
         f'{len(seen.problems)} problems, first {seen.problems[:3]}',

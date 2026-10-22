@@ -9,7 +9,7 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~2.5 min, login node | **passed** (2026-10-22): 97 cases, TROPOMI, GOSAT and GOSAT-2 (`source` and `platform`), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~2.5 min, login node | **passed** (2026-10-22): 132 cases, TROPOMI, GOSAT, GOSAT-2 (`source` and `platform`) and SCIAMACHY (declared rows, monthly coverage), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
 | 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: **done** (2026-10-22): built, verified with 0 failures, finalized |
 
@@ -21,6 +21,7 @@ all after any change to shared code.
 ```bash
 uv run python validation/stage_tropomi.py   # once: 5 orbits cut to 23-47 scanlines
 uv run python validation/stage_gosat.py     # once: 4 real days, both files
+uv run python validation/stage_sciamachy.py # once: 5 real orbit files, whole
 TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py
 ```
 
@@ -33,11 +34,14 @@ Per product, the test:
 4. **Tampers.** One stored value is changed, and the verifier must fail,
    naming the store.
 5. **Exercises the guards.** The build must refuse:
-   - an undeclared missing day;
+   - an undeclared missing day (a month for SCIAMACHY);
    - a wrong version;
    - a run without the quality flags;
    - an unknown variable;
-   - an undeclared empty granule directory (TROPOMI).
+   - an undeclared empty granule directory (TROPOMI);
+   - declared rows that are missing or do not match raw (SCIAMACHY), or
+     that a reader cannot apply (the others). The verifier must fail a
+     declaration that does not match raw.
 
    A refused version must leave no store behind.
 6. **Finalizes.** `--attrs` must refuse an unverified store. Then `--attrs`,

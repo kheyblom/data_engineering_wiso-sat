@@ -16,9 +16,12 @@ Per product:
 3. resume: one store reset to empty and one to its first commit, as a run
    killed partway would leave them, then rebuilt and re-verified;
 4. the verifier must fail on a tampered value, naming the store, on a
-   store compressed other than as its config says, and (where the config
-   declares one) on a platform the files do not declare;
-5. guards: an undeclared missing day, a wrong processor version or platform,
+   store compressed other than as its config says, (where the config
+   declares one) on a platform the files do not declare, and (where it
+   declares rows left out) on a declaration that does not match raw;
+5. guards: an undeclared missing day (or month), a wrong processor version
+   or platform, declared rows that are missing, do not match, or are given
+   to a reader that cannot apply them,
    a run that omits the quality flags, an unknown variable, compression of an
    unknown array, and (where the product has them) an undeclared empty
    granule directory or unreadable file;
@@ -33,6 +36,7 @@ Run from the repo root after staging each fixture:
 
     uv run python validation/stage_tropomi.py
     uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
+    uv run python validation/stage_sciamachy.py
     uv run python validation/test_pipeline.py
 
 About a minute per product on a login node; no allocation spent. Failures are
@@ -55,7 +59,10 @@ import numpy as np
 import yaml # type: ignore
 import zarr
 
-from utils.path_utils import GEOLOCATION, load_config, run_stores, source_product, store_path
+from utils.granules import COVERAGE_KEYS
+from utils.path_utils import (
+    GEOLOCATION, load_config, load_reader, run_stores, source_product, store_path,
+)
 from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE, sharded_stores
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -281,9 +288,30 @@ def test_product(results, config, scratch):
             last_line(output, 'every file declares platform'),
         )
 
+    # ... and declared rows that do not match raw: the repeat's block halved,
+    # so the same rows are left out (the index still lines up) but the
+    # second half of each copy no longer equals the block
+    declared = settings.get('declared_rows_left_out') or []
+    repeats = [entry for entry in declared if entry.get('repeat_of')]
+    if repeats:
+        first, last = repeats[0]['repeat_of']
+        wrong = [dict(entry, repeat_of=[first, first + (last - first) // 2]) if entry is repeats[0]
+                 else entry for entry in declared]
+        path = write_config(settings, scratch, f'{product}_declared.yaml',
+                            declared_rows_left_out=wrong)
+        status, output = run(
+            'verify_wisosat_zarr.py', '--config', path, '--phases', 'values', '--stores', target
+        )
+        results.check(
+            f'{product}: verifier fails on declared rows that do not match raw',
+            status != 0 and 'FAIL  declared rows left out' in output,
+            last_line(output, 'declared rows left out'),
+        )
+
     # 5. guards that must stop a build before it writes
+    coverage_key, _ = COVERAGE_KEYS[getattr(load_reader(settings), 'COVERAGE_FREQUENCY', 'D')]
     guards = {
-        'an undeclared missing day': ({'expected_missing_days': []}, 'not declared'),
+        'an undeclared missing period': ({coverage_key: []}, 'not declared'),
         'a wrong processor version': ({'version': '0.0'}, 'processor version'),
         'omitted quality flags': (
             {'variables': [v for v in settings['variables'] if not v.startswith('quality_flags')]},
@@ -321,6 +349,27 @@ def test_product(results, config, scratch):
     if settings.get('expected_empty_granules'):
         guards['an undeclared empty granule directory'] = (
             {'expected_empty_granules': []}, 'holds 0 orbit files'
+        )
+    if declared:
+        guards['undeclared repeated rows'] = ({'declared_rows_left_out': []}, 'time decreases')
+        for entry in declared:
+            if entry.get('repeat_of'):
+                first, last = entry['repeat_of']
+                change = {'repeat_of': [first, first + (last - first) // 2]}
+                message = 'are not copies of rows'
+            else:
+                other = entry['same_location_as']
+                start, stop = other['rows']
+                change = {'same_location_as': dict(other, rows=[start + 1, stop + 1])}
+                message = 'do not have the'
+            wrong = [dict(item, **change) if item is entry else item for item in declared]
+            guards[f'declared rows of {entry["granule"]} that do not match'] = (
+                {'declared_rows_left_out': wrong}, message,
+            )
+    elif not getattr(load_reader(settings), 'DECLARED_ROWS', False):
+        guards['declared rows for a reader that cannot apply them'] = (
+            {'declared_rows_left_out': [{'granule': '0', 'rows': [0, 1], 'reason': 'test'}]},
+            'does not apply declared rows',
         )
     # each guard builds into an empty zarr directory of its own, so it meets
     # the check it is aimed at rather than the resume check against the

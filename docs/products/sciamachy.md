@@ -1,6 +1,6 @@
 # SCIAMACHY (SRON SICOR L2 H2O/HDO, file version 0110)
 
-In progress (2026-10-22): audit and subset proposal. First measured 2026-10-14 from header reads and one file's values.
+In progress. 2026-10-22: every file audited, subset decided, reader, key, configs and fixture built (the test passes); bench next. First measured 2026-10-14 from header reads and one file's values.
 
 ## Raw data
 

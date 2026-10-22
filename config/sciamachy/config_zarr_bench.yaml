@@ -1,0 +1,202 @@
+# Tier 2c bench for the SCIAMACHY build (TESTING.md): three real months,
+# 2010-09 to 2010-11 (1,026 orbit files, ~2.5% of the record), symlinked into
+# a bench raw tree by validation/stage_bench_sciamachy.py. Everything else is
+# the production config, so what the bench measures is what production will
+# do, except that only the S9 declaration applies: orbit 15838 (S8) is not in
+# these months, and the fixture covers it. Every output path differs from
+# production.
+product: sciamachy
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_bench/raw/sciamachy
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_bench/zarr/sciamachy
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, with the
+  # data source wisosat.<product> and no product token (decided 2026-10-14)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_sciamachy_bench.log
+# The processor version, the root 'version' attribute of every orbit file
+# (P1, approved 2026-10-22). The '0110' in the file names is the product
+# version and does not name the stores.
+version: '8.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+# Canonical names; each needs a row in nomenclature-key_sciamachy.md. The
+# geolocation store is always built. quality_flags_retrieval is mandatory.
+# Aligned with TROPOMI's stores, plus what Sarkar et al. (2026) filter on (P3).
+variables:
+  # core: the retrieval and its flag (no delta D is published; P2)
+  - water_vapor_column_h2o
+  - water_vapor_column_h2o_standard_error
+  - water_vapor_column_hdo
+  - water_vapor_column_hdo_standard_error
+  - quality_flags_retrieval
+  # filter inputs, and TROPOMI's counterparts
+  - iterations_retrieval
+  - solar_zenith_angle
+  - water_vapor_column_h2o_apriori
+  - water_vapor_column_hdo_apriori
+  - methane_column
+  - methane_column_apriori
+  - rms_residual_retrieval
+  - albedo_surface_2360nm
+  - chi_squared_retrieval
+  - spectral_point_count_retrieval
+  # model comparison, 60 layers and 61 levels
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
+  - pressure
+
+# The tree is filed by month (the reader's COVERAGE_FREQUENCY); the three
+# bench months are all linked.
+expected_missing_months: []
+
+# Observations left out by name, each confirmed by the build and the verifier
+# before it is left out (DeclaredRows in utils/granules.py; user decisions
+# 2026-10-22, docs/products/sciamachy.md P6). Both keep time from decreasing.
+declared_rows_left_out:
+  # S9: a ONE-TIME EXCEPTION to "never select observations" (user decision
+  # 2026-10-22). The two orbits' L1B files overlap, so 32 scenes are retrieved
+  # twice; 45263's retrieval, made with the normal spectral setup (273
+  # spectral points, against 143 in all of 45262), is kept
+  - granule: '45262'
+    rows: [253, 285]
+    same_location_as: {granule: '45263', rows: [0, 32]}
+    reason: >-
+      orbits 45262 and 45263 (2010-10-27) come from overlapping L1B files,
+      so rows 253-284 of 45262 and rows 0-31 of 45263 are the same 32 scenes
+      (same time, latitude and longitude) retrieved twice; 45262's are left
+      out, a one-time exception to keeping every observation, approved by
+      the user on 2026-10-22, since keeping both would make time decrease
+
+# The netCDF default fills, which SRON leaves undeclared, occur only on rows
+# whose quality flag is not 0 (2, 3, 4, 5 and 96; 421,648 rows in 756 files,
+# audit of 2026-10-22). Every other source is written on every row.
+source_fill_values:
+  target_product/h2o_column: [9.96921e+36]
+  target_product/h2o_column_precision: [9.96921e+36]
+  target_product/hdo_column: [9.96921e+36]
+  target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/iterations: [-2147483647]
+  side_product/ch4_column: [9.96921e+36]
+  diagnostics/rms: [9.96921e+36]
+  side_product/surface_albedo: [9.96921e+36]
+  diagnostics/chi_squared: [9.96921e+36]
+  diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
+  target_product/h2o_column_averaging_kernel: [9.96921e+36]
+  target_product/hdo_column_averaging_kernel: [9.96921e+36]
+
+# Scale settings (design condition 3), to be confirmed by the bench (TESTING.md
+# Tier 2c): 78.7 million obs over 41,616 orbits (~1,900 obs each).
+# - obs: 4,194,304 is halved per array to fit 40 MiB, so the 60- and 61-wide
+#   arrays take 131,072 obs (~600 chunks per array; no shards needed, P4).
+#   Compression is measured at the bench.
+# - granules_per_commit: 500 (~950,000 obs; 84 commits over the record). An
+#   unsharded store rewrites its partial last chunk at every commit, and the
+#   superseded copies stay in its history; a 1-D chunk holds ~2,200 orbits,
+#   so fewer, larger commits keep that small. ~1.6 KB per obs over all stores
+#   is ~1.5 GB per batch, two in flight.
+chunks:
+  obs: 4194304
+  granule: 65536
+granules_per_commit: 500
+num_workers: 8
+verify_granules_per_task: 100
+
+# The upstream filtering guidance recorded in every store's quality_filtering
+# attribute. Recorded, never applied: every observation is kept (P5).
+filtering_guidance: >-
+  Sarkar et al. (2026), as applied in WISO-SAT: processing_quality_flags 0;
+  iterations < 12; solar zenith angle < 70 degrees; 0.7 <= H2O column /
+  H2O a priori column <= 1.3; 0.9 <= CH4 column / CH4 a priori column <= 1.1
+  (a cloud filter); -600 < delta D < 0 per mil; log(RMS) within 6 sigma of
+  its median; log(uncertainty) of the H2O and HDO columns within 5 sigma of
+  their medians. Schneider et al. (2018), the product paper, give the same
+  ratio cuts (strict inequalities), iterations <= 12 and SZA < 70 degrees,
+  with sigma half the 15.9th to 84.1st percentile range of each log
+  distribution. No delta D is published; SRON define it in their TROPOMI
+  files of the same processor as (hdo_column / h2o_column) / 3.1153e-4 - 1.
+  On rows whose flag is not 0 the retrieved quantities, kernels and fit
+  diagnostics are mostly missing (NaN, or the integer fill); the a priori,
+  meteorological and geometry stores are complete on every row.
+
+# Global attributes, identical in every store of the product except where they
+# template {variable}. Coverage, history, date_created and verification are
+# deliberately absent: finalize_wisosat_zarr.py --attrs writes them once the
+# verifier has passed.
+attrs:
+  title: >-
+    WISO-SAT SCIAMACHY H2O/HDO Level 2 (SRON SICOR, processor {version_label}): {variable}
+  summary: >-
+    One variable of the SRON SCIAMACHY H2O/HDO total column retrieval
+    (Schneider et al. 2018), the non-scattering SICOR retrieval over the full
+    Envisat mission, as distributed for WISO-SAT: every observation of the
+    record on the native swath, stored as an icechunk-backed zarr store. Join
+    with the geolocation store of the same product on obs for time, latitude
+    and longitude.
+  Conventions: ACDD-1.3
+  source: >-
+    SRON SCIAMACHY L2 H2O/HDO product, SICOR processor {version_label}
+    (product version 0110), one netCDF file per orbit (HDO_SICORv10),
+    2003-01 to 2012-04
+  source_product_version: '0110'
+  institution: SRON Netherlands Institute for Space Research (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Schneider, A., Borsdorff, T., aan de Brugh, J., Hu, H., and Landgraf, J.
+    (2018), A full-mission data set of H2O and HDO columns from SCIAMACHY 2.3
+    um reflectance measurements, Atmos. Meas. Tech., 11, 3339-3350,
+    doi:10.5194/amt-11-3339-2018. Sarkar, M., Dee, S., Frazer, M., Bailey, A.,
+    Good, S., et al. (2026), WISO-SAT: A global database of stable hydrogen
+    isotopes in water vapor from eight satellite missions, Scientific Data,
+    doi:10.1038/s41597-026-08218-8.
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs; every other store of this product shares
+    its obs axis and granule index.
+  granule: >-
+    one orbit file; granule_id is the orbit number. Row r of a file is its
+    pixel_id r + 1, and an observation's row is its obs index minus
+    granule_obs_start
+  known_data_gaps: >-
+    Every month from 2003-01 to 2012-04 holds orbit files; not every orbit
+    number has one, and the files present were not checked against an
+    upstream listing. Every row of every file has a time, latitude and
+    longitude, so no row is left out as not an observation. Two defects
+    repeat observations, and the repeats are left out by declaration, each
+    checked against the rows it repeats (declared_rows_left_out in the build
+    config): orbit 15838 holds its 312 observations three times, and its rows
+    312-935 are left out; orbits 45262 and 45263 come from overlapping L1B
+    files, so 32 scenes are retrieved twice, and rows 253-284 of 45262 are
+    left out, a one-time exception to keeping every observation (user
+    decision 2026-10-22), keeping 45263's retrieval with the normal spectral
+    setup. granule_source_rows in the granule index records each file's own
+    row count. The rest of orbit 45262 (253 rows) used 143 spectral points
+    rather than about 273, with a fit RMS about 1000 times smaller, and is
+    kept as published.
+
+variable_attrs:
+  quality_flags_retrieval:
+    comment: >-
+      Mandatory. SRON's processing quality flags, with their CF flag_masks,
+      flag_values and flag_meanings as published. 0 is success.
+  chi_squared_retrieval:
+    comment: >-
+      Unreduced. A reduced chi-squared would be this divided by
+      spectral_point_count_retrieval; no source defines it.
+  rms_residual_retrieval:
+    comment: >-
+      SRON's root mean square fit residual, the RMS of the spectral fit
+      residual radiance (Schneider et al. 2018). The source unit is mol ph.
+      s-1 m-2 nm-1 sr-1; 'ph.' (photons) is a label and moved to the
+      long_name, so no value changes.
+  methane_column:
+    comment: >-
+      Retrieved in the same non-scattering fit as the H2O and HDO columns.
+      Its ratio to methane_column_apriori is the cloud filter of Schneider et
+      al. (2018) and Sarkar et al. (2026).

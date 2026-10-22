@@ -1,0 +1,115 @@
+# SCIAMACHY pipeline test fixture: five real orbit files, copied whole (they
+# are 0.7-4 MB), staged by validation/stage_sciamachy.py. Every path differs
+# from production, so this can never address a real store.
+#
+# What the fixture is built to exercise:
+# - both declared defects, as real files: orbit 15838 (its 312 observations
+#   three times; the repeats left out) and orbits 45262 and 45263 (32 scenes
+#   retrieved twice; 45262's last 32 rows left out, the one-time exception of
+#   2026-10-22). 15838 is staged in 2010-10 as a stand-in; its orbit number
+#   sorts first and its time is earlier, so time still never decreases;
+# - orbit 45824 (2010-12), whose flagged rows (3, 4, 5, 96) hold fill in every
+#   source that declares one, so each declared fill occurs;
+# - 2010-11 is not staged and is declared missing, so the monthly coverage
+#   check sees a gap;
+# - a hidden .ArchiveServiceTemp folder and a .DS_Store, as the real tree has,
+#   which the reader must not walk;
+# - obs: 1000 so appends land mid-chunk; granules_per_commit: 2 gives three
+#   commits per store, and so resume points; num_workers: 2 runs reads
+#   through the process pool.
+product: sciamachy
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/raw/sciamachy
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/zarr/sciamachy
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_sciamachy_fixture.log
+version: '8.1'
+temporal_resolution: observation
+grid_name: native_swath
+
+variables:
+  - water_vapor_column_h2o
+  - water_vapor_column_h2o_standard_error
+  - water_vapor_column_hdo
+  - water_vapor_column_hdo_standard_error
+  - quality_flags_retrieval
+  - iterations_retrieval
+  - solar_zenith_angle
+  - water_vapor_column_h2o_apriori
+  - water_vapor_column_hdo_apriori
+  - methane_column
+  - methane_column_apriori
+  - rms_residual_retrieval
+  - albedo_surface_2360nm
+  - chi_squared_retrieval
+  - spectral_point_count_retrieval
+  - water_vapor_column_h2o_averaging_kernel
+  - water_vapor_column_hdo_averaging_kernel
+  - water_vapor_partial_column_h2o_apriori
+  - water_vapor_partial_column_hdo_apriori
+  - dry_air_partial_column
+  - pressure
+
+# the tree is filed by month (the reader's COVERAGE_FREQUENCY)
+expected_missing_months:
+  - 2010-11-01
+
+# Only fixture configs may build from a working tree with uncommitted changes:
+# the pipeline test builds during development and its stores are throwaway.
+allow_dirty_tree: true
+
+# as in config_zarr.yaml
+declared_rows_left_out:
+  - granule: '15838'
+    rows: [312, 936]
+    repeat_of: [0, 312]
+    repeat_except: [instrument/pixel_id]
+    reason: TEST FIXTURE. Orbit 15838 holds its 312 observations three times.
+  - granule: '45262'
+    rows: [253, 285]
+    same_location_as: {granule: '45263', rows: [0, 32]}
+    reason: TEST FIXTURE. Orbit 45263 retrieves these 32 scenes again.
+
+source_fill_values:
+  target_product/h2o_column: [9.96921e+36]
+  target_product/h2o_column_precision: [9.96921e+36]
+  target_product/hdo_column: [9.96921e+36]
+  target_product/hdo_column_precision: [9.96921e+36]
+  diagnostics/iterations: [-2147483647]
+  side_product/ch4_column: [9.96921e+36]
+  diagnostics/rms: [9.96921e+36]
+  side_product/surface_albedo: [9.96921e+36]
+  diagnostics/chi_squared: [9.96921e+36]
+  diagnostics/number_of_spectral_points_in_retrieval: [-2147483647]
+  target_product/h2o_column_averaging_kernel: [9.96921e+36]
+  target_product/hdo_column_averaging_kernel: [9.96921e+36]
+
+chunks:
+  obs: 1000
+  granule: 4
+granules_per_commit: 2
+num_workers: 2
+# verify: granules per scan; each scan is one group of stores over one range
+verify_granules_per_task: 2
+
+filtering_guidance: >-
+  TEST FIXTURE. See config_zarr.yaml for the real guidance.
+
+attrs:
+  title: 'TEST STORE -- WISO-SAT SCIAMACHY {version_label}, staged subset, not for use: {variable}'
+  summary: >-
+    A correctness fixture, NOT data: five orbit files, two of them stand-ins.
+  Conventions: ACDD-1.3
+  source: >-
+    TEST FIXTURE, subset from the SRON SCIAMACHY L2 H2O/HDO product {version_label}
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr
+  comment: >-
+    TEST FIXTURE built from config_zarr_fixture.yaml by
+    validation/test_pipeline.py. Not data.
+
+variable_attrs:
+  quality_flags_retrieval:
+    comment: TEST FIXTURE attribute for {variable}, and no other store.

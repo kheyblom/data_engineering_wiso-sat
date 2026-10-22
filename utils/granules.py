@@ -26,6 +26,9 @@ shared, so this module is the interface between the two halves:
   names in ``allowed_on_rows_left_out``; anything else written on it fails
   the read, because leaving it out would lose data. The verifier works the
   same rows out from raw on its own.
+- ``DeclaredRows`` are observations a config leaves out by name, because they
+  repeat others (SCIAMACHY, 2026-10-22). Each declaration states what the
+  rows must match, and the build and the verifier each check it from raw.
 
 The granule index every store carries is derived from these: one entry per
 granule with its identifier, first observation, observation count, start and
@@ -146,6 +149,43 @@ class GranuleData(NamedTuple):
 LOCATION_COORDINATES = ('time', 'lat', 'lon')
 
 
+class DeclaredRows(NamedTuple):
+    """Rows of one granule left out by declaration, with what they must match.
+
+    For a defect the row rule cannot see: rows that are observations, but
+    repeats of others, so keeping them would break "time never decreases"
+    (user decision 2026-10-22; ``docs/products/sciamachy.md`` P6). Declared in
+    config (``declared_rows_left_out``), never detected, and left out only
+    while the build and the verifier each confirm the stated match:
+
+    - ``repeat_of``: the rows are copies of an earlier block of the same file,
+      repeated whole, equal bit for bit in every source read except
+      ``repeat_except`` (SCIAMACHY orbit 15838, triplicated);
+    - ``location_of``: the rows have exactly the time, latitude and longitude
+      of a block of another granule, which keeps them (SCIAMACHY orbits
+      45262 and 45263, overlapping; a one-time exception to "never select
+      observations").
+
+    Attributes:
+        granule (str): The granule's identifier.
+        start (int): First source row left out.
+        stop (int): One past the last.
+        repeat_of (tuple | None): ``(start, stop)`` of the block repeated.
+        repeat_except (tuple): Source paths that may differ between copies.
+        location_of (tuple | None): ``(granule, start, stop, path)``: the
+            other granule's block and its first file.
+        reason (str): Why, as the config states it, for the metadata.
+    """
+
+    granule: str
+    start: int
+    stop: int
+    repeat_of: tuple | None
+    repeat_except: tuple
+    location_of: tuple | None
+    reason: str
+
+
 class RowRule(NamedTuple):
     """Which rows of a source file are observations; see the module docstring.
 
@@ -157,11 +197,115 @@ class RowRule(NamedTuple):
         allowed (tuple): Source paths that may hold values on a row left out
             (``allowed_on_rows_left_out``), e.g. viewing geometry the producer
             computes before it geolocates.
+        declared (dict): Granule id -> :class:`DeclaredRows`, from
+            ``declared_rows``; only a reader with ``DECLARED_ROWS`` applies it.
     """
 
     location: tuple
     fills: dict
     allowed: tuple = ()
+    declared: dict = {}
+
+
+def declared_rows(settings, granules):
+    """The config's ``declared_rows_left_out``, checked against the listing.
+
+    Each entry names a granule, the source rows ``[start, stop)`` it leaves
+    out, a ``reason``, and exactly one check: ``repeat_of: [start, stop]``
+    (with optional ``repeat_except``), or ``same_location_as: {granule,
+    rows: [start, stop]}``.
+
+    Args:
+        settings (dict): The loaded configuration.
+        granules (list): The reader's listing, to find each granule named.
+
+    Returns:
+        dict: Granule id -> :class:`DeclaredRows`.
+
+    Raises:
+        ValueError: If an entry is malformed, names a granule not listed, or
+            a granule is named twice.
+    """
+    paths = {granule.id: granule.paths[0] for granule in granules}
+    declared = {}
+    for entry in settings.get('declared_rows_left_out') or []:
+        gid = str(entry.get('granule', ''))
+        start, stop = (int(row) for row in entry.get('rows', (0, 0)))
+        repeat = entry.get('repeat_of')
+        other = entry.get('same_location_as')
+        problems = []
+        if gid not in paths:
+            problems.append(f'granule {gid!r} is not in the listing')
+        if gid in declared:
+            problems.append(f'granule {gid!r} is declared twice')
+        if not 0 <= start < stop:
+            problems.append(f'rows {entry.get("rows")} are not [start, stop) with start < stop')
+        if (repeat is None) == (other is None):
+            problems.append('give exactly one of repeat_of and same_location_as')
+        if not str(entry.get('reason', '')).strip():
+            problems.append('a reason is required')
+        location_of = None
+        if repeat is not None:
+            first, last = (int(row) for row in repeat)
+            if not 0 <= first < last <= start or (stop - start) % (last - first):
+                problems.append(
+                    f'repeat_of {repeat} must be an earlier block whose length divides {stop - start}'
+                )
+            repeat = (first, last)
+        if other is not None:
+            ogid = str(other.get('granule', ''))
+            first, last = (int(row) for row in other.get('rows', (0, 0)))
+            if ogid not in paths or ogid == gid:
+                problems.append(f'same_location_as names {ogid!r}, which is not another listed granule')
+            if last - first != stop - start or first < 0:
+                problems.append(f'same_location_as rows {other.get("rows")} are not {stop - start} rows')
+            location_of = (ogid, first, last, paths.get(ogid))
+        if problems:
+            raise ValueError(f'declared_rows_left_out entry {entry}: {"; ".join(problems)}')
+        declared[gid] = DeclaredRows(
+            granule=gid, start=start, stop=stop, repeat_of=repeat,
+            repeat_except=tuple(entry.get('repeat_except') or ()),
+            location_of=location_of, reason=str(entry['reason']).strip(),
+        )
+    return declared
+
+
+def declared_mask(n_rows, declared):
+    """The rows a declaration leaves out, as a mask over a file's rows.
+
+    Args:
+        n_rows (int): The file's rows.
+        declared (DeclaredRows | None): The granule's declaration, if any.
+
+    Returns:
+        numpy.ndarray: bool per row, True where left out.
+
+    Raises:
+        ValueError: If the declared rows run past the file.
+    """
+    mask = np.zeros(n_rows, dtype=bool)
+    if declared is None:
+        return mask
+    if declared.stop > n_rows:
+        raise ValueError(
+            f'granule {declared.granule}: declared rows {declared.start}-{declared.stop} '
+            f'run past its {n_rows} rows'
+        )
+    mask[declared.start:declared.stop] = True
+    return mask
+
+
+def same_bits(left, right):
+    """Whether two raw arrays are identical, NaN included, bit for bit.
+
+    Args:
+        left (numpy.ndarray): One array.
+        right (numpy.ndarray): The other.
+
+    Returns:
+        bool: True if shape, dtype and every byte agree.
+    """
+    return left.shape == right.shape and left.dtype == right.dtype and left.tobytes() == right.tobytes()
 
 
 def unwritten(values, fill=()):
@@ -264,50 +408,61 @@ def check_order(granules):
         raise ValueError(f'granules appear more than once: {duplicated[:10]}')
 
 
-def check_coverage(granules, settings):
-    """Fail unless the days without a granule are exactly the declared ones.
+# the period a reader's tree files granules under (``COVERAGE_FREQUENCY`` in
+# the reader, daily if it names none) -> the config key declaring the periods
+# with no granule, and the word for one in messages. SCIAMACHY files orbits by
+# month, and its file names carry no date (2026-10-22)
+COVERAGE_KEYS = {'D': ('expected_missing_days', 'days'), 'MS': ('expected_missing_months', 'months')}
+
+
+def check_coverage(granules, settings, frequency='D'):
+    """Fail unless the periods without a granule are exactly the declared ones.
 
     A day missing upstream is fine and documented; a day missing because a
     download is incomplete is how a store silently ends up short. The two look
     identical in the tree, so they are told apart by the config, as in MSWEP:
     the run proceeds only if what is missing is precisely
-    ``expected_missing_days``.
+    ``expected_missing_days``. A reader whose tree is filed by month checks
+    months instead, against ``expected_missing_months``.
 
     Args:
         granules (list): From the reader, in source order.
         settings (dict): The loaded configuration.
+        frequency (str): The reader's ``COVERAGE_FREQUENCY``, a key of
+            ``COVERAGE_KEYS``.
 
     Returns:
-        list: The missing days, ascending.
+        list: The missing periods' first days, ascending.
 
     Raises:
-        ValueError: If the missing days differ at all from the declared ones.
+        ValueError: If the missing periods differ at all from the declared
+            ones, or the frequency is unknown.
     """
+    if frequency not in COVERAGE_KEYS:
+        raise ValueError(f'unknown coverage frequency {frequency!r}; expected one of {list(COVERAGE_KEYS)}')
+    key, unit = COVERAGE_KEYS[frequency]
     present = sorted({granule.day for granule in granules})
-    span = pd.date_range(present[0], present[-1], freq='D').date
+    span = pd.date_range(present[0], present[-1], freq=frequency).date
     missing = sorted(set(span) - set(present))
-    declared = sorted(
-        pd.Timestamp(day).date() for day in settings.get('expected_missing_days') or []
-    )
+    declared = sorted(pd.Timestamp(day).date() for day in settings.get(key) or [])
     if missing != declared:
         unexpected = sorted(set(missing) - set(declared))
         recovered = sorted(set(declared) - set(missing))
         detail = []
         if unexpected:
             detail.append(
-                f'{len(unexpected)} days have no granule and are not declared: '
+                f'{len(unexpected)} {unit} have no granule and are not declared: '
                 f'{[str(day) for day in unexpected[:10]]}{" ..." if len(unexpected) > 10 else ""}'
             )
         if recovered:
             detail.append(
-                f'{len(recovered)} days declared missing have granules: '
+                f'{len(recovered)} {unit} declared missing have granules: '
                 f'{[str(day) for day in recovered[:10]]}{" ..." if len(recovered) > 10 else ""}'
             )
         raise ValueError(
             'the raw tree does not cover what the config says it should; '
             + '; '.join(detail)
-            + '. Either the download is incomplete or expected_missing_days '
-            'needs updating'
+            + f'. Either the download is incomplete or {key} needs updating'
         )
     return missing
 

@@ -14,7 +14,9 @@ The pass, per batch of ``granules_per_commit`` granules:
    reader keeps only rows that are observations, with time, latitude and
    longitude all written (``RowRule`` in ``utils/granules.py``);
 2. check that every granule declares the configured processor version and
-   that time never decreases, within or across granules;
+   that time never decreases, within or across granules. Rows a config
+   declares as repeats of others (``declared_rows_left_out``) are left out
+   by the reader, once their declared match is confirmed;
 3. append each store's slice, data and granule index together, as one commit
    per store.
 
@@ -227,16 +229,22 @@ def prepare(settings):
         expected_unreadable=settings.get('expected_unreadable_granules') or [],
     )
     check_order(granules)
-    missing = check_coverage(granules, settings)
+    missing = check_coverage(granules, settings, getattr(reader, 'COVERAGE_FREQUENCY', 'D'))
     LOG.info(
         f'{len(granules)} granules, {granules[0].day} to {granules[-1].day}; '
-        f'{len(missing)} days absent upstream, as declared'
+        f'{len(missing)} periods absent upstream, as declared'
     )
 
     # the version names every store, so it is checked on the first granule
     # before any repository is created under a name that may be wrong
     time = time_source(source_name)
-    rule = row_rule(settings)
+    # declared rows are checked against the listing here, before any read
+    rule = row_rule(settings, granules)
+    for declared in rule.declared.values():
+        LOG.info(
+            f'granule {declared.granule}: rows {declared.start}-{declared.stop - 1} '
+            f'left out as declared: {declared.reason}'
+        )
     check_versions([reader.read_granule(granules[0], [time], time, rule)], settings)
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
     return granules, revision
@@ -261,7 +269,7 @@ def run_pass(settings, granules, revision, stores, num_workers):
     chunks = resolve_chunks(settings)
     codecs = resolve_compression(settings)
     time = time_source(source_name)
-    rule = row_rule(settings)
+    rule = row_rule(settings, granules)
     repositories, states = {}, {}
     for store in stores:
         path = store_path(settings, store)

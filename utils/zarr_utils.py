@@ -45,7 +45,8 @@ from icechunk.xarray import to_icechunk
 from zarr.codecs import BloscCodec
 
 from .granules import (
-    GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, LOCATION_COORDINATES, RowRule, index_entries,
+    GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, LOCATION_COORDINATES, RowRule, declared_rows,
+    index_entries,
 )
 from .nomenclature import (
     conversion_factor,
@@ -664,15 +665,21 @@ def coordinate_attrs(product, name, array, settings, fill):
     return attrs
 
 
-def row_rule(settings):
+def row_rule(settings, granules=()):
     """The rule for which source rows are observations (``utils/granules.py``).
 
     Args:
         settings (dict): The loaded configuration.
+        granules (list): The reader's listing, which declared rows are
+            checked against; needed only when the config declares any.
 
     Returns:
-        RowRule: Location sources from the key, fills and allowed sources from
-            the config.
+        RowRule: Location sources from the key, fills, allowed sources and
+            declared rows from the config.
+
+    Raises:
+        ValueError: If the config declares rows and the product's reader
+            cannot apply them, which would otherwise ignore them silently.
     """
     key = coordinates(source_product(settings))
     location = tuple(key[name].original for name in LOCATION_COORDINATES)
@@ -680,10 +687,19 @@ def row_rule(settings):
         source: tuple(values or [])
         for source, values in (settings.get('source_fill_values') or {}).items()
     }
+    declared = {}
+    if settings.get('declared_rows_left_out'):
+        if not getattr(load_reader(settings), 'DECLARED_ROWS', False):
+            raise ValueError(
+                f'declared_rows_left_out is set, but the {source_product(settings)} reader '
+                f'does not apply declared rows'
+            )
+        declared = declared_rows(settings, granules)
     return RowRule(
         location=location,
         fills=fills,
         allowed=tuple(settings.get('allowed_on_rows_left_out') or []),
+        declared=declared,
     )
 
 
