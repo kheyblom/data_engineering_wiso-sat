@@ -7,13 +7,15 @@ Read this first in a new session. Update it whenever work lands.
 **Current task: SCIAMACHY** (task 6; chosen by the user 2026-10-22).
 - **Nothing is running.** The full file audit is done (TESTING.md finding
   13; job 7907283, ~0.8 core-hours): all 41,616 files good, 78,666,953 obs.
-- **Awaiting the user:** the proposal in `docs/products/sciamachy.md`
-  (P1-P6: store version `v_8_1`, δD left out, the 19-store subset, 5 new
-  nomenclature rows, and the two time-order defects S8/S9), reviewed in place
-  with `#@CLAUDE` comments.
-- **Then:** the rows to style_guides (user review), the declared-defects
-  shared code if P6 (a), the reader (from `products/tropomi.py`), the key,
-  configs and fixture, then the bench.
+- **Decided 2026-10-22** (`docs/products/sciamachy.md`, Production subset):
+  `v_8_1`, δD left out, 22 stores aligned with TROPOMI's, the S8 repeats and
+  S9 overlap rows left out (see Decisions in force).
+- **Awaiting the user:** P3a (the RMS name), P3b (CH4 final only) and P3c
+  (`pixel_id` not stored if the verifier confirms it is row + 1).
+- **Then:** the 6 new rows to style_guides (user review), the shared
+  declared-rows block (build and verifier; every fixture re-runs), the reader
+  (from `products/tropomi.py`), the key, configs and fixture, then the
+  bench.
 - **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
   in the raw tree (S5); the reader lists `YYYYMM` folders only.
 
@@ -202,5 +204,11 @@ when it is time (2026-10-22).
   have their build snapshots expired at finalization.
 - **Filtering guidance** in the metadata is Table 1 in full, plus the
   inferred reduced chi-squared.
+- **SCIAMACHY (2026-10-22):** stores `v_8_1`; no δD (SRON publish none); the
+  1-D stores align with TROPOMI's, plus what Sarkar et al. (2026) filter on.
+  - **S8:** orbit 15838 keeps the first of its three identical copies.
+  - **S9, a one-time exception** to "never select observations": the last 32
+    rows of 45262, a second retrieval of 45263's first 32 scenes, are left
+    out. Checked against 45263 and named in the metadata. Not a precedent.
 - **Naming rule:** the quantity first, then qualifiers general to specific.
   Established terms stay whole; unitless quantities use `unitless`.
