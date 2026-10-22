@@ -87,14 +87,21 @@ Review in place with `#@CLAUDE` comments. Once settled, this section becomes
 "Production subset (decided ...)", as in `tropomi.md`, and the new rows go to
 style_guides for review before commit.
 
-Facts behind it, from one-file probes on 2026-10-22 (the full audit of every
-file is running; S2):
-- Every dataset is contiguous and the layout is the same in the 40 files
-  sampled. Fill (9.96921e36, int -2147483647) occurs only on rows flagged 4
-  or 5 (convergence error, side retrieval failure). Those rows have time and
-  position, so they are observations and stay in.
-- `aerosol_optical_thickness`, its precision and `aerosol_height_precision`
-  are fill on every row sampled (S6).
+Facts behind it, from the audit of every file on 2026-10-22 (S2; TESTING.md
+finding 13) and one-file probes:
+- All 41,616 files open, are version 8.1 and share one layout: 78,666,953
+  obs, every row with time, lat and lon. Every dataset is contiguous.
+- Quality flags over the record: 0 on 78,241,717 rows (99.46%); 2
+  (dead spectrum) 258,132; 5 (side retrieval failure) 123,108; 4
+  (convergence error) 39,338; 2048 (weak spectrum warning) 3,585; 3
+  (numerical error) 719; 96 354.
+- Fill (9.96921e36, int -2147483647) occurs only on 421,648 rows in 756
+  files, all flagged. Those rows have time and position, so they are
+  observations and stay in. `h2o_column` is written on 63 of them where
+  `hdo_column` is not. `instrument/averaged_reflectance_signal` (not stored)
+  holds 258,252 NaN.
+- `aerosol_optical_thickness` and its precision are fill on every row of the
+  record; `aerosol_height_precision` on all but 128 (S6).
 - `h2o_column_apriori` and `hdo_column_apriori` equal the sums of their
   partial-column priors to float32 precision (ratio 1.000000 in three files;
   S7).
@@ -200,8 +207,45 @@ That makes **19 stores**: geolocation, 5 core, 7 filter inputs (with
 ### P5. Filtering guidance in the metadata
 
 Sarkar et al. (2026) for SCIAMACHY in full, as listed above under Filtering
-guidance, with the δD definition from P2. The record also notes that rows
-flagged 4 or 5 hold fill in the retrieval variables.
+guidance, with the δD definition from P2. The record also notes that flagged
+rows hold fill in the retrieval variables.
+
+### P6. Two defects that break "time never decreases" (found by the audit)
+
+The style guide requires time never to decrease along `obs`, and keeping
+every observation in source order. The verifier fails on any decrease,
+within a file or across a granule seam. Both cases deviate from the guide
+one way or the other, so both need approval.
+
+**S8, orbit 15838 (2005-03-11) is triplicated.** Its 936 rows are the same 312
+observations three times (rows 0-311, 312-623, 624-935), identical in every
+variable but `pixel_id` (1-936). Time steps back 312 s at rows 312 and 624.
+- **(a) Keep the first copy (recommended).** Declare it in config (orbit,
+  rows kept). The build and verifier check that the other two copies equal it
+  in every source but `pixel_id` before leaving them out, and the index keeps
+  `granule_source_rows` 936. The 624 rows are repeats, not observations, so
+  nothing is lost.
+- (b) Keep all 936, and declare the two decreases as known in config.
+- (c) Leave the orbit out as defective, as with TROPOMI's corrupt files
+  (loses 312 obs).
+
+**S9, orbits 45262 and 45263 (2010-10-27) overlap.** Their L1B files overlap
+in time (45262's ends 02:52:24, 45263's starts 02:52:05). The last 32 rows of
+45262 and the first 32 of 45263 have the same time, position and meteo, but
+different retrievals: all of 45262 (285 rows) used 143 spectral points, with
+an RMS ~1000x smaller, against 273 in 45263. All 64 rows are flag 0. Time
+steps back 18.5 s at the seam.
+- **(a) Keep both (recommended).** They are two retrievals, not one row
+  twice, so every observation stays. Declare the seam in config (orbit pair,
+  step); the verifier passes exactly that one decrease and fails any other.
+  The metadata names the 32 scenes retrieved twice.
+- (b) Leave out the 32 rows of 45262, the anomalous retrieval. That selects
+  observations on quality, which the guide forbids.
+- (c) Leave out the 32 rows of 45263 instead.
+
+Either (a) needs new shared code: a declared-defects block in config, read
+by the build and the verifier. That is shared code, so every fixture
+re-runs.
 
 ## Known data issues
 
@@ -210,9 +254,13 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | # | issue | status |
 | --- | --- | --- |
 | S1 | **`raw/SCIAMACHY/H2O` and `raw/SCIAMACHY/HDO` hold ESA MIPAS files**, a different Envisat instrument that is not in WISO-SAT. | handled: excluded |
-| S2 | **Same SRON format as TROPOMI**, so TROPOMI's T1-T17 (`tropomi.md`) likely apply. No 9.96921e36 was seen in the one file sampled. | open: check the fill convention, and audit for shells and partial files as for TROPOMI |
+| S2 | **Same SRON format as TROPOMI**, so TROPOMI's T1-T17 (`tropomi.md`) might apply. Audit of every file, 2026-10-22 (TESTING.md finding 13): no shells, partial, unreadable or wrong-version files, and no row without time, lat or lon. The netCDF default fills occur, undeclared, on 421,648 flagged rows (see the Proposal). | handled: fills to declare in `source_fill_values`, as TROPOMI's |
 | S3 | **Negative retrieved columns** (e.g. `hdo_column` -9.3e16) are real retrieval output, not fill. | record only |
 | S4 | **No δD is published**; WISO-SAT derives it. | open: P2 |
 | S5 | **Hidden transfer leftovers in the raw tree** (found 2026-10-22): 24 `.ArchiveServiceTemp.sb-*` folders hold 3,350 files whose names all also exist in the month folders. 3,339 have the same size as the month-folder copy; 11 are truncated (0 B or a whole number of MiB). 201 names occur more than once among them. Also one `.DS_Store`. The month folders hold 41,616 files, 173 GB, with no repeated name. | handled: only `YYYYMM` folders are listed. Deleting the leftovers (~14 GB) is the user's call |
 | S6 | **`aerosol_optical_thickness`, its precision and `aerosol_height_precision` are fill on every row** in every file sampled, though `aerosol_height` and its prior are written. | record only: left out (P3); the audit counts it over every file |
 | S7 | **The total-column priors are the sums of the partial-column priors**, for H2O and HDO, to float32 precision (three files). | record only |
+| S8 | **Orbit 15838 (2005-03-11) is triplicated**: 936 rows, the same 312 observations three times, identical but for `pixel_id`. Time steps back twice. | open: P6 |
+| S9 | **Orbits 45262 and 45263 (2010-10-27) overlap by 32 scenes**, retrieved twice from overlapping L1B files with different spectral setups (143 vs 273 points). Time steps back 18.5 s at the seam. | open: P6 |
+| S10 | **The millisecond field reaches 1000** in 759 files, meaning the next whole second (`...:06.1000` is `:07.000`). | handled: `decode_time` (pandas) carries it; checked across a year end |
+| S11 | **Month folders are by orbit start.** 41 orbits run across a month end, and 24 have their first observation after midnight on the 1st, so 65 files hold times outside their folder's month. | handled: granules are ordered by orbit number, never by folder |

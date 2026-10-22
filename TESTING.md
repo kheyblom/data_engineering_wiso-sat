@@ -202,6 +202,24 @@ The build of the corner geolocation store and the two index stores was stamped
   must refuse without the fixture's allowance. A global check confirms that
   no other config sets it. 46 cases pass.
 
+### 13. Every SCIAMACHY file audited (2026-10-22, develop job 7907283, 6 min)
+
+`tools/survey/sciamachy_file_audit.py` read all 41,616 month-folder files in
+full (173 GB; 8 cores requested, 16 workers from the affinity mask; ~0.8
+core-hours).
+- **All 41,616 files are good:** they open, are version 8.1, share one
+  layout, and hold 78,666,953 obs. No row lacks time, lat or lon, so no row
+  is left out.
+- **The first run reported 759 as unreadable**, but the error was the audit's
+  own decoder: the millisecond field reaches 1000 (the next whole second).
+  `pd.to_datetime`, which the shared `decode_time` uses, carries it. Those
+  files were re-audited in place (`--redo-unreadable`, login node, 70 s).
+- **Two defects break "time never decreases"** (`sciamachy.md` S8, S9): orbit
+  15838 holds its 312 observations three times, and orbits 45262 and 45263
+  retrieve 32 scenes twice. Both await the user (P6).
+- The output is in `/glade/derecho/scratch/$USER/data/wisosat/audit/`
+  (`sciamachy_file_audit.jsonl`; the first run kept as `_run1`).
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445

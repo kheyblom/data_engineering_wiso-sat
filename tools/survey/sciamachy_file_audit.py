@@ -28,7 +28,8 @@ Every file lands in one category: ``unreadable``, ``wrong_version``,
     .venv/bin/python -I tools/survey/sciamachy_file_audit.py <output.jsonl> [--limit N]
 
 It writes one JSON line per file and prints a summary; ``--summarize``
-re-reads an existing output.
+re-reads an existing output, and ``--redo-unreadable`` re-audits only the
+files an existing output records as unreadable, in place.
 """
 
 import collections
@@ -66,8 +67,11 @@ def walk():
 
 
 def decode(row):
+    # the millisecond field reaches 1000 in 759 files, meaning the next whole
+    # second (found by the first audit run, 2026-10-22), so it is added, not set
     year, month, day, hour, minute, second, millisecond = (int(v) for v in row)
-    return datetime.datetime(year, month, day, hour, minute, second, millisecond * 1000)
+    return (datetime.datetime(year, month, day, hour, minute, second)
+            + datetime.timedelta(milliseconds=millisecond))
 
 
 def audit(path):
@@ -186,6 +190,14 @@ def summarize(path):
 def main():
     if sys.argv[1] == '--summarize':
         summarize(sys.argv[2])
+        return
+    if sys.argv[1] == '--redo-unreadable':
+        path = sys.argv[2]
+        records = [json.loads(line) for line in open(path)]
+        records = [audit(f'{RAW}/{r["file"]}') if r['category'] == 'unreadable' else r for r in records]
+        with open(path, 'w') as handle:
+            handle.writelines(json.dumps(r) + '\n' for r in records)
+        summarize(path)
         return
     output = sys.argv[1]
     started = time.time()
