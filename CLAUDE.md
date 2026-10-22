@@ -19,6 +19,10 @@ then extend to the other products (decided 2026-10-14).
   handled / open / record only). Add new findings there. The cross-product
   unit survey, the value checks and the WISO-SAT paper cross-check are in
   [docs/l2-survey.md](docs/l2-survey.md).
+- The WISO-SAT paper (Sarkar et al. 2026) is in full text in
+  `docs/sarkar-2026-wiso-sat.md`, beside its PDF. Both are local only (the PDF
+  is gitignored, the .md is in `.git/info/exclude`; licence CC BY-NC-ND).
+  Search or read it by section; go to the PDF for figures.
 - Environment: uv (`pyproject.toml`, `uv.lock`, `.venv` at the repo root). Run
   with `uv run python ...`.
 - Remote: `git@github.com:kheyblom/data_engineering_wiso-sat.git` (SSH),

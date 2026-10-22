@@ -241,7 +241,9 @@ What a shared store costs:
 ## Cross-check against Sarkar et al. (2026), WISO-SAT data descriptor
 
 Read 2026-10-14. The paper describes the eight products these raw files were
-gathered for (its L3 gridding is out of scope here).
+gathered for (its L3 gridding is out of scope here). Full text, local only:
+`docs/sarkar-2026-wiso-sat.md` (from the Article in Press PDF, added
+2026-10-22; this cross-check predates it).
 
 **Confirms earlier findings:**
 - Units:
