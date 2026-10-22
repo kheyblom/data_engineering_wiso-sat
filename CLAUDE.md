@@ -87,6 +87,10 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
 uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yaml --gc [--apply]
 ```
 
+- **Never run two verifies of one config at once.** Both append to the
+  same `logs/verify_<log_file>`, and finalize credits each run's verdict to
+  the last `stores:` line before it, so interleaved runs can credit one run's
+  pass to the other's stores. Chain verify jobs `afterany` (2026-10-21).
 - **Tag names:** `<version>-verified-YYYYMMDD`, after GLEAM. TROPOMI is
   `v8.1-verified-<date>`.
 - **`--expire --apply` and `--gc --apply` are irreversible.** Expiry runs
