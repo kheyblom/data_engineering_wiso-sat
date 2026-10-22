@@ -14,10 +14,12 @@ Read this first in a new session. Update it whenever work lands.
   in `utils/granules.py`; the S8 repeats and the S9 overlap, checked by the
   reader and the verifier) and a reader `COVERAGE_FREQUENCY` (SCIAMACHY is
   monthly, `expected_missing_months`).
-- **Next: the bench (Tier 2c),** awaiting the user's approval of the jobs:
-  2010-09..11, 1,026 orbits, `config/sciamachy/config_zarr_bench.yaml`,
-  staged by `validation/stage_bench_sciamachy.py` (done). It measures time,
-  memory and compression; then production.
+- **The bench (Tier 2c) passed** 2026-10-22 (jobs 7908198 build, 7908201
+  verify; 879 checks, 0 failures; ~0.6 core-hours). Bench stores under
+  `/glade/derecho/scratch/$USER/data/wisosat_bench/zarr/sciamachy/`.
+- **Awaiting the user:** blosc for the six 2-D stores (saves 18-38%), and a
+  chunk cache in the verifier (finding 14: ~17 of ~21 cpu-hours of a
+  production verify re-decode chunks); then production.
 - **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
   in the raw tree (S5); the reader lists `YYYYMM` folders only.
 

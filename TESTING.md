@@ -415,6 +415,37 @@ bench at 10 granules per commit).** The six bench stores were deleted first
 - **Memory:** six store processes at 15.6 GiB can approach 94 GB; production
   should request ~128 GB at 10 granules per commit.
 
+## Tier 2c: the SCIAMACHY bench (passed 2026-10-22)
+
+**What it is:** three real months, 2010-09 to 2010-11: 1,026 orbit files,
+1,983,046 observations (~2.5% of the record), with the S9 overlap declared
+(`config/sciamachy/config_zarr_bench.yaml`; the raw tree is 3 symlinks made by
+`validation/stage_bench_sciamachy.py`). Production settings: `chunks.obs`
+4,194,304, `granules_per_commit` 500, `num_workers` 8, default zstd.
+
+| job | what | wall | cpu | memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7908198 | build, 22 stores, 3 commits | 38 s | 1 min 10 s | 4.49 GiB main process (job 11.4 GiB) | done |
+| 7908201 | verify, 11 scans x 8 processes | 3 min 45 s | 30 min 52 s (workers 0.29 h user + 0.22 h sys) | 0.58 GiB per scan | **879 checks, 0 failures**; the 32 declared rows confirmed from raw |
+
+Both on develop, 8 cores and 32 GB; ~0.6 core-hours in all.
+
+**Compression** (three chunks of each 2-D store, login node): blosc zstd 5 +
+byte shuffle against the default zstd. The water kernels compress 1.36x and
+1.70x against 1.12x and 1.19x; the priors 1.42x against 1.07x; dry air 1.73x
+against 1.11x; pressure 1.82x against 1.12x. Blosc saves 18-38% of the
+default size, ~26 GB of ~101 GB over the record. (A first measurement passed
+blosc raw bytes, so its shuffle ran at type size 1 and did nothing.)
+
+**Finding 14: the verifier decodes a whole chunk for every granule.** The
+values phase reads each store's slice for one granule at a time. A SCIAMACHY
+orbit is ~1,900 obs and a chunk 4,194,304 (1-D) or 131,072 (2-D), so each
+read decodes a chunk to keep ~0.05-1.5% of it. On the bench stores, 100
+orbits read one at a time took 1.45 s against 15 ms in one read (1-D), and
+5.3 s against 82 ms (2-D): ~1.5 cpu-s per orbit over the 22 stores, so ~17 of
+the ~21 cpu-hours a production verify would take. TROPOMI's orbits are larger
+than a 1-D chunk's share, so it paid this far less.
+
 ## Tier 3: production
 
 Per product:
