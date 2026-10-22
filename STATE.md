@@ -86,13 +86,12 @@ when it is time (2026-10-22).
 
 - **Throwaway data on scratch** (delete only with approval):
   `/glade/derecho/scratch/kheyblom/data/wisosat_bench/` (25 bench stores of
-  2020-07, roughly 280 GiB with the 2-D stores' superseded shards; and the 22
-  SCIAMACHY bench stores, 2.2 GiB, plus 3 raw symlinks) and
+  2020-07, roughly 280 GiB with the 2-D stores' superseded shards) and
   `wisosat_fixture/` (rebuilt by the test).
-- **SCIAMACHY raw-tree leftovers** (S5; delete only with approval): 24 hidden
-  `.ArchiveServiceTemp.sb-*` folders in `raw/SCIAMACHY/HDO_SICORv10/`, ~14
-  GB of duplicates (11 truncated), and a `.DS_Store`. The reader ignores
-  them.
+- **Deleted 2026-10-22 with the user's approval:** the SCIAMACHY bench (22
+  stores, 2.2 GiB, and its 3 raw symlinks) and the raw tree's 22 hidden
+  `.ArchiveServiceTemp.sb-*` folders (S5; 3,350 duplicate orbit files, 13
+  GB). The raw root's `.DS_Store` is left.
 - **SCIAMACHY orbits were not checked against an upstream listing** (4525 to
   52867 numbered, 41,616 present); stated in `known_data_gaps`. Possible if
   the user knows the download source.

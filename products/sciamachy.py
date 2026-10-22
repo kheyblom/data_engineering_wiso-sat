@@ -16,8 +16,9 @@ TROPOMI's own functions. What differs, measured by the audit of every file on
   month (S11). Coverage is checked by month (``COVERAGE_FREQUENCY``), since a
   day would need every file opened to list the tree.
 - **Hidden transfer leftovers** (``.ArchiveServiceTemp.sb-*``, duplicates of
-  month-folder files, some truncated; S5) and a ``.DS_Store`` sit in the raw
-  root, so only ``YYYYMM`` folders are walked.
+  month-folder files, some truncated; S5) sat in the raw root until deleted
+  on 2026-10-22, and a ``.DS_Store`` still does, so only ``YYYYMM`` folders
+  are walked.
 - **No shells or partial files**: every row of every file has time, lat and
   lon. The shared row rule is still applied, as for every product.
 - **The millisecond field reaches 1000** (the next whole second) in 759 files
