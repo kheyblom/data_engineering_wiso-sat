@@ -14,6 +14,10 @@ output_conventions:
 log_file: wisosat_zarr_gosat.log
 # the files' root product_version attribute, checked on every file
 version: 'v3.0.1'
+# the files' root platform attribute, checked on every file: the reader also
+# serves GOSAT-2 (source: gosat in its config), and the product token names
+# every store
+platform: GOSAT
 temporal_resolution: observation
 grid_name: native_swath
 

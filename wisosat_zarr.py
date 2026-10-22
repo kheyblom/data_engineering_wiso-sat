@@ -48,6 +48,7 @@ from utils.path_utils import (
     load_reader,
     log_path,
     run_stores,
+    source_product,
     store_path,
 )
 from utils.zarr_utils import (
@@ -74,10 +75,13 @@ LOG = logging.getLogger(__name__)
 
 
 def check_versions(datas, settings):
-    """Fail unless every granule declares the configured processor version.
+    """Fail unless every granule declares the configured version and platform.
 
     The version names every store, so a granule from another processor version
-    would be filed under a name that misdescribes it.
+    would be filed under a name that misdescribes it. The product token does
+    too where one reader serves several platforms (GOSAT and GOSAT-2): such a
+    reader reports each granule's platform, and the config must declare it.
+    Elsewhere both sides are None.
 
     Args:
         datas (list): GranuleData just read.
@@ -92,6 +96,13 @@ def check_versions(datas, settings):
         raise ValueError(
             f'{len(wrong)} granules declare a processor version other than the '
             f'configured {expected!r}: {wrong[:5]}'
+        )
+    platform = settings.get('platform')
+    wrong = [(data.granule.id, data.platform) for data in datas if data.platform != platform]
+    if wrong:
+        raise ValueError(
+            f'{len(wrong)} granules declare a platform other than the configured '
+            f'{platform!r}: {wrong[:5]}'
         )
 
 
@@ -191,21 +202,21 @@ def prepare(settings):
     Returns:
         tuple: The granule listing and the code revision.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     reader = load_reader(settings)
     configure_runtime(settings)
     resolve_chunks(settings)
     resolve_compression(settings)
     own_process_stores(settings)
-    log_key(product)
+    log_key(source_name)
     # stamped on every commit, so finalize can say which code wrote what;
     # checked before anything is listed or written
     revision = code_revision()
     LOG.info(f'code revision {revision}')
     check_clean_tree(revision, settings)
 
-    known = [entry.original for entry in variables(product).values()]
-    known += [entry.original for entry in coordinates(product).values()]
+    known = [entry.original for entry in variables(source_name).values()]
+    known += [entry.original for entry in coordinates(source_name).values()]
     check_fill_config(settings, known)
 
     raw = settings['directories']['raw']
@@ -224,7 +235,7 @@ def prepare(settings):
 
     # the version names every store, so it is checked on the first granule
     # before any repository is created under a name that may be wrong
-    time = time_source(product)
+    time = time_source(source_name)
     rule = row_rule(settings)
     check_versions([reader.read_granule(granules[0], [time], time, rule)], settings)
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
@@ -244,12 +255,12 @@ def run_pass(settings, granules, revision, stores, num_workers):
     Returns:
         dict: Store -> granules written by this pass.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     reader = load_reader(settings)
     _, per_commit = configure_runtime(settings)
     chunks = resolve_chunks(settings)
     codecs = resolve_compression(settings)
-    time = time_source(product)
+    time = time_source(source_name)
     rule = row_rule(settings)
     repositories, states = {}, {}
     for store in stores:
@@ -285,7 +296,7 @@ def run_pass(settings, granules, revision, stores, num_workers):
     sources = sorted(
         {time} | {
             source for store in incomplete
-            for source in store_sources(product, store).values()
+            for source in store_sources(source_name, store).values()
         }
     )
     written = {store: 0 for store in stores}
@@ -318,7 +329,7 @@ def run_pass(settings, granules, revision, stores, num_workers):
                     # encoding and the store's global attributes
                     observations.attrs = global_attrs(settings, store, versions)
                     encoding = build_encoding(
-                        observations, index, chunks, fills, product, codecs
+                        observations, index, chunks, fills, source_name, codecs
                     )
                 message = COMMIT_MESSAGE.format(
                     first=subset[0].granule.id, last=subset[-1].granule.id,

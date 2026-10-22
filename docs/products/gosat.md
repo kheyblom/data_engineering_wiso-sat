@@ -4,8 +4,14 @@
 second reader): `products/gosat.py`, `nomenclature-key_gosat.md`,
 `config/gosat/`, `validation/stage_gosat.py`. The fixture passes the
 end-to-end test. The model-comparison stores joined it on 2026-10-19 (below).
-GOSAT-2 is not configured yet; it has the same format, and the reader's
-patterns already accept it.
+**GOSAT-2 configured at fixture level, 2026-10-22:** `config/gosat2/`, read
+with the GOSAT reader and key (`source: gosat`) and named `gosat2`. Each
+file's root `platform` attribute (`GOSAT` / `GOSAT2`) is checked against the
+config's `platform` in the build and the verifier. Its fixture is staged by
+`validation/stage_gosat.py` (2019-02-18, -19, -21, -22; 2019-02-20 is a gap).
+In our variables the two formats differ in nothing but `platform`: only the
+gain variables (`gain_s`/`gain_p` against `gain_1s`..`gain_3p`) differ, and
+they are not in the subset.
 
 ## Raw data: four products
 
@@ -32,7 +38,7 @@ days per satellite:
 - **Two flag stores:** each flag gets its own canonical name,
   `quality_flags_retrieval_delta_d` and `quality_flags_retrieval_h2o`.
 - **Granule:** a day, holding both files. Its index entry names both.
-- **Naming:** `wisosat.gosat.v_3_0_1...` and later `wisosat.gosat2...`.
+- **Naming:** `wisosat.gosat.v_3_0_1...` and `wisosat.gosat2.v_3_0_1...`.
 
 ```
 raw/GOSAT/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYY>-v3.0.1/v3.0.1/<YYYY>/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-<YYYYMMDD>-v3.0.1.nc
@@ -158,8 +164,8 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | G2 | **Pre-filtered upstream**: the files hold only soundings that passed IUP's quality control, and every flag sampled is 0. | record only: stated in `filtering_guidance` |
 | G3 | **Time has no decimal grid coarser than a nanosecond.** It is float64 seconds since 1970. In an exact round trip of 38,003 sampled times, ms failed 99% and us 76%. | handled: stored as int64 ns since 1900 |
 | G4 | **The time variable carries `calendar: standard`**, which blocks xarray's time encoding. | handled: kept as `original_calendar`; stored as proleptic_gregorian |
-| G5 | **GOSAT: 138 days have no files, GOSAT-2: 51**, identical for DED and H2O. Not yet checked against upstream. | handled for GOSAT (`expected_missing_days`); GOSAT-2 not configured |
-| G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly |
+| G5 | **GOSAT: 138 days have no files, GOSAT-2: 51**, identical for DED and H2O. Not yet checked against upstream. | handled: declared as found in `expected_missing_days` for both (user decision 2026-10-22 for GOSAT-2, as for GOSAT) |
+| G6 | **GOSAT-2 file names say `GOSAT2` while their folders say `GOSAT`.** The GOSAT-2 2019 folder also holds L3 files (`GOSAT2_monthly_1deg.nc`, `HDO_5x5_monthly.mat`). | handled: the reader accepts both names and matches L2 file names exactly; each file's `platform` attribute is checked against the config, so a raw root of the wrong satellite fails (2026-10-22) |
 | G7 | **`dry_column` has units `no. of molecules`**, with no per-area unit, and is **~1/4 of the hydrostatic dry column**. In molec cm-2, dp / (g M_dry) x N_A per layer over `dry_column` gives p1 / p50 / p99 3.97 / 3.99-4.00 / 4.04, on 2011-01-15 and 2015-06-01 (2,984 soundings; 2026-10-19). | open: held (user decision 2026-10-19; `docs/model-comparison-naming.md` N11). Not needed to apply the kernel. Resolve from the GHG-CCI PSD v3 or IUP |
 | G8 | `xh2o` holds negative values (minimum -116.6 ppm in one sampled day). | record only |
 | G9 | **The top pressure level is 0 hPa** on every sounding of the 4 fixture days (6,702): the top layer reaches the top of the atmosphere. | record only: stored as published (0 Pa) |

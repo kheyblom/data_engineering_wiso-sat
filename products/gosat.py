@@ -40,7 +40,11 @@ Format facts:
   datetime64[ns].
 - **Version** is the root ``product_version`` attribute (``v3.0.1``).
 - **GOSAT-2** files have the same format, with ``GOSAT2`` in the file name. The
-  pattern below accepts both, so the GOSAT-2 configs can reuse this reader.
+  pattern below accepts both, so the GOSAT-2 configs reuse this reader
+  (``source: gosat``). The root ``platform`` attribute (``GOSAT`` or
+  ``GOSAT2``) tells them apart, and each granule's is checked against the
+  config's ``platform``, so a raw root pointed at the wrong satellite cannot
+  build stores under the other's name (2026-10-22).
 
 The build reads with netCDF4. The verifier reads each file on its own with
 h5py and places its soundings by matching ``MATCH_SOURCES`` against the
@@ -76,6 +80,7 @@ DIMENSION_RENAMES = {'level_dim': 'level', 'layer_dim': 'layer'}
 VERTICAL_ORDER = 'surface_first'
 
 VERSION_ATTR = 'product_version'
+PLATFORM_ATTR = 'platform'
 
 # what identifies a sounding across the day's two files
 MATCH_SOURCES = ('time', 'latitude', 'longitude')
@@ -240,9 +245,9 @@ def read_granule(granule, sources, time_source, rule):
 
     Raises:
         KeyError: If no file of the day holds a source.
-        ValueError: If the files declare different versions, disagree on a
-            variable they share at a shared sounding, or a row left out holds
-            data the rule does not allow.
+        ValueError: If the files declare different versions or platforms,
+            disagree on a variable they share at a shared sounding, or a row
+            left out holds data the rule does not allow.
     """
     handles = [netCDF4.Dataset(path, 'r') for path in granule.paths]
     try:
@@ -252,6 +257,9 @@ def read_granule(granule, sources, time_source, rule):
         versions = {str(handle.getncattr(VERSION_ATTR)) for handle in handles}
         if len(versions) != 1:
             raise ValueError(f'the files of {granule.id} declare versions {sorted(versions)}')
+        platforms = {decode_text(handle.getncattr(PLATFORM_ATTR)) for handle in handles}
+        if len(platforms) != 1:
+            raise ValueError(f'the files of {granule.id} declare platforms {sorted(platforms)}')
         keeps = [
             observed_rows({source: handle[source][...] for source in rule.location}, rule)
             for handle in handles
@@ -312,6 +320,7 @@ def read_granule(granule, sources, time_source, rule):
             attrs=read_attrs(handles[0]),
             arrays=arrays,
             n_source_rows=sum(handle.dimensions[OBSERVATION_DIM].size for handle in handles),
+            platform=platforms.pop(),
         )
     finally:
         for handle in handles:

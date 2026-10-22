@@ -18,6 +18,7 @@ output_conventions:
   filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
 log_file: wisosat_zarr_gosat_fixture.log
 version: 'v3.0.1'
+platform: GOSAT
 temporal_resolution: observation
 grid_name: native_swath
 

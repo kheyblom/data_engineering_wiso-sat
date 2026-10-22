@@ -15,8 +15,11 @@ the processor version the source files carry in their own attributes, declared
 in the config so the store can be named before a file is opened; the build
 checks every granule against it. There is no product token.
 
-Variables are named canonically in the config, since they name stores. Raw
-paths are given whole in ``directories.raw`` rather than assembled: the
+Variables are named canonically in the config, since they name stores.
+``source`` names the product whose reader and nomenclature key a config uses,
+when that is not its own: GOSAT-2 shares GOSAT's file format, so its config
+sets ``product: gosat2`` (store names) and ``source: gosat`` (user decision
+2026-10-22). Raw paths are given whole in ``directories.raw`` rather than assembled: the
 products' trees share no layout, and the reader owns everything below that
 root.
 """
@@ -82,16 +85,28 @@ def format_version(version):
     return '_'.join(parts)
 
 
-def load_reader(settings):
-    """Import the reader module for the configured product.
+def source_product(settings):
+    """The product whose reader and nomenclature key a config uses.
 
     Args:
         settings (dict): The loaded configuration.
 
     Returns:
-        module: ``products.<product>``.
+        str: ``source`` if the config sets it, else ``product``.
     """
-    return importlib.import_module(f'products.{settings["product"]}')
+    return settings.get('source') or settings['product']
+
+
+def load_reader(settings):
+    """Import the reader module for the configured source.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        module: ``products.<source>``.
+    """
+    return importlib.import_module(f'products.{source_product(settings)}')
 
 
 def run_variables(settings):
@@ -115,9 +130,9 @@ def run_variables(settings):
         raise ValueError(f'config lists a variable twice: {names}')
     for name in names:
         # raises with a pointer to the key when the row is missing
-        key_variable(settings['product'], name)
+        key_variable(source_product(settings), name)
 
-    flags = [name for name in variables(settings['product']) if name.startswith(QUALITY_FLAG_PREFIX)]
+    flags = [name for name in variables(source_product(settings)) if name.startswith(QUALITY_FLAG_PREFIX)]
     missing = [name for name in flags if name not in names]
     if missing:
         raise ValueError(
@@ -169,11 +184,11 @@ def template_fields(settings, store):
     fields['version_label'] = str(settings['version'])
     fields['version'] = format_version(settings['version'])
     fields['frequency'] = canonical_frequency(
-        settings['product'], settings['temporal_resolution']
+        source_product(settings), settings['temporal_resolution']
     )
     fields['variable'] = store
     fields['variable_label'] = (
-        store if store == GEOLOCATION else key_variable(settings['product'], store).original
+        store if store == GEOLOCATION else key_variable(source_product(settings), store).original
     )
     return fields
 

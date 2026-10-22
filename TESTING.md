@@ -9,9 +9,9 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~75 s, login node | **passed** (2026-10-19): 63 cases, TROPOMI and GOSAT, with both products' 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~2.5 min, login node | **passed** (2026-10-22): 97 cases, TROPOMI, GOSAT and GOSAT-2 (`source` and `platform`), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: fixture passed 2026-10-22; production next |
 
 ## Tier 0 and 1: the fixture test
 
@@ -671,7 +671,8 @@ the production run, in order.
    - the cross-product naming pass for kernels, priors and dry-air columns
      (done 2026-10-19);
    - GOSAT-2 configs (`product: gosat2`), which need a small shared change so
-     the reader and key can be named apart from the product;
+     the reader and key can be named apart from the product (done at fixture
+     level 2026-10-22: `source` and `platform`);
    - task 6, the other products.
 
 Blockers:

@@ -129,6 +129,8 @@ class GranuleData(NamedTuple):
         n_source_rows (int | None): Rows the file(s) declare, before merging or
             leaving out rows that are not observations. None means the same as
             ``n_obs``.
+        platform (str | None): The platform the file(s) declare, for a reader
+            whose format serves more than one (``PLATFORM_ATTR``); else None.
     """
 
     granule: Granule
@@ -137,6 +139,7 @@ class GranuleData(NamedTuple):
     attrs: dict
     arrays: dict
     n_source_rows: int | None = None
+    platform: str | None = None
 
 
 # the coordinates a row needs to be an observation: where and when

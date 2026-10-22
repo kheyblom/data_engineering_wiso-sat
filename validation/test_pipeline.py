@@ -15,12 +15,13 @@ Per product:
 2. a re-run, which must be a no-op;
 3. resume: one store reset to empty and one to its first commit, as a run
    killed partway would leave them, then rebuilt and re-verified;
-4. the verifier must fail on a tampered value, naming the store, and on a
-   store compressed other than as its config says;
-5. guards: an undeclared missing day, a wrong processor version, a run that
-   omits the quality flags, an unknown variable, compression of an unknown
-   array, and (where the product has
-   them) an undeclared empty granule directory or unreadable file;
+4. the verifier must fail on a tampered value, naming the store, on a
+   store compressed other than as its config says, and (where the config
+   declares one) on a platform the files do not declare;
+5. guards: an undeclared missing day, a wrong processor version or platform,
+   a run that omits the quality flags, an unknown variable, compression of an
+   unknown array, and (where the product has them) an undeclared empty
+   granule directory or unreadable file;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
 6. finalize: ``--attrs`` refuses without verification evidence, and
@@ -31,6 +32,7 @@ Per product:
 Run from the repo root after staging each fixture:
 
     uv run python validation/stage_tropomi.py
+    uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
     uv run python validation/test_pipeline.py
 
 About a minute per product on a login node; no allocation spent. Failures are
@@ -53,7 +55,7 @@ import numpy as np
 import yaml # type: ignore
 import zarr
 
-from utils.path_utils import GEOLOCATION, load_config, run_stores, store_path
+from utils.path_utils import GEOLOCATION, load_config, run_stores, source_product, store_path
 from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE, sharded_stores
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -180,7 +182,7 @@ def test_product(results, config, scratch):
 
     if not os.path.isdir(settings['directories']['raw']):
         results.check(f'{product}: fixture is staged', False,
-                      f'run validation/stage_{product}.py first')
+                      f'run validation/stage_{source_product(settings)}.py first')
         return
     shutil.rmtree(settings['directories']['zarr'], ignore_errors=True)
 
@@ -266,6 +268,19 @@ def test_product(results, config, scratch):
         last_line(output, 'compressed and sharded as the config sets'),
     )
 
+    # ... and files of another platform than the config declares, where the
+    # reader reads one (GOSAT and GOSAT-2 share a reader)
+    if settings.get('platform'):
+        path = write_config(settings, scratch, f'{product}_platform.yaml', platform='NO_SUCH')
+        status, output = run(
+            'verify_wisosat_zarr.py', '--config', path, '--phases', 'values', '--stores', target
+        )
+        results.check(
+            f'{product}: verifier fails on a platform the files do not declare',
+            status != 0 and "FAIL  every file declares platform 'NO_SUCH'" in output,
+            last_line(output, 'every file declares platform'),
+        )
+
     # 5. guards that must stop a build before it writes
     guards = {
         'an undeclared missing day': ({'expected_missing_days': []}, 'not declared'),
@@ -290,6 +305,8 @@ def test_product(results, config, scratch):
             'no store of this config holds',
         ),
     }
+    if settings.get('platform'):
+        guards['a wrong platform'] = ({'platform': 'NO_SUCH'}, 'platform other than')
     if settings.get('expected_unreadable_granules'):
         # only the last declared file is undeclared: a file that crashes HDF5
         # (TROPOMI 3335) would take the build down with no message to match
@@ -318,12 +335,14 @@ def test_product(results, config, scratch):
         status, output = run('wisosat_zarr.py', '--config', path)
         results.check(f'{product}: build refuses {name}', status != 0 and message in output,
                       last_line(output, message) or last_line(output, 'Error'))
-        if 'version' in changes:
-            wrong = dict(settings, version=changes['version'], directories=directories)
-            results.check(
-                f'{product}: a refused version created no store',
-                not os.path.exists(store_path(wrong, GEOLOCATION)),
-            )
+        # both are checked on the first granule, before any repository exists
+        for field in ('version', 'platform'):
+            if field in changes:
+                wrong = dict(settings, directories=directories, **changes)
+                results.check(
+                    f'{product}: a refused {field} created no store',
+                    not os.path.exists(store_path(wrong, GEOLOCATION)),
+                )
 
     # a build must start from a clean commit. The fixture config allows a
     # dirty tree (the test runs during development); without that, and with

@@ -11,7 +11,8 @@ disagree.
 Ported from ``data_engineering_mswep/utils/nomenclature.py``. What differs:
 
 - **The key is chosen by product**, since one codebase serves every WISO-SAT
-  product.
+  product: the config's ``source`` where it sets one (GOSAT-2 reads GOSAT's
+  key), else its ``product``.
 - **The variable key carries a real unit conversion**, which MSWEP never
   needed. ``unit_conversion`` is parsed into a factor by ``conversion_factor``,
   so the multiplier a store was built with is the one the key documents.

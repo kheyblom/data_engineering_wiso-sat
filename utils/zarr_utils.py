@@ -54,7 +54,9 @@ from .nomenclature import (
     key_path,
     variable as key_variable,
 )
-from .path_utils import GEOLOCATION, format_attrs, load_reader, run_stores, template_fields
+from .path_utils import (
+    GEOLOCATION, format_attrs, load_reader, run_stores, source_product, template_fields,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -99,7 +101,7 @@ NOMENCLATURE_NOTE = (
     'Variable names, units and long names follow the internal data engineering '
     'nomenclature (nomenclature_data.md). The original -> canonical mapping for '
     'this product, including every unit conversion, is '
-    'nomenclature-key_{product}.md in the data_engineering_wiso-sat repository. '
+    'nomenclature-key_{source_name}.md in the data_engineering_wiso-sat repository. '
     'What the source published is preserved on each variable as '
     'original_variable_name, original_units and original_long_name.'
 )
@@ -230,7 +232,7 @@ def vertical_order(settings):
     order = getattr(load_reader(settings), 'VERTICAL_ORDER', None)
     if order not in VERTICAL_ORDERS:
         raise ValueError(
-            f'products/{settings["product"]}.py must set VERTICAL_ORDER to one of '
+            f'products/{source_product(settings)}.py must set VERTICAL_ORDER to one of '
             f'{VERTICAL_ORDERS} to store a vertical dimension; it is {order!r}'
         )
     return order
@@ -331,8 +333,8 @@ def resolve_compression(settings):
             f'compression must set blosc and arrays, and may set shard_obs; it sets '
             f'{sorted(config)}'
         )
-    product = settings['product']
-    known = {name for store in run_stores(settings) for name in store_sources(product, store)}
+    source_name = source_product(settings)
+    known = {name for store in run_stores(settings) for name in store_sources(source_name, store)}
     unknown = sorted(set(config['arrays']) - known)
     if unknown:
         raise ValueError(f'compression names arrays no store of this config holds: {unknown}')
@@ -364,10 +366,10 @@ def sharded_stores(settings):
         list: Store variable slots, in run order.
     """
     sharded = {name for name, spec in resolve_compression(settings).items() if spec['shard_obs']}
-    product = settings['product']
+    source_name = source_product(settings)
     return [
         store for store in run_stores(settings)
-        if sharded & set(store_sources(product, store))
+        if sharded & set(store_sources(source_name, store))
     ]
 
 
@@ -672,7 +674,7 @@ def row_rule(settings):
         RowRule: Location sources from the key, fills and allowed sources from
             the config.
     """
-    key = coordinates(settings['product'])
+    key = coordinates(source_product(settings))
     location = tuple(key[name].original for name in LOCATION_COORDINATES)
     fills = {
         source: tuple(values or [])
@@ -731,9 +733,9 @@ def assemble(store, datas, obs_start, settings):
         ValueError: If the granules disagree on a variable's dtype or
             dimensions.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     variables, masked, fills = {}, {}, {}
-    for name, source in store_sources(product, store).items():
+    for name, source in store_sources(source_name, store).items():
         first = datas[0].arrays[source]
         for data in datas[1:]:
             other = data.arrays[source]
@@ -753,16 +755,16 @@ def assemble(store, datas, obs_start, settings):
         fill = declared_fill(settings, source)
 
         if store == GEOLOCATION:
-            factor = coordinate_factor(coordinates(product)[name])
-            attrs = coordinate_attrs(product, name, first, settings, fill)
+            factor = coordinate_factor(coordinates(source_name)[name])
+            attrs = coordinate_attrs(source_name, name, first, settings, fill)
         else:
-            factor = conversion_factor(key_variable(product, name).unit_conversion)
-            attrs = variable_attrs(product, name, first, settings, fill)
+            factor = conversion_factor(key_variable(source_name, name).unit_conversion)
+            attrs = variable_attrs(source_name, name, first, settings, fill)
 
         if np.issubdtype(values.dtype, np.datetime64):
             # the reader decodes to the key's unit; anything else would be
             # rounded or padded by the encoding rather than stored exactly
-            unit = time_units(product)[1]
+            unit = time_units(source_name)[1]
             if np.datetime_data(values.dtype)[0] != unit:
                 raise ValueError(
                     f'{source} decodes to {values.dtype}, but the key stores '
@@ -789,7 +791,7 @@ def assemble(store, datas, obs_start, settings):
         masked[name] = count
 
     observations = xr.Dataset(variables)
-    entries = index_entries(datas, time_source(product), obs_start)
+    entries = index_entries(datas, time_source(source_name), obs_start)
     index = xr.Dataset(
         coords={
             field: (GRANULE_DIM, entries[field], INDEX_ATTRS[field]) for field in INDEX_FIELDS
@@ -813,13 +815,13 @@ def global_attrs(settings, store, versions):
     Returns:
         dict: The attributes.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     derived = {
         'cdm_data_type': 'Point',
         'temporal_frequency': template_fields(settings, store)['frequency'],
         'original_temporal_frequency': settings['temporal_resolution'],
         'source_processor_version': versions['processor'],
-        'nomenclature': NOMENCLATURE_NOTE.format(product=product),
+        'nomenclature': NOMENCLATURE_NOTE.format(source_name=source_name),
         'layout': LAYOUT_NOTE,
         'quality_filtering': (
             'none applied. Every observation in the source files is kept. '

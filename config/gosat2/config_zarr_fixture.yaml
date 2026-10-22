@@ -1,0 +1,79 @@
+# GOSAT-2 pipeline test fixture: four real days copied whole by
+# validation/stage_gosat.py. Every path differs from production.
+#
+# What GOSAT's fixture does not already cover: the config's source (the GOSAT
+# reader and key under the gosat2 store names) and its platform, checked on
+# every file. Otherwise the same shape:
+# - 2019-02-20 is a real upstream gap, and the year folder holds the L3 files'
+#   names, as the real 2019 folder does;
+# - every day's DED and H2O files overlap only partly; 2019-02-19 holds 111
+#   soundings, a small day;
+# - obs: 1000 against ~1,700-2,100 soundings a day lands appends mid-chunk;
+# - granules_per_commit: 2 gives two commits per store.
+product: gosat2
+source: gosat
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/raw/gosat2
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/zarr/gosat2
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_gosat2_fixture.log
+version: 'v3.0.1'
+platform: GOSAT2
+temporal_resolution: observation
+grid_name: native_swath
+
+variables:
+  - water_vapor_column_delta_d
+  - water_vapor_column_delta_d_standard_error
+  - quality_flags_retrieval_delta_d
+  - water_vapor_column_h2o_mole_fraction_dry_air
+  - water_vapor_column_h2o_mole_fraction_dry_air_standard_error
+  - quality_flags_retrieval_h2o
+  - solar_zenith_angle
+  - water_vapor_column_h2o_mole_fraction_dry_air_averaging_kernel
+  - water_vapor_h2o_mole_fraction_dry_air_apriori
+  - pressure_weight_column_average
+  - pressure
+
+expected_missing_days:
+  - 2019-02-20
+
+# Only fixture configs may build from a working tree with uncommitted changes:
+# the pipeline test builds during development and its stores are throwaway.
+# Every other build refuses (check_clean_tree), and the test checks that no
+# other config sets this.
+allow_dirty_tree: true
+
+# Rows that are not observations (no time, latitude or longitude written) are
+# left out by the shared rule (RowRule in utils/granules.py, 2026-10-17). None
+# is known in FOCAL, so nothing may be written on one.
+allowed_on_rows_left_out: []
+
+source_fill_values: {}
+absent_fill_values:
+  xded_quality_flag: -2147483647
+  xh2o_quality_flag: -2147483647
+
+chunks:
+  obs: 1000
+  granule: 3
+granules_per_commit: 2
+num_workers: 2
+
+filtering_guidance: >-
+  TEST FIXTURE. See config_zarr.yaml for the real guidance.
+
+attrs:
+  title: 'TEST STORE -- WISO-SAT GOSAT-2 {version_label}, staged subset, not for use: {variable}'
+  summary: A correctness fixture, NOT data. Four days of FOCAL files copied whole.
+  Conventions: ACDD-1.3
+  source: TEST FIXTURE, copied from the IUP FOCAL GOSAT-2 product {version_label}
+  comment: >-
+    TEST FIXTURE built from config_zarr_fixture.yaml by
+    validation/test_pipeline.py. Not data.
+
+variable_attrs:
+  quality_flags_retrieval_h2o:
+    comment: TEST FIXTURE attribute for {variable}, and no other store.

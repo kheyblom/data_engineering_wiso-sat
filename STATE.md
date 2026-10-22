@@ -5,13 +5,23 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-22)
 
 **Nothing is running and nothing is half done.** No batch jobs are queued.
-**Current task: GOSAT-2** (user, 2026-10-22), Next item 2. GOSAT was
-re-checked complete the same day: 12 stores, each with all 4,498 raw days
-in its index, one obs axis, the tag at the branch tip, and 0 verify failures.
+**Current task: GOSAT-2** (user, 2026-10-22). GOSAT was re-checked complete
+the same day: 12 stores, each with all 4,498 raw days in its index, one obs
+axis, the tag at the branch tip, and 0 verify failures.
+
+- **GOSAT-2 fixture level done (2026-10-22):** config `source` (reader and
+  key; defaults to `product`) and `platform` (checked per file in the build
+  and the verifier), both approved by the user. `config/gosat2/` with the 51
+  missing days declared as found (user: same as GOSAT).
+  `validation/stage_gosat.py` stages both fixtures. The test passes 97 cases
+  over TROPOMI, GOSAT and GOSAT-2.
+- **Next step:** the GOSAT-2 production build and verify on develop (shown to
+  the user for approval), then finalize step by step. Expect ~1,010 days and
+  ~2e6 obs.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place. The fixture test passes 63 cases
-  over TROPOMI and GOSAT.
+  testing tiers (`TESTING.md`) are in place. The fixture test passes 97 cases
+  over TROPOMI, GOSAT and GOSAT-2.
 - **TROPOMI is finished: 25 stores, all finalized**, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`, on one obs
   axis (32,657,526,234 obs, 38,645 orbits) and one granule index.
@@ -48,8 +58,8 @@ when it is time (2026-10-22).
    TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
-2. **GOSAT-2 configs** (`product: gosat2`): a small shared change so the
-   reader and key can be named apart from the product. **In progress.**
+2. **GOSAT-2** (`product: gosat2`, `source: gosat`): fixture done, production
+   **in progress** (see above).
 3. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`.

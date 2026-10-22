@@ -38,9 +38,9 @@ Four phases, all run by default, selectable with ``--phases``:
 ``values``
     The pass over every granule: every value of every store against raw; each
     granule's index entry (observation count, start and end time) against the
-    file; time never decreasing; the processor version; the product's swath
-    layout; every declared fill value occurring somewhere in the record; and no
-    netCDF default fill surviving in a source that does not declare it.
+    file; time never decreasing; the processor version, and the platform where
+    the reader reads one; the product's swath layout; every declared fill value
+    occurring somewhere in the record; and no netCDF default fill surviving in a source that does not declare it.
 ``repository``
     Every commit in each store's history is one the pipeline makes.
 
@@ -86,6 +86,7 @@ from utils.path_utils import (
     load_reader,
     log_path,
     run_stores,
+    source_product,
     store_path,
 )
 from utils.zarr_utils import (
@@ -253,7 +254,8 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
         list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
             ``timed`` (rows left out although their time is written),
             ``leaked`` (values on rows left out that may not be lost),
-            ``version``,
+            ``version``, ``platform`` (None unless the reader names a
+            ``PLATFORM_ATTR``),
             ``problems`` (layout), and ``sources``: per source present in the
             file, the ``expected`` stored values, the ``dtype`` as published,
             its ``attrs``, how many values matched a declared ``fill``, how many
@@ -266,6 +268,10 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed):
         out = {'path': path, 'sources': {}}
         with h5py.File(path, 'r') as handle:
             out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
+            platform_attr = getattr(reader, 'PLATFORM_ATTR', None)
+            out['platform'] = (
+                str(decode_text(handle.attrs.get(platform_attr, ''))) if platform_attr else None
+            )
             out['problems'] = reader.check_granule(handle)
             # a row is an observation only if its time, lat and lon are all
             # written; the rest are not stored, as long as nothing else that
@@ -391,9 +397,9 @@ def check_structure(report, settings, store, group, chunks, codecs):
         chunks (dict): The configured chunks.
         codecs (dict): The configured codecs, from ``resolve_compression``.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     names = set(group.array_keys())
-    expected_vars = set(store_sources(product, store))
+    expected_vars = set(store_sources(source_name, store))
     report.check(
         f'{store}: holds exactly its variables and the granule index',
         names == expected_vars | set(INDEX_FIELDS),
@@ -427,7 +433,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
                 attrs.get('vertical_order') == order, f'{attrs.get("vertical_order")!r}',
             )
         if name == 'time' or name.startswith('granule_time'):
-            units = time_units(product)[0]
+            units = time_units(source_name)[0]
             report.check(
                 f'{store}/{name}: int64 {units!r}, {TIME_CALENDAR}',
                 str(array.dtype) == 'int64' and attrs.get('units') == units
@@ -435,7 +441,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
                 f'{array.dtype} {attrs.get("units")!r} {attrs.get("calendar")!r}',
             )
             continue
-        source = store_sources(product, store)[name]
+        source = store_sources(source_name, store)[name]
         fill = declared_fill(settings, source)
         if np.dtype(str(array.dtype)).kind == 'f':
             # the attribute is xarray's base64 encoding of the float, so the
@@ -454,7 +460,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
             )
 
         if store == GEOLOCATION:
-            entry = coordinates(product)[name]
+            entry = coordinates(source_name)[name]
             report.check(
                 f'{store}/{name}: units {entry.units!r}',
                 attrs.get('units') == entry.units, f'{attrs.get("units")!r}',
@@ -465,7 +471,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
                 f'{attrs.get("unit_conversion")!r}',
             )
             continue
-        entry = key_variable(product, name)
+        entry = key_variable(source_name, name)
         for key, value in (
             ('units', entry.units),
             ('long_name', entry.long_name),
@@ -483,7 +489,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
     attrs = dict(group.attrs)
     missing = [key for key in REQUIRED_ATTRS if not attrs.get(key)]
     report.check(f'{store}: carries every required global attribute', not missing, f'missing {missing}')
-    frequency = canonical_frequency(product, settings['temporal_resolution'])
+    frequency = canonical_frequency(source_name, settings['temporal_resolution'])
     for key, value in (
         ('cdm_data_type', 'Point'),
         ('temporal_frequency', frequency),
@@ -542,7 +548,7 @@ def check_index(report, settings, groups, granules):
             f'{store}: granule index identical to the geolocation store',
             all(np.array_equal(index[field], reference[field]) for field in INDEX_FIELDS),
         )
-        n_obs = group[next(iter(store_sources(settings['product'], store)))].shape[0]
+        n_obs = group[next(iter(store_sources(source_product(settings), store)))].shape[0]
         report.check(
             f'{store}: obs length is the sum of the index counts',
             n_obs == int(index['granule_obs_count'].sum()),
@@ -578,6 +584,7 @@ class Pass:
         index (dict): Index field -> mismatching granules.
         placement (dict): Merge failures in multi-file granules, by kind.
         versions (set): Processor versions seen.
+        platforms (set): Platforms seen; None where the reader names none.
         bounds (list): ``[lat_min, lat_max, lon_min, lon_max]``.
         decreasing (int): Places where time decreases.
         dtypes (dict): Source -> dtypes seen.
@@ -601,6 +608,7 @@ class Pass:
         self.timed = 0
         self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
+        self.platforms = set()
         self.bounds = [np.inf, -np.inf, np.inf, -np.inf]
         self.decreasing = 0
         self.dtypes = {}
@@ -678,13 +686,13 @@ def value_targets(settings, stores):
     Returns:
         list: The targets, in store order.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     targets = []
     for store in stores:
-        for name, source in store_sources(product, store).items():
+        for name, source in store_sources(source_name, store).items():
             factor = (
-                coordinate_factor(coordinates(product)[name]) if store == GEOLOCATION
-                else conversion_factor(key_variable(product, name).unit_conversion)
+                coordinate_factor(coordinates(source_name)[name]) if store == GEOLOCATION
+                else conversion_factor(key_variable(source_name, name).unit_conversion)
             )
             targets.append((store, name, source, factor))
     return targets
@@ -704,8 +712,8 @@ def value_items(settings, targets):
     Returns:
         list: Sorted by source.
     """
-    product = settings['product']
-    key = coordinates(product)
+    source_name = source_product(settings)
+    key = coordinates(source_name)
     by_source = {entry.original: entry for entry in key.values()}
     match_sources = tuple(getattr(load_reader(settings), 'MATCH_SOURCES', ()))
     factors = {source: factor for _, _, source, factor in targets}
@@ -759,12 +767,12 @@ def scan_values(settings, stores, begin, granules, primary, counted):
         Pass: What the scan saw; ``first_time`` and ``last_time`` are the
             stored times at either end, for the seams between ranges.
     """
-    product = settings['product']
+    source_name = source_product(settings)
     reader = load_reader(settings)
-    time = time_source(product)
-    _, unit = time_units(product)
-    coordinate_names = {entry.original: name for name, entry in coordinates(product).items()}
-    location = tuple(coordinates(product)[name].original for name in LOCATION_COORDINATES)
+    time = time_source(source_name)
+    _, unit = time_units(source_name)
+    coordinate_names = {entry.original: name for name, entry in coordinates(source_name).items()}
+    location = tuple(coordinates(source_name)[name].original for name in LOCATION_COORDINATES)
     allowed = tuple(settings.get('allowed_on_rows_left_out') or [])
     targets = value_targets(settings, stores)
     items = value_items(settings, targets)
@@ -787,7 +795,7 @@ def scan_values(settings, stores, begin, granules, primary, counted):
     previous = None
     for offset, granule in enumerate(granules):
         position = begin + offset
-        files = read_expected(granule, product, items, time, unit, location, allowed)
+        files = read_expected(granule, source_name, items, time, unit, location, allowed)
         lo = int(starts[position])
         hi = lo + int(counts[position])
         stored = {(store, name): np.asarray(groups[store][name][lo:hi]) for store, name, _, _ in targets}
@@ -798,6 +806,7 @@ def scan_values(settings, stores, begin, granules, primary, counted):
             seen.leaked += entry['leaked']
             if primary:
                 seen.versions.add(entry['version'])
+                seen.platforms.add(entry['platform'])
                 seen.problems += [(granule.id, problem) for problem in entry['problems']]
                 seen.unprocessed += entry['n_rows'] - entry['n_obs']
                 seen.timed += entry['timed']
@@ -890,7 +899,7 @@ def scan_values(settings, stores, begin, granules, primary, counted):
                 seen.attrs.setdefault(source, found['attrs'])
             if primary:
                 for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
-                    values = entry['sources'][coordinates(product)[name].original]['expected']
+                    values = entry['sources'][coordinates(source_name)[name].original]['expected']
                     finite = values[np.isfinite(values)]
                     if finite.size:
                         seen.bounds[low] = min(seen.bounds[low], float(finite.min()))
@@ -919,6 +928,7 @@ def merge_pass(total, part):
     total.timed += part.timed
     total.decreasing += part.decreasing
     total.versions |= part.versions
+    total.platforms |= part.platforms
     total.bounds = [
         min(total.bounds[0], part.bounds[0]), max(total.bounds[1], part.bounds[1]),
         min(total.bounds[2], part.bounds[2]), max(total.bounds[3], part.bounds[3]),
@@ -956,7 +966,6 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     Returns:
         Pass: What the scans saw, for the evidence lines.
     """
-    product = settings['product']
     counts = index['granule_obs_count']
     targets = value_targets(settings, compared)
     items = value_items(settings, targets)
@@ -1031,6 +1040,12 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
         f'every file declares processor version {settings["version"]!r}',
         seen.versions == {str(settings['version'])}, f'{sorted(seen.versions)}',
     )
+    if getattr(load_reader(settings), 'PLATFORM_ATTR', None):
+        # the product token names every store, as the version does
+        report.check(
+            f'every file declares platform {settings.get("platform")!r}',
+            seen.platforms == {settings.get('platform')}, f'{sorted(map(str, seen.platforms))}',
+        )
     report.check(
         'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
     )

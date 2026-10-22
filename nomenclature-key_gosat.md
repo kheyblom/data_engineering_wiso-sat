@@ -73,4 +73,5 @@ one obs per distinct sounding** (decided 2026-10-14; see
 ```
 
 - The version is the files' root `product_version` attribute (`v3.0.1`).
-- GOSAT-2 has the same format and will reuse this key as `wisosat.gosat2`.
+- GOSAT-2 has the same format and reuses this key (`source: gosat` in
+  `config/gosat2/`), as `wisosat.gosat2.v_3_0_1...`.
