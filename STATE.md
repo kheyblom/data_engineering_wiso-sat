@@ -4,9 +4,20 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-22)
 
-**Nothing is running and nothing is half done.** No batch jobs are queued;
-the tree is clean and pushed. The next task is not chosen yet: ask the user
-(candidates under Next).
+**Current task: SCIAMACHY** (task 6; chosen by the user 2026-10-22).
+- **Running:** the full file audit, `tools/survey/sciamachy_file_audit.py`,
+  as a develop job submitted with `qcmd` (8 cores, 30 min cap; approved). Output:
+  `/glade/derecho/scratch/$USER/data/wisosat/audit/sciamachy_file_audit.jsonl`.
+  If the session dropped, check it with `qstat -u $USER`, or re-summarize
+  with `--summarize <jsonl>`.
+- **Awaiting the user:** the proposal in `docs/products/sciamachy.md`
+  (P1-P5: store version `v_8_1`, δD left out, the 19-store subset, 5 new
+  nomenclature rows), reviewed in place with `#@CLAUDE` comments.
+- **Then:** the audit result into S2, the rows to style_guides (user
+  review), the reader (from `products/tropomi.py`), the key, configs and
+  fixture, then the bench.
+- **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
+  in the raw tree (S5); the reader lists `YYYYMM` folders only.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 97 cases
