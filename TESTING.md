@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~2.5 min, login node | **passed** (2026-10-22): 97 cases, TROPOMI, GOSAT and GOSAT-2 (`source` and `platform`), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: fixture passed 2026-10-22; production next |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: **done** (2026-10-22): built, verified with 0 failures, finalized |
 
 ## Tier 0 and 1: the fixture test
 
@@ -678,6 +678,7 @@ the production run, in order.
 Blockers:
 - **TROPOMI:** done. All 19 stores were finalized 2026-10-18 (run log above).
 - **GOSAT:** done 2026-10-19 (run log below).
+- **GOSAT-2:** done 2026-10-22 (run log below).
 
 ### GOSAT run log (2026-10-19)
 
@@ -729,6 +730,31 @@ clean `5261f04`. The other 10 stores were no-ops.
   `--tag v3.0.1-verified-20261019 --apply`, on the two new stores; nothing
   unreachable. `--status`: all 12 stores "remaining nothing, finalized".
 - The backup is kept until the user approves deleting it.
+
+### GOSAT-2 run log (2026-10-22)
+
+The GOSAT reader and key under `product: gosat2`, `source: gosat`, with
+`platform: GOSAT2` checked on every file (fixture passed the same day, 97
+cases over three products). No bench, as for GOSAT. Both jobs on develop, 4
+cores, 16 GB, a 30 min limit, from a clean `4becc57`:
+
+```bash
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/gosat2/config_zarr.yaml QUEUE=develop NCPUS=4 MEM=16GB WALLTIME=00:30:00 ./submit_wisosat_zarr.sh'
+bash -lc 'cd ~/work/data_engineering/data_engineering_wiso-sat && CONFIG=config/gosat2/config_zarr.yaml VERIFY=1 QUEUE=develop NCPUS=4 MEM=16GB WALLTIME=00:30:00 AFTER=7907020.desched1 ./submit_wisosat_zarr.sh'
+```
+
+| job | what | wall | CPU | peak memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7907020 | build | 44 s | 30 s | 1.4 GiB | 12 stores, 1,010 days, 3 commits each; nothing masked |
+| 7907023 | verify | 2 min 15 s | 6.9 min | 1.4 GiB | **478 checks, 0 failures**; 14 arrays bit for bit over 1,620,006 obs; every file `v3.0.1` and `GOSAT2` |
+
+- **Cost:** ~0.2 core-hours reserved for both jobs.
+- **Listing:** 2019-02-05 to 2021-12-31, the 51 declared missing days and no
+  others.
+- **Finalized 2026-10-22** with the user's sign-off on each step: `--attrs
+  --apply`, `--tag v3.0.1-verified-20261022 --apply`; `--gc` dry run found
+  nothing unreachable, so no `--apply`. `--status`: all 12 stores "remaining
+  nothing, finalized". 163 MB on disk.
 
 ### TROPOMI model-comparison stores: production (2026-10-19 to 10-22)
 

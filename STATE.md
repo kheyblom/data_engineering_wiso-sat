@@ -4,20 +4,9 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-22)
 
-**Nothing is running and nothing is half done.** No batch jobs are queued.
-**Current task: GOSAT-2** (user, 2026-10-22). GOSAT was re-checked complete
-the same day: 12 stores, each with all 4,498 raw days in its index, one obs
-axis, the tag at the branch tip, and 0 verify failures.
-
-- **GOSAT-2 fixture level done (2026-10-22):** config `source` (reader and
-  key; defaults to `product`) and `platform` (checked per file in the build
-  and the verifier), both approved by the user. `config/gosat2/` with the 51
-  missing days declared as found (user: same as GOSAT).
-  `validation/stage_gosat.py` stages both fixtures. The test passes 97 cases
-  over TROPOMI, GOSAT and GOSAT-2.
-- **Next step:** the GOSAT-2 production build and verify on develop (shown to
-  the user for approval), then finalize step by step. Expect ~1,010 days and
-  ~2e6 obs.
+**Nothing is running and nothing is half done.** No batch jobs are queued;
+the tree is clean and pushed. The next task is not chosen yet: ask the user
+(candidates under Next).
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 97 cases
@@ -42,12 +31,21 @@ axis, the tag at the branch tip, and 0 verify failures.
   (time, lat, lon), `pressure`, and 10 variable stores including the kernel,
   the a priori and the pressure weight. 8,856,028 obs. The geolocation store
   was rebuilt without `pressure` on 2026-10-19; its backup is deleted.
+  Re-checked complete 2026-10-22 (every store: all 4,498 raw days, one obs
+  axis, tag at the tip).
+- **GOSAT-2 is finished: 12 stores, all finalized** 2026-10-22, tag
+  `v3.0.1-verified-20261022`, in
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat2/` (163 MB): the
+  same 12 stores as GOSAT, 1,010 days, 1,620,006 obs, 478 checks and 0
+  failures. Read with the GOSAT reader and key through the config's `source`;
+  `platform: GOSAT2` checked on every file (both user-approved 2026-10-22; the
+  51 missing days declared as found). Run log: TESTING.md, GOSAT-2 run log.
 - **The cross-product naming pass is done** (task 7, steps 1-2):
   `docs/model-comparison-naming.md` (N1-N18); rows in style_guides
   `a585066`, `fee64ec`, `65ac688` (the `pressure` row and rule).
 - **Compute used so far:** TROPOMI ~380 core-hours for the 19 stores, ~835
   for the 6 model-comparison stores (benches and diagnostic ~19, production
-  ~815, the overrun approved by the user); GOSAT ~0.5.
+  ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2.
 
 ## Next: candidates (ask the user which)
 
@@ -58,12 +56,11 @@ when it is time (2026-10-22).
    TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
-2. **GOSAT-2** (`product: gosat2`, `source: gosat`): fixture done, production
-   **in progress** (see above).
-3. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
+2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
-   GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`.
-4. **Optional cost work before the next large product** (TESTING.md finding
+   GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`
+   (GOSAT-2 has the same variable, so both products would get it).
+3. **Optional cost work before the next large product** (TESTING.md finding
    12): the build still uses ~2.5x the CPU its stages need, mostly kernel time
    from page faults on multi-GB arrays (glibc maps every allocation over 32
    MB fresh). Untested remedies: buffer reuse, transparent huge pages. Verify

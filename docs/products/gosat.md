@@ -4,7 +4,9 @@
 second reader): `products/gosat.py`, `nomenclature-key_gosat.md`,
 `config/gosat/`, `validation/stage_gosat.py`. The fixture passes the
 end-to-end test. The model-comparison stores joined it on 2026-10-19 (below).
-**GOSAT-2 configured at fixture level, 2026-10-22:** `config/gosat2/`, read
+**GOSAT-2 production finalized 2026-10-22**, tag `v3.0.1-verified-20261022`:
+12 stores, 1,010 days, 1,620,006 obs (TESTING.md, GOSAT-2 run log).
+`config/gosat2/`, read
 with the GOSAT reader and key (`source: gosat`) and named `gosat2`. Each
 file's root `platform` attribute (`GOSAT` / `GOSAT2`) is checked against the
 config's `platform` in the build and the verifier. Its fixture is staged by

@@ -56,6 +56,10 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
+GOSAT-2 production built, verified and finalized 2026-10-22: 12 stores,
+1,620,006 observations, 0 failures, tag `v3.0.1-verified-20261022`, read with
+the GOSAT reader and key (`source: gosat`; TESTING.md Tier 3).
+
 GOSAT production built, verified and finalized 2026-10-19: 11 stores,
 8,856,028 observations, 0 failures, tag `v3.0.1-verified-20261019`
 (TESTING.md Tier 3).
