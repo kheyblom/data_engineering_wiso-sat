@@ -36,7 +36,7 @@ Read this first in a new session. Update it whenever work lands.
     Delete it only with the user's approval.
   - Its data-lake home is undecided, as for TROPOMI.
 
-## Next task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3)
+## Last task: TROPOMI's model-comparison stores (TASKS.md task 7, step 3) — DONE 2026-10-22
 
 **Read first:**
 - `docs/products/tropomi.md`, sections Model-comparison variables (the
@@ -122,23 +122,13 @@ Read this first in a new session. Update it whenever work lands.
      (~1-2 core-hours) on the remaining kernel time (page faults on
      multi-GB arrays; buffer reuse or huge pages), maybe toward 350-450.
      Production should request ~128 GB at 10 granules per commit.
-8. **Production build DONE (2026-10-21 18:21):** jobs 7877706-7877712 and
-   7882022 (B1-B8; B9, B10 no-ops), all as expected (B1-B7 walltime -29,
-   B8-B10 exit 0), no errors. Each of the six stores holds 38,645 granules
-   and 32,657,526,234 obs, its index identical to geolocation's; 19.6 TiB
-   live. ~364 core-hours (estimate 295).
-   - **Verify RUNNING, in sequence** (two verifies of one config must never
-     overlap: CLAUDE.md): V1 7901062 (kernels, pressure) -> V2 7901063
-     (priors, dry air) -> S 7901064 (`--phases structure,index`, all 25).
-     A first, parallel submission (7901053-7901055) was cancelled within a
-     minute, before either wrote a verdict.
-   - Slower than estimated: ~3.5 h per job (CPU per granule-store ~2x the
-     re-bench, 64 processes contending), so verify ~450 core-hours and
-     production ~820 in all; **the user approved the extra** (2026-10-21).
-     V2's limit was raised to 6 h (`qalter`, approved) since the verifier
-     cannot resume.
-9. **Production finalize**, chained `afterany`; finalize the 6 stores with
-   `v8.1-verified-<date>`, then `--expire` and `--gc`.
+8. **Production DONE and finalized (2026-10-22).** Build B1-B8 (jobs
+   7877706-7877712, 7882022), verify V1 7901062 and V2 7901063 (184 checks
+   each, 0 failures), S 7901064 (775 checks over all 25 stores). Finalized
+   with the user's sign-off: `--attrs`, `--tag v8.1-verified-20261022`,
+   `--expire`, `--gc` (4.87 TiB freed). All 25 TROPOMI stores report
+   "remaining nothing, finalized". 19.6 TiB for the six; ~815 core-hours
+   (user approved the overrun). Run log: TESTING.md, Tier 3.
 
 **Later:** multi-array variable stores for TES and IASI (N18), and the
 per-product open issues under Other open items.

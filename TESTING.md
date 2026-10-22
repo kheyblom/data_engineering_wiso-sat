@@ -728,3 +728,40 @@ clean `5261f04`. The other 10 stores were no-ops.
   `--tag v3.0.1-verified-20261019 --apply`, on the two new stores; nothing
   unreachable. `--status`: all 12 stores "remaining nothing, finalized".
 - The backup is kept until the user approves deleting it.
+
+### TROPOMI model-comparison stores: production (2026-10-19 to 10-22)
+
+The six 2-D stores (both column kernels, both a priori partial columns,
+`dry_air_partial_column`, `pressure`), each in a process of its own, sharded,
+blosc zstd 5 + shuffle, 10 granules per commit. The 19 finalized stores were
+no-ops. All jobs develop.
+
+| jobs | what | wall | result |
+| --- | --- | --- | --- |
+| 7877706-7877712, 7882022 (B1-B8) | build, 8 cores, 128 GB | B1-B7 6 h each (walltime, -29, as planned), B8 3 h 27 min (exit 0) | each store 38,645 granules, 32,657,526,234 obs, index identical to geolocation; no errors |
+| 7882023, 7882024 (B9, B10) | build | ~1 min each, exit 0 | no-ops |
+| 7901062 (V1) | verify the two kernels and `pressure`, 64 cores, 200 GB | 3 h 17 min | **184 checks, 0 failures** |
+| 7901063 (V2) | verify the two priors and dry air (limit raised to 6 h, approved) | 3 h 44 min | **184 checks, 0 failures** |
+| 7901064 (S) | `--phases structure,index`, all 25 stores | 1 min | **775 checks, 0 failures** |
+
+- **Cost: ~815 core-hours** (build ~365, verify ~450), against 575
+  estimated; the user approved the extra. The build ran ~32% slower per
+  orbit than the bench month (~680-1,000 orbits/h per store), and verify
+  used ~2x the bench's CPU per granule and store (64 processes on one node).
+- **A parallel verify submission was cancelled** (7901053-7901055) within a
+  minute, before any verdict: two verifies of one config share the evidence
+  log, so they must run in sequence (now in CLAUDE.md).
+- Memory: store processes peaked at 15.6-18.8 GiB; PBS counted up to the
+  128 GB limit once (B5), with file cache, but every store committed to the
+  end of that job.
+- **Finalized 2026-10-22** with the user's sign-off on each step: `--attrs`
+  (history names build revisions `4945839`, `157d4af`, `53c063b`, identical
+  code), `--tag v8.1-verified-20261022`, `--expire` (3,865 build snapshots
+  per store), `--gc` (**4.87 TiB freed**: superseded shards, old index
+  chunks and manifests). `--status`: all 25 TROPOMI stores "remaining
+  nothing, finalized". A post-gc `--phases structure,repository` over the six:
+  225 checks, 0 failures.
+- **Size: 19.6 TiB** live for the six (kernels 3.21 and 2.66 TiB, priors 3.66
+  each, dry air 3.23, `pressure` 3.21). Each store holds ~7,795 chunk files, 8
+  manifests and 2 snapshots, plus ~3,870 transaction logs and ~3,870
+  `overwritten` entries that `--gc` keeps.

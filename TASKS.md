@@ -95,8 +95,9 @@ what to read, the layouts per product, and the deliverables in order.
     verified and finalized in production 2026-10-19 with the rest of GOSAT;
     `pressure` moved to its own store the same day.
   - TROPOMI: key rows, configs, compression, shards and `finalize --expire`
-    done; bench passed 2026-10-19 (TESTING.md Tier 2b). Production waits on
-    the cost work in STATE.md, step 7.
+    done; bench passed 2026-10-19 (TESTING.md Tier 2b); **production built,
+    verified and finalized 2026-10-22** (tag `v8.1-verified-20261022`, 19.6
+    TiB, ~815 core-hours).
   - TES and IASI first need multi-array variable stores in the shared
     code (N18).
 

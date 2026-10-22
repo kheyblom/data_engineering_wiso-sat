@@ -244,7 +244,8 @@ Named in the cross-product naming pass. The grammar and decisions are in
 `docs/model-comparison-naming.md`; the rows are in `nomenclature_data.md`
 (style_guides `fee64ec`). Units are after conversion. The key rows and the
 three configs carry them (2026-10-19), and the fixture builds and verifies
-them. Not built at bench or production scale yet.
+them. **Built, verified and finalized in production 2026-10-22**, tag
+`v8.1-verified-20261022`: 19.6 TiB (TESTING.md, Tier 3).
 
 - **Dims:** `nlayer` (50) becomes `layer`; `nlevel` (51) becomes `level`, the
   layer interfaces.
