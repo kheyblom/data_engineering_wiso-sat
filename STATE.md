@@ -20,8 +20,10 @@ Read this first in a new session. Update it whenever work lands.
 - **Approved and done 2026-10-22:** blosc zstd 5 + shuffle for the six 2-D
   stores (no shards), and `ChunkSpans` in the verifier (finding 14). The
   fixture test passes 132 cases.
-- **Next:** delete the bench stores and rebuild and re-verify the bench with
-  blosc (user approval needed for the delete and the jobs); then production.
+- **Re-bench passed** 2026-10-22 (jobs 7909064, 7909065): the verify takes
+  ~10x less cpu (finding 14, fixed). Bench stores are throwaway.
+- **Next: production,** awaiting the user's approval of the jobs (build,
+  then verify chained `afterany`; ~5 core-hours expected); then finalize.
 - **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
   in the raw tree (S5); the reader lists `YYYYMM` folders only.
 

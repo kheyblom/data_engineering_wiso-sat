@@ -448,8 +448,13 @@ than a 1-D chunk's share, so it paid this far less.
 - **Fixed** (user approval 2026-10-22): `ChunkSpans` in the verifier keeps
   each array's last decoded chunk span per scan and serves later slices from
   it, as read-only views, so each chunk is decoded about once. What is
-  compared is unchanged. The fixture test passes 132 cases. The bench is
-  rebuilt with blosc on the 2-D stores and re-verified to measure it.
+  compared is unchanged. The fixture test passes 132 cases.
+- **Re-bench** (2026-10-22, blosc on the 2-D stores, the old bench stores
+  deleted with approval): build 7909064, 52 s wall, 1 min 36 s cpu, 4.60
+  GiB main process, 2.2 GiB of stores; verify 7909065, **51 s wall and
+  2 min 58 s cpu against 3 min 45 s and 30 min 52 s** (workers 0.02 h user
+  + 0.03 h sys), 1.32 GiB per scan (was 0.58: the spans it holds), **879
+  checks, 0 failures**.
 
 ## Tier 3: production
 
