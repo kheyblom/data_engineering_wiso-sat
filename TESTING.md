@@ -445,6 +445,11 @@ orbits read one at a time took 1.45 s against 15 ms in one read (1-D), and
 5.3 s against 82 ms (2-D): ~1.5 cpu-s per orbit over the 22 stores, so ~17 of
 the ~21 cpu-hours a production verify would take. TROPOMI's orbits are larger
 than a 1-D chunk's share, so it paid this far less.
+- **Fixed** (user approval 2026-10-22): `ChunkSpans` in the verifier keeps
+  each array's last decoded chunk span per scan and serves later slices from
+  it, as read-only views, so each chunk is decoded about once. What is
+  compared is unchanged. The fixture test passes 132 cases. The bench is
+  rebuilt with blosc on the 2-D stores and re-verified to measure it.
 
 ## Tier 3: production
 

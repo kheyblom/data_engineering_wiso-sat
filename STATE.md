@@ -17,9 +17,11 @@ Read this first in a new session. Update it whenever work lands.
 - **The bench (Tier 2c) passed** 2026-10-22 (jobs 7908198 build, 7908201
   verify; 879 checks, 0 failures; ~0.6 core-hours). Bench stores under
   `/glade/derecho/scratch/$USER/data/wisosat_bench/zarr/sciamachy/`.
-- **Awaiting the user:** blosc for the six 2-D stores (saves 18-38%), and a
-  chunk cache in the verifier (finding 14: ~17 of ~21 cpu-hours of a
-  production verify re-decode chunks); then production.
+- **Approved and done 2026-10-22:** blosc zstd 5 + shuffle for the six 2-D
+  stores (no shards), and `ChunkSpans` in the verifier (finding 14). The
+  fixture test passes 132 cases.
+- **Next:** delete the bench stores and rebuild and re-verify the bench with
+  blosc (user approval needed for the delete and the jobs); then production.
 - **Found 2026-10-22:** hidden `.ArchiveServiceTemp.sb-*` transfer leftovers
   in the raw tree (S5); the reader lists `YYYYMM` folders only.
 

@@ -632,6 +632,49 @@ def check_index(report, settings, groups, granules):
     return reference
 
 
+class ChunkSpans:
+    """Reads granule slices of stored arrays, decoding each chunk once.
+
+    The values phase reads one granule at a time, and a granule can be far
+    smaller than a chunk: a SCIAMACHY orbit is ~1,900 obs, a 1-D chunk
+    4,194,304. Reading each slice straight from zarr decoded the whole chunk
+    every time, ~1.5 cpu-s per orbit over 22 stores (TESTING.md finding 14).
+    This keeps, per array, the last chunk-aligned span it decoded, and serves
+    every later slice that falls inside it. Granules come in order, so each
+    chunk is decoded about once. Values are returned exactly as zarr reads
+    them, undecoded, so the comparison is unchanged.
+
+    Attributes:
+        spans (dict): Array key -> ``(start, stop, values)`` last decoded.
+    """
+
+    def __init__(self):
+        self.spans = {}
+
+    def read(self, key, array, lo, hi):
+        """The stored values ``array[lo:hi]``.
+
+        Args:
+            key (tuple): Identifies the array, e.g. ``(store, name)``.
+            array (zarr.Array): The stored array, ``obs`` first.
+            lo (int): First obs.
+            hi (int): One past the last.
+
+        Returns:
+            numpy.ndarray: The slice, a read-only view of the span.
+        """
+        span = self.spans.get(key)
+        if span is None or not span[0] <= lo <= hi <= span[1]:
+            chunk = array.chunks[0]
+            start = lo // chunk * chunk
+            stop = min(array.shape[0], max(-(-hi // chunk) * chunk, start + chunk))
+            values = np.asarray(array[start:stop])
+            # every later slice is a view of this, so nothing may write to it
+            values.flags.writeable = False
+            span = self.spans[key] = (start, stop, values)
+        return span[2][lo - span[0]:hi - span[0]]
+
+
 class Pass:
     """Accumulates the values phase over every granule.
 
@@ -859,6 +902,7 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     reference = sorted({'time'} | {coordinate_names[source] for source in match_sources})
 
     seen = Pass()
+    spans = ChunkSpans()
     previous = None
     for offset, granule in enumerate(granules):
         position = begin + offset
@@ -867,9 +911,15 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
         )
         lo = int(starts[position])
         hi = lo + int(counts[position])
-        stored = {(store, name): np.asarray(groups[store][name][lo:hi]) for store, name, _, _ in targets}
+        stored = {
+            (store, name): spans.read((store, name), groups[store][name], lo, hi)
+            for store, name, _, _ in targets
+        }
         for name in reference:
-            stored.setdefault((GEOLOCATION, name), np.asarray(groups[GEOLOCATION][name][lo:hi]))
+            if (GEOLOCATION, name) not in stored:
+                stored[(GEOLOCATION, name)] = spans.read(
+                    (GEOLOCATION, name), groups[GEOLOCATION][name], lo, hi
+                )
 
         for entry in files:
             seen.leaked += entry['leaked']

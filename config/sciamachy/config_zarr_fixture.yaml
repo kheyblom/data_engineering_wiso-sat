@@ -86,6 +86,20 @@ source_fill_values:
   target_product/h2o_column_averaging_kernel: [9.96921e+36]
   target_product/hdo_column_averaging_kernel: [9.96921e+36]
 
+# as in config_zarr.yaml: blosc zstd 5 + byte shuffle for the six 60- and 61-wide arrays (user decision
+# 2026-10-22, TESTING.md Tier 2c): 18-38% smaller than the default zstd,
+# lossless. No shards: each array is ~600 chunks over the record. Every other
+# array keeps zarr's default zstd.
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_column_h2o_averaging_kernel
+    - water_vapor_column_hdo_averaging_kernel
+    - water_vapor_partial_column_h2o_apriori
+    - water_vapor_partial_column_hdo_apriori
+    - dry_air_partial_column
+    - pressure
+
 chunks:
   obs: 1000
   granule: 4
