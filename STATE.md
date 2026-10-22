@@ -122,25 +122,16 @@ Read this first in a new session. Update it whenever work lands.
      (~1-2 core-hours) on the remaining kernel time (page faults on
      multi-GB arrays; buffer reuse or huge pages), maybe toward 350-450.
      Production should request ~128 GB at 10 granules per commit.
-8. **Production build RUNNING (submitted 2026-10-19 20:48, user approved):**
-   chain B1-B7 = jobs 7877706-7877712, develop, 8 cores, 128 GB, 6 h,
-   `afterany`; at `4945839`, `granules_per_commit` 10, 3,865 batches per
-   store. B1 committed all six stores' first batch by 20:50.
-   - **Slower than the bench (2026-10-20 09:05):** ~680 orbits/h per store
-     against ~1,000 in the bench month, flat over five hours (contention on
-     shared develop nodes, probably). 27-28% of obs done after 13 h; the
-     build now looks like ~52 h wall, ~420 core-hours (estimate was 295),
-     and production as a whole ~780 if the verify is slowed alike.
-   - **B8-B10 appended** (user approved): jobs 7882022-7882024, same
-     settings, `afterany` B7; ~2 expected to be needed. Later jobs are
-     no-ops (~1 min) once all 38,645 granules are written.
-   - **When the chain ends:** check every job's `Exit_status` (`qstat -xf
-     <id>.desched1`) and that each of the six stores holds 38,645 granules.
-   - **Then verify (approved):** two jobs, `--stores` the two kernels and
-     `pressure`, then the two priors and `dry_air_partial_column`; develop,
-     `NCPUS=64 MEM=200GB WALLTIME=05:00:00` (config `verify_num_workers`
-     64); then `--phases structure,index` over all 25 stores (small job).
-   - Keep the tree clean while builds are queued: commit any edit at once.
+8. **Production build DONE (2026-10-21 18:21):** jobs 7877706-7877712 and
+   7882022 (B1-B8; B9, B10 no-ops), all as expected (B1-B7 walltime -29,
+   B8-B10 exit 0), no errors. Each of the six stores holds 38,645 granules
+   and 32,657,526,234 obs, its index identical to geolocation's; 19.6 TiB
+   live. ~364 core-hours (estimate 295).
+   - **Verify RUNNING, in sequence** (two verifies of one config must never
+     overlap: CLAUDE.md): V1 7901062 (kernels, pressure) -> V2 7901063
+     (priors, dry air) -> S 7901064 (`--phases structure,index`, all 25).
+     A first, parallel submission (7901053-7901055) was cancelled within a
+     minute, before either wrote a verdict.
 9. **Production finalize**, chained `afterany`; finalize the 6 stores with
    `v8.1-verified-<date>`, then `--expire` and `--gc`.
 
