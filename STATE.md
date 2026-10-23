@@ -42,9 +42,9 @@ Read this first in a new session. Update it whenever work lands.
     `INDEX_EXTRA`, and declared `standard_name`s checked against the source.
   - ~6.6 core-hours in all: audit ~1, benches ~0.1, production ~5.5 (with
     the R33 rebuild and two FS re-verifies).
-- **Throwaway AIRS bench data** (delete only with approval):
-  `wisosat_bench/zarr/airs_{rs,fs}/` (~1.2 GB) and the symlinks in
-  `wisosat_bench/raw/airs_{rs,fs}/`.
+- **The AIRS bench data is deleted** (user approved 2026-10-23): its stores
+  and symlink trees in `wisosat_bench/`. The configs and stager stay, to
+  rebuild it.
 - **The fixture test passes 218 cases** over all six products (~12 min,
   login node; the two AIRS fixtures are ~5 of it).
 
