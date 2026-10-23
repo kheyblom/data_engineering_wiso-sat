@@ -1,5 +1,9 @@
 # Handoff: download the missing TROPESS AIRS and CrIS HDO data
 
+**Done 2026-10-22:** 12,127 files, 237.01 GB, 0 failures. The report is
+`~/work/data_access/access_tropess/HANDBACK.md`, and its results are in
+`docs/products/tropess.md`. Kept as the brief that was given.
+
 For a separate data-access session (2026-10-22). The user wants every AIRS
 and CrIS TROPESS HDO granule that is not already on disk, so that
 `data_engineering_wiso-sat` can build zarr stores from them. That repo does

@@ -5,20 +5,29 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-22)
 
 **Nothing is running.** No batch jobs are queued.
-- **Current task: AIRS, then CrIS (task 6), waiting on downloads.** On
-  2026-10-22 the user chose AIRS first and CrIS once AIRS is finalized.
-- The survey is done and recorded in `docs/products/tropess.md`: every
-  collection, the stream and product-type definitions, every version, and
-  issues R1-R21.
-- The user is fetching every missing AIRS and CrIS granule in a separate
-  data-access session, briefed by `docs/handoff-tropess-download.md`.
-- **Resume when the user returns with that session's report:**
-  1. update `tropess.md` (the collections table, R18, R19) from the
-     manifests;
-  2. draft the AIRS production subset in `tropess.md` for in-place review,
+- **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
+  chose AIRS first and CrIS once AIRS is finalized.
+- Every AIRS and CrIS collection is on disk (downloaded 2026-10-22; see
+  `~/work/data_access/access_tropess/HANDBACK.md`).
+- `docs/products/tropess.md` holds:
+  - every collection, the definitions and every version;
+  - the Summary = Standard (DOF >= 1.1) finding;
+  - the product scheme;
+  - issues R1-R26.
+- **Decided 2026-10-23:**
+  - Summary is merged into Standard: one product per stream, with no
+    summary/standard token in the name;
+  - Standard's row-0 `x` is masked as a declared defect (R22);
+  - AIRS v2 waits for CrIS.
+- **Pending (user):** whether AIRS RS and FS become one product. The analysis
+  was given in chat on 2026-10-23.
+- **Next:**
+  1. draft the AIRS production subset in `tropess.md` for in-place review,
      as `sciamachy.md`'s P1-P6;
-  3. then the reader at fixture level, the shared per-granule version change,
-     the bench, and production.
+  2. a full-record audit (batch; show it first);
+  3. then nomenclature rows, the reader at fixture level, the shared changes
+     (per-granule versions, the Summary merge, declared masking), the bench,
+     and production.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 132
