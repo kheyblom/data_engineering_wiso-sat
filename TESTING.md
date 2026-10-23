@@ -11,7 +11,7 @@ core-hours against a finite allocation.
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
 | 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~12 min, login node | **passed** (2026-10-23): 218 cases, TROPOMI, GOSAT, GOSAT-2 (`source` and `platform`), SCIAMACHY (declared rows, monthly coverage) and AIRS RS and FS (two-file days with one-sided days declared, a declared masked defect, source time order with the repeat check, a stream in the version slot, extra index fields, lossless integer casts), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
-| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: **done** (2026-10-22): built, verified with 0 failures, finalized |
+| 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: **done** (2026-10-22): built, verified with 0 failures, finalized. AIRS RS and FS: **done** (2026-10-23): built, verified with 0 failures, finalized |
 
 ## Tier 0 and 1: the fixture test
 
@@ -967,3 +967,37 @@ no-ops. All jobs develop.
   each, dry air 3.23, `pressure` 3.21). Each store holds ~7,795 chunk files, 8
   manifests and 2 snapshots, plus ~3,870 transaction logs and ~3,870
   `overwritten` entries that `--gc` keeps.
+
+### AIRS v1 run log (2026-10-23)
+
+RS and FS each built and verified on develop (8 cores, 32 GB) from
+`259bf2d`, after the bench (Tier 2d). ~5.5 core-hours in all, against ~6
+estimated.
+
+| job | what | wall | result |
+| --- | --- | --- | --- |
+| 7924565 | RS build, 19 stores, 13 commits | 3 min 17 s | 6,363 days, 17,109,546 obs; peak 7.25 GiB |
+| 7924567 | RS verify | 5 min 22 s | **842 checks, 0 failures**; 6,362 R22 defects confirmed, 0 repeats |
+| 7924569 | FS build, 19 stores, 37 commits | 8 min 35 s | 1,820 days, 47,882,856 obs; peak 9.51 GiB |
+| 7924572 | FS verify | 7 min 28 s | 843 checks, **1 failure**: `day_night_flag`'s `standard_name` (R33) |
+| 7926254 | FS `day_night_flag` rebuilt, at `ac03f04` | 1 min 57 s | after its branch was reset to the empty root (user approved; logged in `logs/reset_airs_fs_day_night_flag.log`) |
+| 7926256 | FS verify | 6 min 3 s | 841 checks, 0 failures, but 2 dtype checks skipped by a verifier bug (`3857cd9` fixed it) |
+| 7926375 | FS verify, at `3857cd9` | 7 min 24 s | **843 checks, 0 failures**; 1,815 R22 defects confirmed, 0 repeats |
+
+- **R33:** TROPESS renamed `day_night_flag`'s `standard_name` from
+  `day_binary_mask` to `sunlit_binary_mask` on 2022-03-28 in FS Standard.
+  The first FS store took the first file's name. The user chose the current
+  name (option A), declared in config. The verifier now requires a declared
+  name to be one the source uses. Neither the fixture nor the bench month
+  reached the early files; the FS fixture now carries both names.
+- **Repeats:** 0 within any granule or across any seam in either stream,
+  including FS's 175 overlapping day boundaries. This completes the
+  full-record check the style-guide exception asks for (R32).
+- **Finalized 2026-10-23** (each `--apply` signed off by the user): `--attrs`,
+  `--tag v1-verified-20261023` on all 38 stores, and `--gc` on FS
+  `day_night_flag` only (the 37 snapshots orphaned by the reset, under 0.01
+  GiB; no other store had anything to collect). Afterwards `--phases
+  structure,index`: 681 checks, 0 failures, on each stream.
+- **Size:** RS 20.1 GiB, FS 55.6 GiB, in
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`. The kernel is
+  ~75% of each.

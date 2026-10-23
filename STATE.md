@@ -4,78 +4,41 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-23)
 
-**Nothing is running.** AIRS v1 production ran 2026-10-23 from `259bf2d`
-(develop, 8 cores, 32 GB; ~3.3 core-hours): RS build 7924565 and verify
-7924567, **842 checks, 0 failures**; FS build 7924569 and verify 7924572,
-843 checks, **1 failure**: `day_night_flag`'s `standard_name` (R33; the
-source renamed it in 2022). The user chose option A: FS carries
-`sunlit_binary_mask`, declared in config, and the verifier checks a declared
-name is one the source uses (218 fixture cases pass).
-- **Pending user sign-off:** RS `finalize --attrs --apply` (dry run read and
-  checked: 17,109,546 obs, latitude -50 to 70, R34); then the FS fix: reset
-  the FS `day_night_flag` store's branch to its empty root (undoable until
-  `--gc`), rebuild it and re-verify FS on develop.
-- **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
-  chose AIRS first and CrIS once AIRS is finalized.
-- Every AIRS and CrIS collection is on disk (downloaded 2026-10-22; see
+**Nothing is running.** No batch jobs are queued.
+- **Current task: CrIS (task 6), next.** AIRS v1 is finished (below). On
+  2026-10-22 the user chose CrIS once AIRS was finalized. Settled so far:
+  platform tokens `cris_snpp` and `cris_jpss1`; AIRS v2 (FS 2026-06 on) is
+  taken up with CrIS. Everything else about CrIS is open (`tropess.md`,
+  Product scheme). Every CrIS collection is on disk (downloaded 2026-10-22;
   `~/work/data_access/access_tropess/HANDBACK.md`).
-- `docs/products/tropess.md` holds:
-  - every collection, the definitions and every version;
-  - the Summary = Standard (DOF >= 1.1) finding;
-  - the product scheme;
-  - issues R1-R32.
-- **Decided 2026-10-23:**
-  - Summary is merged into Standard: one product per stream, with no
-    summary/standard token in the name;
-  - Standard's row-0 `x` is masked as a declared defect (R22);
-  - AIRS v2 waits for CrIS.
-  - AIRS RS and FS stay separate products, `wisosat.airs.v_1.rs.*` and
-    `wisosat.airs.v_1.fs.*`, built to join cleanly, each pointing to the
-    other (`tropess.md`, Product scheme).
-- **Now: the AIRS v1 production subset is approved** (`tropess.md`, P1-P8,
-  2026-10-23), all questions settled:
-  - Q2b drops `column` from the 850-250 hPa means, which are unweighted
-    level means;
-  - Q2c is `water_vapor_delta_d_004`;
-  - `x` and `x_h2o` carry "bias corrected" in their metadata (config
-    `comment`, `original_long_name`, `source`).
-- **Done 2026-10-23:**
-  - the 14 nomenclature rows (style_guides `f18168e`);
-  - the full-record audit (develop job 7921827, 6 min, ~1 core-hour;
-    TESTING.md finding 15). No blocker: R22 holds on every Standard file,
-    the merge is exact on every day, and TAI93 matches `datetime_utc`
-    everywhere. The audit added R27-R31 in `tropess.md`.
-- **Done 2026-10-23: the reader at fixture level and the shared changes**
-  (`products/tropess.py`, `config/airs_rs/`, `config/airs_fs/`,
-  `nomenclature-key_tropess.md`, `validation/stage_tropess.py`):
-  - Standard + Summary merged per day onto Standard's rows, matched on time
-    and position, every merge invariant checked (DOF > 1.1, identical
-    values); one-sided days declared (`expected_partial_granules`);
-  - `granule_algorithm` and `granule_format` in the granule index (a
-    reader's `INDEX_EXTRA`);
-  - R22 masked by `declared_masked_values`, confirmed from raw by the build
-    and the verifier (`declared_defects_masked` on the store);
-  - `time_order: source` (R32): `time` is not sorted, the layout attribute
-    says so, the index gives each granule's earliest and latest time;
-  - `version_product` puts the stream in the version slot (`v_1.rs`);
-    `source_dtypes` stores the flags as int32;
-  - the TAI93 decode, checked against `datetime_utc` on every row.
-- **Repeat check (user decision 2026-10-23):** under `time_order: source`,
-  the build and the verifier check that no observation repeats another's
-  time, lat and lon in its granule or across a seam, in place of the time
-  check (which caught SCIAMACHY S8 and S9). The audit covered repeats within
-  files; production covers every seam.
-- **Tests pass:** 216 cases, 0 failures, over every product (TESTING.md
-  Tier 1).
-- **The style-guide exception is approved and committed** (style_guides
-  `43b6b51`): an unordered source's row order may be kept, approved per
-  product, once a full-record check finds no repeats, and every build then
-  checks for repeats in place of the time order.
-- **Next:** check the production verify results, then finalize each stream
-  with sign-off on each `--apply` (`--attrs`, `--tag
-  v1-verified-YYYYMMDD`, `--gc`; no shards, so no `--expire`), then CrIS.
-  The bench stores in `wisosat_bench/zarr/airs_{rs,fs}/` (~1.2 GB) and links
-  in `wisosat_bench/raw/airs_{rs,fs}/` are throwaway: delete with approval.
+- **AIRS v1 is finished: 38 stores, all finalized** 2026-10-23, tag
+  `v1-verified-20261023`, in
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`: two products of
+  19 stores each (geolocation, `pressure`, 17 variable stores), on their own
+  obs axes.
+  - **RS** `wisosat.airs.v_1.rs.*`: 6,363 days, 2002-08-30 .. 2020-03-31,
+    17,109,546 obs, 50°S to 70°N (R34), 20.1 GiB; 842 checks, 0 failures.
+  - **FS** `wisosat.airs.v_1.fs.*`: 1,820 days, 2021-02-01 .. 2026-05-31,
+    47,882,856 obs, 55.6 GiB; 843 checks, 0 failures.
+  - Decisions, evidence and issues R1-R34: `docs/products/tropess.md`
+    (Product scheme; production subset P1-P8). Audit, bench and run:
+    TESTING.md finding 15, Tier 2d and the AIRS v1 run log.
+  - Summary merged into Standard per day; the row-0 `x` defect (R22) masked
+    as declared; rows in source order with the repeat check in place of the
+    time order (R32; style_guides `43b6b51`); blosc on the six 2-D arrays;
+    FS `day_night_flag` carries `sunlit_binary_mask`, TROPESS renamed it
+    mid-record (R33).
+  - Shared code added for it (CLAUDE.md, Layout): `version_product`,
+    `time_order`, `check_repeats`, `declared_masked_values`, `source_dtypes`,
+    `expected_partial_granules`, a reader's `LISTING_OPTIONS` and
+    `INDEX_EXTRA`, and declared `standard_name`s checked against the source.
+  - ~6.6 core-hours in all: audit ~1, benches ~0.1, production ~5.5 (with
+    the R33 rebuild and two FS re-verifies).
+- **Throwaway AIRS bench data** (delete only with approval):
+  `wisosat_bench/zarr/airs_{rs,fs}/` (~1.2 GB) and the symlinks in
+  `wisosat_bench/raw/airs_{rs,fs}/`.
+- **The fixture test passes 218 cases** over all six products (~12 min,
+  login node; the two AIRS fixtures are ~5 of it).
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place.
@@ -129,7 +92,8 @@ name is one the source uses (218 fixture cases pass).
 - **Compute used so far:** TROPOMI ~380 core-hours for the 19 stores, ~835
   for the 6 model-comparison stores (benches and diagnostic ~19, production
   ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2;
-  SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8).
+  SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8); AIRS v1
+  ~6.6 (audit ~1, benches ~0.1, production ~5.5).
 
 ## Next: candidates (ask the user which)
 
@@ -139,7 +103,7 @@ when it is time (2026-10-22).
 1. **The other products** (task 6): AIRS and CrIS (TROPESS), IASI, TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
-   AIRS and CrIS are in progress (see above).
+   AIRS v1 is finished; CrIS is next (see above).
 2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`
