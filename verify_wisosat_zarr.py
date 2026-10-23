@@ -1368,7 +1368,19 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     for store, name, source, _ in targets:
         stored_attrs = dict(groups[store][name].attrs)
         names = seen.standard_names.get(source, set())
-        raw = next(iter(names)) if len(names) == 1 else (None if not names else sorted(names))
+        declared = ((settings.get('variable_attrs') or {}).get(name) or {}).get('standard_name')
+        if declared is not None or len(names) > 1:
+            # set in config where the first commit may lack the file that
+            # carries it (TROPESS x_h2o), or where the source renamed it over
+            # the record (TROPESS R33): either way it must be a source one
+            report.check(
+                f'{store}/{name}: standard_name is the source one the config declares',
+                declared in names and stored_attrs.get('standard_name') == declared,
+                f'{stored_attrs.get("standard_name")!r}, declared {declared!r}, against source '
+                f'{sorted(names)!r}',
+            )
+            continue
+        raw = next(iter(names)) if names else None
         report.check(
             f'{store}/{name}: standard_name is the source one, or absent with it',
             stored_attrs.get('standard_name') == raw,

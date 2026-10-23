@@ -386,3 +386,12 @@ variable_attrs:
       vapor content for water vapor volume mixing ratio of 0.004". It does not
       reproduce by interpolating the stored profiles; TROPESS computes it on
       its own grid.
+  day_night_flag:
+    # R33: TROPESS renamed it during the record; the verifier checks this is
+    # one of the source's names. The current one, and RS's throughout
+    standard_name: sunlit_binary_mask
+    comment: >-
+      The source standard_name is sunlit_binary_mask in every Summary file and
+      in every Standard file from 2022-03-28 on, as in the reanalysis stream;
+      Standard files from 2021-02-01 to 2022-03-27 (R1p11 to R1p15) call it
+      day_binary_mask. The store carries the current name.

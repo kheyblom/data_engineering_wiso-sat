@@ -328,6 +328,24 @@ def test_product(results, config, scratch):
             last_line(output, 'every file declares platform'),
         )
 
+    # ... and a standard_name the config declares that no source file uses
+    named = [name for name, attrs in (settings.get('variable_attrs') or {}).items()
+             if 'standard_name' in (attrs or {})]
+    if named:
+        wrong = {name: dict(attrs, standard_name='no_such_name') if name in named else attrs
+                 for name, attrs in settings['variable_attrs'].items()}
+        path = write_config(settings, scratch, f'{product}_standard_name.yaml', variable_attrs=wrong)
+        status, output = run(
+            'verify_wisosat_zarr.py', '--config', path, '--phases', 'values', '--stores', ','.join(named)
+        )
+        results.check(
+            f'{product}: verifier fails on a declared standard_name no source file uses',
+            status != 0 and 'failed: ' in last_line(
+                output, 'standard_name is the source one the config declares'
+            ),
+            last_line(output, 'standard_name is the source one the config declares'),
+        )
+
     # ... and declared rows that do not match raw: the repeat's block halved,
     # so the same rows are left out (the index still lines up) but the
     # second half of each copy no longer equals the block

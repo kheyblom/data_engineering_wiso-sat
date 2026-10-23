@@ -107,3 +107,7 @@ variable_attrs:
     # written with its first commit, which may hold no Summary file; the
     # verifier checks it equals the source's
     standard_name: dry_atmosphere_volume_mixing_ratio_of_water_vapor
+  day_night_flag:
+    # R33: the stager gives 20220617's Standard file the early name, as
+    # upstream's Standard files before 2022-03-28 have it
+    standard_name: sunlit_binary_mask

@@ -4,12 +4,17 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-23)
 
-**Running: AIRS v1 production** (approved 2026-10-23; develop, 8 cores, 32
-GB, 1 h each, from `259bf2d`): RS build 7924565, then verify 7924567
-(`afterany`); FS build 7924569, then verify 7924572. Stores in
-`/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`. The bench passed
-(TESTING.md Tier 2d, jobs 7924508-7924514); blosc on the six 2-D arrays
-(user decision 2026-10-23).
+**Nothing is running.** AIRS v1 production ran 2026-10-23 from `259bf2d`
+(develop, 8 cores, 32 GB; ~3.3 core-hours): RS build 7924565 and verify
+7924567, **842 checks, 0 failures**; FS build 7924569 and verify 7924572,
+843 checks, **1 failure**: `day_night_flag`'s `standard_name` (R33; the
+source renamed it in 2022). The user chose option A: FS carries
+`sunlit_binary_mask`, declared in config, and the verifier checks a declared
+name is one the source uses (218 fixture cases pass).
+- **Pending user sign-off:** RS `finalize --attrs --apply` (dry run read and
+  checked: 17,109,546 obs, latitude -50 to 70, R34); then the FS fix: reset
+  the FS `day_night_flag` store's branch to its empty root (undoable until
+  `--gc`), rebuild it and re-verify FS on develop.
 - **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
   chose AIRS first and CrIS once AIRS is finalized.
 - Every AIRS and CrIS collection is on disk (downloaded 2026-10-22; see

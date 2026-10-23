@@ -16,6 +16,10 @@ exercise what the AIRS reader does beyond the shared code
   both files; 2022-06-19, a real day upstream has no Standard file for; 06-20
   left out (a fixture gap); 06-21, both files, its Standard file written to a
   year folder of the later download's layout, so both layouts are read.
+- **A renamed attribute:** 2022-06-17's Standard file gets the
+  ``day_night_flag`` standard_name ``day_binary_mask``, as upstream's
+  Standard files before 2022-03-28 have it (R33), so the fixture holds both
+  names and the config must declare the one the store carries.
 - **Strays** the reader must skip: an L3 file name and a local ``_target``
   copy name, as the real FS folder holds (R5, R6), written empty.
 
@@ -49,6 +53,8 @@ FIXTURES = {
 FS_ROWS = 400
 # an FS day whose Standard file is staged in the later download's year layout
 RELOCATED = ('20220621', 'TRPSDL2HDOAIRSFS.1', '2022')
+# R33: (day, source, standard_name) written into that day's Standard file
+RENAMED = ('20220617', 'geophysical/day_night_flag', 'day_binary_mask')
 STRAYS = ('AIRS_TROPESS_gridded_20220617_1deg.nc',
           'TROPESS_AIRS-Aqua_L2_Standard_HDO_20220617_MUSES_R1p17_FS_F0p4_target.nc')
 
@@ -139,6 +145,8 @@ def stage(production, fixture, days, cut, restage):
             else:
                 with netCDF4.Dataset(path) as src, netCDF4.Dataset(destination, 'w') as dst:
                     copy_group(src, dst, keep)
+                    if RENAMED[0] == day and '_Standard_' in path:
+                        dst[RENAMED[1]].setncattr('standard_name', RENAMED[2])
             print(f'staged  {destination}  {"whole" if keep is None else f"{len(keep)} rows"}')
     if cut:
         folder = os.path.dirname(os.path.join(target, os.path.relpath(granules[days[0]].paths[0], raw)))
