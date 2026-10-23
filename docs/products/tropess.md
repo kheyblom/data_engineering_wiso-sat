@@ -209,8 +209,9 @@ full-record audit (P8) follows and may revise the facts here.
 
 ### P1. Products, names and provenance
 
-- **Two products, one config each** (`config/airs/config_zarr_rs.yaml`,
-  `config_zarr_fs.yaml`; `source: tropess`):
+- **Two products, one config each** (`config/airs_rs/config_zarr.yaml`,
+  `config/airs_fs/config_zarr.yaml`; `product: airs`, `source: tropess`,
+  `version_product: rs` or `fs`):
 
   | product | stores named | days (span) | obs |
   | --- | --- | --- | --- |
@@ -225,7 +226,10 @@ full-record audit (P8) follows and may revise the facts here.
   config.
 - **Per granule, in the granule index** (approved 2026-10-22; shared change):
   the algorithm (`R1pNN`), format (`F0pN`) and joint flag of each of the
-  granule's two files. Both file names go in `granule_file`.
+  granule's two files. Both file names go in `granule_file`. As built:
+  `granule_algorithm` (e.g. `R1p17; R1p17`) and `granule_format`
+  (`F0p4; F0p4`, with `_J0`/`_J1` appended where the name has a joint flag),
+  in `granule_file` order (the reader's `INDEX_EXTRA`).
 - **Store attributes:**
   - both collections (`ShortName`, version, DOI);
   - the span of each algorithm version;

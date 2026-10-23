@@ -15,6 +15,12 @@ the processor version the source files carry in their own attributes, declared
 in the config so the store can be named before a file is opened; the build
 checks every granule against it. There is no product token.
 
+A config may also set ``version_product``, a product name the version alone
+does not tell apart, which the style guide appends after a period
+(``v_3_5.nrt``). TROPESS names its streams so (user decision 2026-10-22):
+``wisosat.airs.v_1.rs...`` and ``wisosat.airs.v_1.fs...``, where ``1`` is the
+collection version the files declare.
+
 Variables are named canonically in the config, since they name stores.
 ``source`` names the product whose reader and nomenclature key a config uses,
 when that is not its own: GOSAT-2 shares GOSAT's file format, so its config
@@ -83,6 +89,46 @@ def format_version(version):
     if parts[0] != 'v':
         parts.insert(0, 'v')
     return '_'.join(parts)
+
+
+def version_token(settings):
+    """The version slot of the config's store names.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        str: ``format_version(version)``, with ``.<version_product>`` appended
+            when the config sets one, e.g. 'v_1.rs'.
+
+    Raises:
+        ValueError: If ``version_product`` is not a lowercase word, which a
+            filename component must be.
+    """
+    token = format_version(settings['version'])
+    product = settings.get('version_product')
+    if product is None:
+        return token
+    if not re.fullmatch(r'[a-z][a-z0-9_]*', str(product)):
+        raise ValueError(f'version_product must be a lowercase word; it is {product!r}')
+    return f'{token}.{product}'
+
+
+def listing_options(settings, reader):
+    """The config settings a reader's ``list_granules`` takes besides its own.
+
+    A reader names them in ``LISTING_OPTIONS``; TROPESS lists one stream of a
+    shared raw folder, chosen by ``version_product``. Readers that name none
+    get none, so their listing is unchanged.
+
+    Args:
+        settings (dict): The loaded configuration.
+        reader (module): The product's reader.
+
+    Returns:
+        dict: Option name -> the config's value (None where unset).
+    """
+    return {name: settings.get(name) for name in getattr(reader, 'LISTING_OPTIONS', ())}
 
 
 def source_product(settings):
@@ -161,8 +207,8 @@ def template_fields(settings, store):
     Pairs follow MSWEP's rule: the plain field is the canonical spelling used in
     store names, and the ``_label`` beside it is what the source writes.
 
-    - ``version`` is the filename form (``v_8_1``); ``version_label`` is the
-      config's own (``8.1``).
+    - ``version`` is the filename form (``v_8_1``, or ``v_1.rs`` with a
+      ``version_product``); ``version_label`` is the config's own (``8.1``).
     - ``frequency`` is the canonical token (``inst``); ``temporal_resolution``
       is the config's word for it (``observation``).
     - ``variable`` is the store's variable slot: a canonical name, or
@@ -182,7 +228,7 @@ def template_fields(settings, store):
     }
     fields.update(settings.get('output_conventions', {}))
     fields['version_label'] = str(settings['version'])
-    fields['version'] = format_version(settings['version'])
+    fields['version'] = version_token(settings)
     fields['frequency'] = canonical_frequency(
         source_product(settings), settings['temporal_resolution']
     )

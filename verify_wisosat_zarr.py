@@ -37,10 +37,15 @@ Four phases, all run by default, selectable with ``--phases``:
     own coverage check.
 ``values``
     The pass over every granule: every value of every store against raw; each
-    granule's index entry (observation count, start and end time) against the
-    file; time never decreasing; the processor version, and the platform where
-    the reader reads one; the product's swath layout; every declared fill value
-    occurring somewhere in the record; and no netCDF default fill surviving in a source that does not declare it.
+    granule's index entry (observation count, earliest and latest time, and
+    any fields of the reader's own) against the file; time never decreasing,
+    unless the config keeps an unordered source's order (``time_order:
+    source``); the processor version, and the platform where the reader reads
+    one; the product's swath layout, and the reader's checks across a
+    granule's files; values the config declares defects
+    (``declared_masked_values``) confirmed in raw and stored as NaN; every
+    declared fill value occurring somewhere in the record; and no netCDF
+    default fill surviving in a source that does not declare it.
 ``repository``
     Every commit in each store's history is one the pipeline makes.
 
@@ -65,13 +70,13 @@ import zarr
 from utils.granules import (
     FILE_SEPARATOR,
     GRANULE_DIM,
-    INDEX_FIELDS,
     LOCATION_COORDINATES,
     check_coverage,
     check_order,
     declared_mask,
     declared_rows,
     decode_text,
+    index_fields,
 )
 from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import (
@@ -83,13 +88,14 @@ from utils.nomenclature import (
 )
 from utils.path_utils import (
     GEOLOCATION,
-    format_version,
+    listing_options,
     load_config,
     load_reader,
     log_path,
     run_stores,
     source_product,
     store_path,
+    version_token,
 )
 from utils.zarr_utils import (
     BRANCH,
@@ -106,6 +112,7 @@ from utils.zarr_utils import (
     resolve_chunks,
     resolve_compression,
     store_sources,
+    time_order,
     time_source,
     time_units,
     vertical_order,
@@ -231,7 +238,7 @@ def to_epoch(values, unit):
     return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
-def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None):
+def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None, masks=()):
     """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
@@ -254,9 +261,13 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
         declared (DeclaredRows | None): Rows the config leaves out of this
             granule. They are left out here too, but only after this reads
             for itself that they match as declared.
+        masks (tuple): The config's ``declared_masked_values``; the reader's
+            ``declared_masks`` finds and confirms them in each file.
 
     Returns:
         list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
+            ``masked`` (source -> bool over the file's observations, the
+            values declared defects) and ``mask_problems``,
             ``declared`` (rows left out as declared), ``declared_problems``
             (where they do not match their declaration),
             ``timed`` (rows left out although their time is written),
@@ -274,7 +285,12 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
     for path in granule.paths:
         out = {'path': path, 'sources': {}}
         with h5py.File(path, 'r') as handle:
-            out['version'] = str(decode_text(handle.attrs.get(reader.VERSION_ATTR, '')))
+            version = handle.attrs.get(reader.VERSION_ATTR, '')
+            # a reader whose version attribute is not text says how to read it
+            out['version'] = (
+                reader.file_version(version) if hasattr(reader, 'file_version')
+                else str(decode_text(version))
+            )
             platform_attr = getattr(reader, 'PLATFORM_ATTR', None)
             out['platform'] = (
                 str(decode_text(handle.attrs.get(platform_attr, ''))) if platform_attr else None
@@ -301,6 +317,9 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
             )
             out['timed'] = int(
                 (~processed & ~missing_rows(raw_location[time], fills.get(time, ()))).sum()
+            )
+            out['masked'], out['mask_problems'] = (
+                reader.declared_masks(handle, path, masks, kept) if masks else ({}, [])
             )
             out['leaked'] = 0
             for source, fill, factor, absent in items:
@@ -460,13 +479,14 @@ def check_structure(report, settings, store, group, chunks, codecs):
     source_name = source_product(settings)
     names = set(group.array_keys())
     expected_vars = set(store_sources(source_name, store))
+    fields = set(index_fields(load_reader(settings)))
     report.check(
         f'{store}: holds exactly its variables and the granule index',
-        names == expected_vars | set(INDEX_FIELDS),
+        names == expected_vars | fields,
         f'{sorted(names)}',
     )
 
-    for name in sorted(names & (expected_vars | set(INDEX_FIELDS))):
+    for name in sorted(names & (expected_vars | fields)):
         array = group[name]
         dims = array.metadata.dimension_names or ()
         leading = 'obs' if name in expected_vars else GRANULE_DIM
@@ -563,22 +583,31 @@ def check_structure(report, settings, store, group, chunks, codecs):
     stem = os.path.basename(store_path(settings, store))
     report.check(
         f'{store}: store name carries the version, frequency and variable',
-        f'.{format_version(settings["version"])}.{frequency}.' in stem
+        f'.{version_token(settings)}.{frequency}.' in stem
         and stem.endswith(f'.{store}.zarr'),
         stem,
     )
+    report.check(
+        f'{store}: layout states the time order {time_order(settings)!r}',
+        str(attrs.get('layout', '')).endswith(
+            'time never decreases along obs.' if time_order(settings) == 'sorted'
+            else '(granule_time_start, granule_time_end).'
+        ),
+        f'{str(attrs.get("layout", ""))[-80:]!r}',
+    )
 
 
-def read_index(group):
+def read_index(group, fields):
     """A store's granule index, undecoded.
 
     Args:
         group (zarr.Group): The store's root group.
+        fields (tuple): The index fields, from ``index_fields``.
 
     Returns:
         dict: Index field -> numpy array.
     """
-    return {field: np.asarray(group[field][...]) for field in INDEX_FIELDS}
+    return {field: np.asarray(group[field][...]) for field in fields}
 
 
 def check_index(report, settings, groups, granules):
@@ -602,12 +631,13 @@ def check_index(report, settings, groups, granules):
     except ValueError as error:
         report.check('raw listing: unique granules, missing days as declared', False, str(error))
 
-    reference = read_index(groups[GEOLOCATION])
+    fields = index_fields(load_reader(settings))
+    reference = read_index(groups[GEOLOCATION], fields)
     for store, group in groups.items():
-        index = read_index(group)
+        index = read_index(group, fields)
         report.check(
             f'{store}: granule index identical to the geolocation store',
-            all(np.array_equal(index[field], reference[field]) for field in INDEX_FIELDS),
+            all(np.array_equal(index[field], reference[field]) for field in fields),
         )
         n_obs = group[next(iter(store_sources(source_product(settings), store)))].shape[0]
         report.check(
@@ -696,6 +726,10 @@ class Pass:
         decreasing (int): Places where time decreases.
         dtypes (dict): Source -> dtypes seen.
         attrs (dict): Source -> the first granule's attributes.
+        standard_names (dict): Source -> the ``standard_name`` attributes any
+            file holding it carries.
+        masked (dict): Source -> values found and confirmed as declared
+            defects.
         first_time, last_time: The stored times at either end of a range.
     """
 
@@ -722,6 +756,8 @@ class Pass:
         self.decreasing = 0
         self.dtypes = {}
         self.attrs = {}
+        self.standard_names = {}
+        self.masked = {}
         self.first_time = None
         self.last_time = None
 
@@ -888,11 +924,16 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     items = value_items(settings, targets)
     match_sources = tuple(getattr(reader, 'MATCH_SOURCES', ()))
 
+    masks = tuple(settings.get('declared_masked_values') or ())
+    # a granule the config declares to lack one of its files lacks that
+    # file's sources too (TROPESS's one-sided days)
+    partial = {str(granule) for granule in settings.get('expected_partial_granules') or {}}
+    extra_fields = tuple(getattr(reader, 'INDEX_EXTRA', {}))
     groups = {}
     for store in dict.fromkeys([GEOLOCATION, *stores]):
         session = open_existing_repository(store_path(settings, store)).readonly_session(branch=BRANCH)
         groups[store] = zarr.open_group(session.store, mode='r')
-    index = read_index(groups[GEOLOCATION])
+    index = read_index(groups[GEOLOCATION], index_fields(reader))
     starts = index['granule_obs_start']
     counts = index['granule_obs_count']
     stored_start = index['granule_time_start']
@@ -907,7 +948,8 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     for offset, granule in enumerate(granules):
         position = begin + offset
         files = read_expected(
-            granule, source_name, items, time, unit, location, allowed, declared.get(granule.id)
+            granule, source_name, items, time, unit, location, allowed, declared.get(granule.id),
+            masks,
         )
         lo = int(starts[position])
         hi = lo + int(counts[position])
@@ -931,8 +973,17 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                 seen.timed += entry['timed']
                 seen.declared += entry['declared']
                 seen.declared_problems += [(granule.id, p) for p in entry['declared_problems']]
+                seen.problems += [(granule.id, problem) for problem in entry['mask_problems']]
         if primary and sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
             seen.index['granule_source_rows'] += 1
+        if primary and hasattr(reader, 'check_files'):
+            # what must hold across a granule's files, read here from raw
+            seen.problems += [(granule.id, problem) for problem in reader.check_files(granule.paths)]
+        if primary and extra_fields:
+            expected_extra = reader.index_extra(granule.paths)
+            for field in extra_fields:
+                if str(index[field][position]) != expected_extra[field]:
+                    seen.index[field] = seen.index.get(field, 0) + 1
 
         # how many observations the granule should hold: every distinct one
         # across its files, found from raw alone
@@ -982,21 +1033,42 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
             for kind, count in placement.placement.items():
                 seen.placement[kind] += count
 
+        # the store positions of values declared defects, from whichever file
+        # found them: the store holds NaN there, whatever any file says
+        masked_at = {}
+        for entry, positions in zip(files, placed):
+            for source, mask in entry['masked'].items():
+                if positions is None:
+                    continue
+                at = masked_at.setdefault(source, np.zeros(int(counts[position]), dtype=bool))
+                at[positions[mask]] = True
+
         for store, name, source, _ in targets:
             key = (store, name)
             values = stored[key]
             covered = np.zeros(values.shape[0], dtype=bool)
+            mask = masked_at.get(source)
             holders = 0
             for entry, positions in zip(files, placed):
                 if source not in entry['sources'] or positions is None:
                     continue
                 holders += 1
                 found = entry['sources'][source]
-                seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(
-                    values[positions], found['expected']
-                )
+                here = values[positions]
+                expected = found['expected']
+                if mask is not None:
+                    keep = ~mask[positions]
+                    here, expected = here[keep], expected[keep]
+                seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(here, expected)
                 covered[positions] = True
-            if not holders:
+            if mask is not None and mask.any():
+                defects = values[mask]
+                seen.mismatches[key] = seen.mismatches.get(key, 0) + int(
+                    (~np.isnan(defects)).sum() if defects.dtype.kind == 'f' else defects.size
+                )
+                if source in counted:
+                    seen.masked[source] = seen.masked.get(source, 0) + int(mask.sum())
+            if not holders and granule.id not in partial:
                 seen.missing[source] = seen.missing.get(source, 0) + 1
                 continue
             # where no file holds the observation, the store must say so: NaN,
@@ -1018,6 +1090,8 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                 seen.absent[source] = seen.absent.get(source, 0) + found['absent']
                 seen.dtypes.setdefault(source, set()).add(found['dtype'])
                 seen.attrs.setdefault(source, found['attrs'])
+                if found['attrs'].get('standard_name'):
+                    seen.standard_names.setdefault(source, set()).add(found['attrs']['standard_name'])
             if primary:
                 for name, low, high in (('lat', 0, 1), ('lon', 2, 3)):
                     values = entry['sources'][coordinates(source_name)[name].original]['expected']
@@ -1035,14 +1109,14 @@ def merge_pass(total, part):
         total (Pass): The total so far.
         part (Pass): The next range's scan.
     """
-    for field in ('mismatches', 'fill', 'undeclared', 'absent', 'missing'):
+    for field in ('mismatches', 'fill', 'undeclared', 'absent', 'missing', 'masked', 'index'):
         tally = getattr(total, field)
         for key, count in getattr(part, field).items():
             tally[key] = tally.get(key, 0) + count
-    for field in ('index', 'placement'):
-        tally = getattr(total, field)
-        for key, count in getattr(part, field).items():
-            tally[key] += count
+    for key, count in part.placement.items():
+        total.placement[key] += count
+    for source, names in part.standard_names.items():
+        total.standard_names.setdefault(source, set()).update(names)
     total.problems += part.problems
     total.declared += part.declared
     total.declared_problems += part.declared_problems
@@ -1100,6 +1174,11 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
         raise ValueError(
             f'declared_rows_left_out is set, but the {source_product(settings)} reader '
             f'does not apply declared rows'
+        )
+    if settings.get('declared_masked_values') and not getattr(load_reader(settings), 'DECLARED_MASKS', False):
+        raise ValueError(
+            f'declared_masked_values is set, but the {source_product(settings)} reader '
+            f'does not apply declared masks'
         )
     # each source is tallied by the group that compares it; the coordinates
     # every scan reads, by the first group
@@ -1177,9 +1256,22 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
             f'every file declares platform {settings.get("platform")!r}',
             seen.platforms == {settings.get('platform')}, f'{sorted(map(str, seen.platforms))}',
         )
-    report.check(
-        'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
-    )
+    if time_order(settings) == 'sorted':
+        report.check(
+            'time never decreases along obs', seen.decreasing == 0, f'{seen.decreasing} decreases'
+        )
+    else:
+        report.note(
+            f'time order kept from the source (time_order: source): time decreases '
+            f'{seen.decreasing} times along obs, as the files have it'
+        )
+    for entry in settings.get('declared_masked_values') or []:
+        source = entry['source']
+        report.check(
+            f'{source}: values declared defects confirmed in raw and stored as NaN',
+            seen.masked.get(source, 0) > 0 and not seen.problems,
+            f'{seen.masked.get(source, 0)} values ({entry.get("reason", "")[:60]})',
+        )
     report.check(
         'rows left out (no time, lat or lon) hold no data beyond what the config allows',
         seen.leaked == 0,
@@ -1198,9 +1290,12 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
         'every file has the documented layout', not seen.problems,
         f'{len(seen.problems)} problems, first {seen.problems[:3]}',
     )
+    casts = settings.get('source_dtypes') or {}
+    partial = settings.get('expected_partial_granules') or {}
     for source, fill, _, absent in items:
         report.check(
-            f'{source}: held by a file of every granule',
+            f'{source}: held by a file of every granule'
+            + (f' but the {len(partial)} declared partial ones' if partial else ''),
             not seen.missing.get(source), f'{seen.missing.get(source, 0)} granules lack it',
         )
         if fill:
@@ -1217,26 +1312,39 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
             f'{source}: no undeclared netCDF default fill',
             seen.undeclared.get(source, 0) == 0, f'{seen.undeclared.get(source, 0)} values',
         )
-        report.check(
-            f'{source}: one dtype across the record',
-            len(seen.dtypes.get(source, ())) == 1, f'{sorted(seen.dtypes.get(source, ()))}',
-        )
+        if source in casts:
+            # integer widths that drift between files, cast to one declared
+            # dtype; the values phase has compared every value after the cast
+            report.check(
+                f'{source}: every dtype across the record is an integer the declared '
+                f'{casts[source]} holds',
+                all(np.dtype(dtype).kind in 'iu' for dtype in seen.dtypes.get(source, ())),
+                f'{sorted(seen.dtypes.get(source, ()))}',
+            )
+        else:
+            report.check(
+                f'{source}: one dtype across the record',
+                len(seen.dtypes.get(source, ())) == 1, f'{sorted(seen.dtypes.get(source, ()))}',
+            )
 
-    # attributes against the first granule: a source standard_name is
-    # retained unchanged, and none is ever added
+    # a source standard_name is retained unchanged, and none is ever added.
+    # In a merged granule it may be on one of the files only (TROPESS's
+    # Summary carries one for x_h2o, its Standard file none)
     for store, name, source, _ in targets:
         stored_attrs = dict(groups[store][name].attrs)
-        raw = seen.attrs.get(source, {}).get('standard_name')
+        names = seen.standard_names.get(source, set())
+        raw = next(iter(names)) if len(names) == 1 else (None if not names else sorted(names))
         report.check(
             f'{store}/{name}: standard_name is the source one, or absent with it',
             stored_attrs.get('standard_name') == raw,
             f'{stored_attrs.get("standard_name")!r} against source {raw!r}',
         )
         if store != GEOLOCATION:
+            expected_dtypes = {casts[source]} if source in casts else seen.dtypes.get(source, set())
             report.check(
-                f'{store}/{name}: dtype is the source dtype',
-                str(groups[store][name].dtype) in seen.dtypes.get(source, set()),
-                f'{groups[store][name].dtype} against {sorted(seen.dtypes.get(source, ()))}',
+                f'{store}/{name}: dtype is the source dtype, or the declared cast',
+                str(groups[store][name].dtype) in expected_dtypes,
+                f'{groups[store][name].dtype} against {sorted(expected_dtypes)}',
             )
     return seen
 
@@ -1314,6 +1422,7 @@ def main(settings, args):
             settings['directories']['raw'],
             expected_empty=settings.get('expected_empty_granules') or [],
             expected_unreadable=settings.get('expected_unreadable_granules') or [],
+            **listing_options(settings, reader),
         )
     if 'index' in phases or 'values' in phases:
         LOG.info('--- index')

@@ -464,7 +464,8 @@ def build_history(repository, settings, evidence, current, ids, supplied, notes=
         )
     history = (
         f'{date_span(started, finished)}: written from the {settings["product"]} '
-        f'{settings["version"]} source files by wisosat_zarr.py in {len(built)} '
+        f'{" ".join(filter(None, (settings["version"], settings.get("version_product"))))} '
+        f'source files by wisosat_zarr.py in {len(built)} '
         f'commits, appending granules in source order: {"; ".join(parts)}. '
         f'{evidence["when"][:10]}: verified against those same files by '
         f'verify_wisosat_zarr.py, then finalized by finalize_wisosat_zarr.py '

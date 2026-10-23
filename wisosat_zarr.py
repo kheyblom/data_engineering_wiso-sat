@@ -14,9 +14,11 @@ The pass, per batch of ``granules_per_commit`` granules:
    reader keeps only rows that are observations, with time, latitude and
    longitude all written (``RowRule`` in ``utils/granules.py``);
 2. check that every granule declares the configured processor version and
-   that time never decreases, within or across granules. Rows a config
-   declares as repeats of others (``declared_rows_left_out``) are left out
-   by the reader, once their declared match is confirmed;
+   that time never decreases, within or across granules, unless the config
+   keeps the source order of files that are not in time order
+   (``time_order: source``, the style guide's exception; TROPESS). Rows a
+   config declares as repeats of others (``declared_rows_left_out``) are
+   left out by the reader, once their declared match is confirmed;
 3. append each store's slice, data and granule index together, as one commit
    per store.
 
@@ -46,6 +48,7 @@ from utils.granules import check_coverage, check_order, check_time
 from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import coordinates, variables
 from utils.path_utils import (
+    listing_options,
     load_config,
     load_reader,
     log_path,
@@ -69,6 +72,7 @@ from utils.zarr_utils import (
     resolve_compression,
     row_rule,
     store_sources,
+    time_order,
     time_source,
     write_append,
 )
@@ -210,6 +214,7 @@ def prepare(settings):
     resolve_chunks(settings)
     resolve_compression(settings)
     own_process_stores(settings)
+    LOG.info(f'time order: {time_order(settings)}')
     log_key(source_name)
     # stamped on every commit, so finalize can say which code wrote what;
     # checked before anything is listed or written
@@ -227,6 +232,7 @@ def prepare(settings):
         raw,
         expected_empty=settings.get('expected_empty_granules') or [],
         expected_unreadable=settings.get('expected_unreadable_granules') or [],
+        **listing_options(settings, reader),
     )
     check_order(granules)
     missing = check_coverage(granules, settings, getattr(reader, 'COVERAGE_FREQUENCY', 'D'))
@@ -322,7 +328,8 @@ def run_pass(settings, granules, revision, stores, num_workers):
                 pending = source_reader.submit(granules[nxt[0]:nxt[1]])
 
             check_versions(datas, settings)
-            previous_end = check_time(datas, time, previous_end)
+            if time_order(settings) == 'sorted':
+                previous_end = check_time(datas, time, previous_end)
             versions = versions or {'processor': datas[0].version}
 
             for store in needed:

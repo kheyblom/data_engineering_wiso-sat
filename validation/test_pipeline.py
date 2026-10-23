@@ -21,10 +21,12 @@ Per product:
    declares rows left out) on a declaration that does not match raw;
 5. guards: an undeclared missing day (or month), a wrong processor version
    or platform, declared rows that are missing, do not match, or are given
-   to a reader that cannot apply them,
-   a run that omits the quality flags, an unknown variable, compression of an
-   unknown array, and (where the product has them) an undeclared empty
-   granule directory or unreadable file;
+   to a reader that cannot apply them, declared defect values that do not
+   match raw or are given to a reader that cannot apply them, a run that
+   omits the quality flags (where the product has any), an unknown variable,
+   compression of an unknown array, and (where the product has them) an
+   undeclared empty granule directory or unreadable file, an undeclared
+   one-sided granule, or a claim that unordered files are in time order;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
 6. finalize: ``--attrs`` refuses without verification evidence, and
@@ -37,6 +39,7 @@ Run from the repo root after staging each fixture:
     uv run python validation/stage_tropomi.py
     uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
     uv run python validation/stage_sciamachy.py
+    uv run python validation/stage_tropess.py    # AIRS RS and FS
     uv run python validation/test_pipeline.py
 
 About a minute per product on a login node; no allocation spent. Failures are
@@ -60,6 +63,7 @@ import yaml # type: ignore
 import zarr
 
 from utils.granules import COVERAGE_KEYS
+from utils.nomenclature import variable as key_variable
 from utils.path_utils import (
     GEOLOCATION, load_config, load_reader, run_stores, source_product, store_path,
 )
@@ -238,8 +242,11 @@ def test_product(results, config, scratch):
     tip = next(iter(repo.ancestry(branch=BRANCH))).id
     session = repo.writable_session(BRANCH)
     array = zarr.open_group(session.store, mode='r+')[target]
-    value = np.asarray(array[5])
-    array[5] = value + 1 if np.isfinite(value) else 1
+    # one element of observation 5, whatever the store's secondary dimensions
+    value = np.array(array[5])
+    flat = value.reshape(-1)
+    flat[0] = flat[0] + 1 if np.isfinite(flat[0]) else 1
+    array[5] = value
     session.commit('write granules tamper')
     status, output = run('verify_wisosat_zarr.py', '--config', base, '--phases', 'values')
     results.check(
@@ -313,10 +320,6 @@ def test_product(results, config, scratch):
     guards = {
         'an undeclared missing period': ({coverage_key: []}, 'not declared'),
         'a wrong processor version': ({'version': '0.0'}, 'processor version'),
-        'omitted quality flags': (
-            {'variables': [v for v in settings['variables'] if not v.startswith('quality_flags')]},
-            'quality flags',
-        ),
         'an unknown variable': ({'variables': settings['variables'] + ['no_such_variable']}, 'has no row'),
         'a shard that is not a multiple of chunks.obs': (
             {'compression': {'blosc': {'cname': 'zstd', 'clevel': 5, 'shuffle': 'shuffle'},
@@ -333,8 +336,37 @@ def test_product(results, config, scratch):
             'no store of this config holds',
         ),
     }
+    if any(v.startswith('quality_flags') for v in settings['variables']):
+        # TROPESS publishes no quality flag, so there is none to omit
+        guards['omitted quality flags'] = (
+            {'variables': [v for v in settings['variables'] if not v.startswith('quality_flags')]},
+            'quality flags',
+        )
     if settings.get('platform'):
         guards['a wrong platform'] = ({'platform': 'NO_SUCH'}, 'platform other than')
+    if settings.get('expected_partial_granules'):
+        guards['an undeclared one-sided granule'] = (
+            {'expected_partial_granules': {}}, 'and is not declared so'
+        )
+    masks = settings.get('declared_masked_values') or []
+    if masks:
+        # the declared defect compared against another source: it must not match
+        wrong = [dict(masks[0], equals='observation_ops/xa')] + masks[1:]
+        guards['a declared defect that is not what it says'] = (
+            {'declared_masked_values': wrong}, 'as declared'
+        )
+    elif not getattr(load_reader(settings), 'DECLARED_MASKS', False):
+        guards['declared masks for a reader that cannot apply them'] = (
+            {'declared_masked_values': [{
+                'source': key_variable(source_product(settings), settings['variables'][0]).original,
+                'reason': 'test',
+            }]},
+            'does not apply declared masks',
+        )
+    if settings.get('time_order') == 'source':
+        # the source order is kept only because the files are not in time
+        # order; claiming they are must fail the build
+        guards['a time order the files do not have'] = ({'time_order': 'sorted'}, 'time decreases')
     if settings.get('expected_unreadable_granules'):
         # only the last declared file is undeclared: a file that crashes HDF5
         # (TROPOMI 3335) would take the build down with no message to match

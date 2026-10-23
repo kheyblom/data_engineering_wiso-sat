@@ -2,7 +2,7 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-22)
+## Where we are (2026-10-23)
 
 **Nothing is running.** No batch jobs are queued.
 - **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
@@ -35,15 +35,28 @@ Read this first in a new session. Update it whenever work lands.
     TESTING.md finding 15). No blocker: R22 holds on every Standard file,
     the merge is exact on every day, and TAI93 matches `datetime_utc`
     everywhere. The audit added R27-R31 in `tropess.md`.
-- **Next:** the reader at fixture level and the shared changes:
-  - multi-file Standard + Summary granules, matched on time and position,
-    with DOF > 1.1;
-  - per-granule versions in the granule index;
-  - declared masking of R22;
-  - the TAI93 decode;
-  - NaN masked as fill.
-
-  Then the test over every product, the bench and production.
+- **Done 2026-10-23: the reader at fixture level and the shared changes**
+  (`products/tropess.py`, `config/airs_rs/`, `config/airs_fs/`,
+  `nomenclature-key_tropess.md`, `validation/stage_tropess.py`):
+  - Standard + Summary merged per day onto Standard's rows, matched on time
+    and position, every merge invariant checked (DOF > 1.1, identical
+    values); one-sided days declared (`expected_partial_granules`);
+  - `granule_algorithm` and `granule_format` in the granule index (a
+    reader's `INDEX_EXTRA`);
+  - R22 masked by `declared_masked_values`, confirmed from raw by the build
+    and the verifier (`declared_defects_masked` on the store);
+  - `time_order: source` (R32): `time` is not sorted, the layout attribute
+    says so, the index gives each granule's earliest and latest time;
+  - `version_product` puts the stream in the version slot (`v_1.rs`);
+    `source_dtypes` stores the flags as int32;
+  - the TAI93 decode, checked against `datetime_utc` on every row.
+- **Tests pass:** both AIRS fixtures (71 cases) and the full suite over every
+  product (TESTING.md Tier 1).
+- **Waiting on the user:** the style-guide time-order exception
+  (style_guides, uncommitted; added after "`time` must never decrease").
+- **Next:** commit, then the AIRS bench (shown with its cost first), then
+  production for RS and FS, then finalize with sign-off on each `--apply`,
+  then CrIS.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 132
@@ -263,10 +276,14 @@ when it is time (2026-10-22).
     out. Checked against 45263 and named in the metadata. Not a precedent.
 - **Naming rule:** the quantity first, then qualifiers general to specific.
   Established terms stay whole; unitless quantities use `unitless`.
-- **TROPESS products (2026-10-22; `tropess.md`, Product scheme):**
-  - one product per platform, stream, product type and collection version;
-  - the version slot follows the style guide's `v_3_5.nrt` form, e.g.
-    `wisosat.airs.v_1.rs_summary...` and `wisosat.airs.v_1.fs_standard...`;
+- **TROPESS products (2026-10-22, revised 2026-10-23; `tropess.md`, Product
+  scheme):**
+  - one product per platform, stream and collection version; Summary is
+    merged into Standard, with no summary/standard token in the name;
+  - the version slot follows the style guide's `v_3_5.nrt` form:
+    `wisosat.airs.v_1.rs...` and `wisosat.airs.v_1.fs...`;
+  - RS and FS stay separate; R22 masked as a declared defect; rows kept in
+    source order (`time_order: source`, R32);
   - FS v2 (2026-06 on) is a separate `v_2.*` store set; Full products are
     added when downloaded;
   - per-granule algorithm, format and joint flag go in the granule index, a

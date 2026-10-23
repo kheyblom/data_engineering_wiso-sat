@@ -45,8 +45,8 @@ from icechunk.xarray import to_icechunk
 from zarr.codecs import BloscCodec
 
 from .granules import (
-    GRANULE_DIM, INDEX_ATTRS, INDEX_FIELDS, LOCATION_COORDINATES, RowRule, declared_rows,
-    index_entries,
+    GRANULE_DIM, LOCATION_COORDINATES, RowRule, declared_rows, index_attrs, index_entries,
+    index_fields,
 )
 from .nomenclature import (
     conversion_factor,
@@ -113,8 +113,51 @@ LAYOUT_NOTE = (
     'granule index: observation i of any store is observation i of every '
     'other. time, lat and lon are in the geolocation store only. Observations '
     'are appended in source granule order and keep their source order within a '
-    'granule; time never decreases along obs.'
+    'granule; {time_order}'
 )
+# the end of the layout note, per the config's time_order. 'source' is the
+# style guide's exception for files that are not in time order (TROPESS, user
+# decision 2026-10-23)
+TIME_ORDER_NOTES = {
+    'sorted': 'time never decreases along obs.',
+    'source': (
+        'the source files are not in time order, so time is not monotonic '
+        'along obs. Each granule\'s earliest and latest time are in the granule '
+        'index (granule_time_start, granule_time_end).'
+    ),
+}
+
+
+def time_order(settings):
+    """The config's ``time_order``: whether time never decreases along obs.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        str: 'sorted' (the default: the build and verifier check that time
+            never decreases) or 'source' (source order kept, time not
+            monotonic, as the style guide allows for unordered files).
+
+    Raises:
+        ValueError: On any other value.
+    """
+    order = settings.get('time_order') or 'sorted'
+    if order not in TIME_ORDER_NOTES:
+        raise ValueError(f'time_order must be one of {sorted(TIME_ORDER_NOTES)}; it is {order!r}')
+    return order
+
+
+def layout_note(settings):
+    """The ``layout`` global attribute for the config's time order.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        str: The note.
+    """
+    return LAYOUT_NOTE.format(time_order=TIME_ORDER_NOTES[time_order(settings)])
 
 
 def code_revision():
@@ -468,10 +511,19 @@ def check_fill_config(settings, sources):
         ValueError: On an unknown source, or more than one value for a source.
     """
     declared = settings.get('source_fill_values') or {}
-    for key in ('source_fill_values', 'absent_fill_values', 'allowed_on_rows_left_out'):
+    for key in ('source_fill_values', 'absent_fill_values', 'allowed_on_rows_left_out', 'source_dtypes'):
         unknown = sorted(set(settings.get(key) or []) - set(sources))
         if unknown:
             raise ValueError(f'{key} names sources the key does not: {unknown}')
+    masked = [str(entry.get('source')) for entry in settings.get('declared_masked_values') or []]
+    unknown = sorted(set(masked) - set(sources))
+    if unknown:
+        raise ValueError(f'declared_masked_values names sources the key does not: {unknown}')
+    for source, dtype in (settings.get('source_dtypes') or {}).items():
+        if np.dtype(dtype).kind not in 'iu':
+            # a declared cast unifies integer widths that drift between files;
+            # a float is never narrowed or widened
+            raise ValueError(f'source_dtypes casts {source} to {dtype}; only integer casts are declared')
     for source, values in declared.items():
         if len(values or []) > 1:
             # an integer store can carry only one _FillValue, and no float
@@ -479,7 +531,7 @@ def check_fill_config(settings, sources):
             raise ValueError(f'source_fill_values declares {len(values)} values for {source}')
 
 
-def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
+def mask_and_convert(values, fill, factor, absent=None, absent_value=None, declared=None):
     """Mask declared fill, fill absent observations, and convert units.
 
     Args:
@@ -489,6 +541,8 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
         absent (numpy.ndarray | None): Along ``obs``, True where the
             observation is not in this source's file.
         absent_value (int | None): What an integer source holds there.
+        declared (numpy.ndarray | None): Along ``obs``, True where the config
+            declares the value a defect and the reader confirmed it; NaN.
 
     Returns:
         tuple: The stored values, the integer ``_FillValue`` to declare (None
@@ -496,17 +550,22 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
 
     Raises:
         ValueError: If an integer source needs a unit conversion, which would
-            change its dtype; if an integer source has absent observations and
-            no declared value for them, or a value the source itself writes; or
+            change its dtype, or has a declared defect, which only NaN can
+            mark; if an integer source has absent observations and no
+            declared value for them, or a value the source itself writes; or
             if its source fill and absent value differ, since an integer store
             carries only one ``_FillValue``.
     """
     dtype = values.dtype
     is_float = np.issubdtype(dtype, np.floating)
-    absent = np.zeros(values.shape[0], dtype=bool) if absent is None else absent
-    # broadcast the per-observation mask over any secondary dimensions
-    absent = absent.reshape(absent.shape + (1,) * (values.ndim - 1))
-    absent = np.broadcast_to(absent, values.shape)
+
+    def along_obs(mask):
+        # broadcast a per-observation mask over any secondary dimensions
+        mask = np.zeros(values.shape[0], dtype=bool) if mask is None else mask
+        return np.broadcast_to(mask.reshape(mask.shape + (1,) * (values.ndim - 1)), values.shape)
+
+    absent = along_obs(absent)
+    declared = along_obs(declared)
     masked = np.zeros(values.shape, dtype=bool)
     for value in fill:
         masked |= (values == np.asarray(value, dtype=dtype)) & ~absent
@@ -515,6 +574,8 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
     if not is_float:
         if factor is not None:
             raise ValueError('an integer source cannot take a unit conversion')
+        if declared.any():
+            raise ValueError('an integer source cannot hold a declared defect; only NaN marks one')
         declared = np.asarray(fill[0], dtype=dtype) if fill else None
         if not absent.any():
             return values, declared, count
@@ -538,7 +599,7 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None):
         out[absent] = absent_value
         return out, absent_value, count
 
-    masked |= absent
+    masked |= absent | declared
     if factor is None:
         out = values.copy() if masked.any() else values
         out[masked] = np.nan
@@ -619,7 +680,32 @@ def variable_attrs(product, canonical, array, settings, fill):
             + ('' if np.issubdtype(array.values.dtype, np.floating) else
                '; integer, so kept as the stored value and declared as _FillValue')
         )
+    defects = [entry for entry in settings.get('declared_masked_values') or []
+               if entry.get('source') == entry_source(product, canonical)]
+    if defects:
+        attrs['declared_defects_masked'] = ' '.join(
+            str(entry.get('reason', '')).strip() for entry in defects
+        )
+    cast = (settings.get('source_dtypes') or {}).get(entry_source(product, canonical))
+    if cast:
+        attrs['dtype_change'] = (
+            f'stored as {cast}: the source files publish this integer at different '
+            f'widths (declared in the config, source_dtypes); every value fits'
+        )
     return attrs
+
+
+def entry_source(product, canonical):
+    """The source path a canonical variable is read from.
+
+    Args:
+        product (str): The product.
+        canonical (str): The canonical name.
+
+    Returns:
+        str: Its ``original_variable_name``.
+    """
+    return key_variable(product, canonical).original
 
 
 def coordinate_attrs(product, name, array, settings, fill):
@@ -695,11 +781,21 @@ def row_rule(settings, granules=()):
                 f'does not apply declared rows'
             )
         declared = declared_rows(settings, granules)
+    masked = tuple(dict(entry) for entry in settings.get('declared_masked_values') or [])
+    if masked and not getattr(load_reader(settings), 'DECLARED_MASKS', False):
+        raise ValueError(
+            f'declared_masked_values is set, but the {source_product(settings)} reader '
+            f'does not apply declared masks'
+        )
+    for entry in masked:
+        if not entry.get('source') or not str(entry.get('reason', '')).strip():
+            raise ValueError(f'declared_masked_values entry {entry}: a source and a reason are required')
     return RowRule(
         location=location,
         fills=fills,
         allowed=tuple(settings.get('allowed_on_rows_left_out') or []),
         declared=declared,
+        masked=masked,
     )
 
 
@@ -750,23 +846,35 @@ def assemble(store, datas, obs_start, settings):
             dimensions.
     """
     source_name = source_product(settings)
+    casts = settings.get('source_dtypes') or {}
     variables, masked, fills = {}, {}, {}
     for name, source in store_sources(source_name, store).items():
-        first = datas[0].arrays[source]
-        for data in datas[1:]:
-            other = data.arrays[source]
+        arrays = [declared_cast(data.arrays[source], casts.get(source), data.granule.id)
+                  for data in datas]
+        # attributes come from the first granule whose file holds the source:
+        # in a merged granule that lacks one file, the source is absent
+        # throughout and carries none (TROPESS's one-sided days, R23)
+        first = next(
+            (array for array in arrays if array.absent is None or not array.absent.all()), arrays[0]
+        )
+        for data, other in zip(datas, arrays):
             if other.values.dtype != first.values.dtype or other.dims != first.dims:
                 raise ValueError(
                     f'{source} is {other.values.dtype} {other.dims} in granule '
-                    f'{data.granule.id} but {first.values.dtype} {first.dims} before it'
+                    f'{data.granule.id} but {first.values.dtype} {first.dims} elsewhere'
                 )
-        values = np.concatenate([data.arrays[source].values for data in datas])
+        values = np.concatenate([array.values for array in arrays])
         absent = None
-        if any(data.arrays[source].absent is not None for data in datas):
+        if any(array.absent is not None for array in arrays):
             absent = np.concatenate([
-                np.zeros(data.n_obs, dtype=bool) if data.arrays[source].absent is None
-                else data.arrays[source].absent
-                for data in datas
+                np.zeros(data.n_obs, dtype=bool) if array.absent is None else array.absent
+                for data, array in zip(datas, arrays)
+            ])
+        declared = None
+        if any(array.masked is not None for array in arrays):
+            declared = np.concatenate([
+                np.zeros(data.n_obs, dtype=bool) if array.masked is None else array.masked
+                for data, array in zip(datas, arrays)
             ])
         fill = declared_fill(settings, source)
 
@@ -789,9 +897,9 @@ def assemble(store, datas, obs_start, settings):
             stored, integer_fill, count = values, None, 0
         else:
             stored, integer_fill, count = mask_and_convert(
-                values, fill, factor, absent, absent_fill(settings, source)
+                values, fill, factor, absent, absent_fill(settings, source), declared
             )
-        if first.absent is not None:
+        if absent is not None and absent.any():
             attrs['absent_observations'] = (
                 'This product merges several source files per granule into one '
                 'obs axis. Where an observation is not in the file this '
@@ -808,12 +916,41 @@ def assemble(store, datas, obs_start, settings):
 
     observations = xr.Dataset(variables)
     entries = index_entries(datas, time_source(source_name), obs_start)
+    reader = load_reader(settings)
+    fields, attrs = index_fields(reader), index_attrs(reader)
+    if set(entries) != set(fields):
+        raise ValueError(
+            f'the reader returned index fields {sorted(entries)}, not its declared {sorted(fields)}'
+        )
     index = xr.Dataset(
-        coords={
-            field: (GRANULE_DIM, entries[field], INDEX_ATTRS[field]) for field in INDEX_FIELDS
-        }
+        coords={field: (GRANULE_DIM, entries[field], attrs[field]) for field in fields}
     )
     return observations, index, masked, fills
+
+
+def declared_cast(array, dtype, granule):
+    """A source array cast to the integer dtype the config declares for it.
+
+    TROPESS publishes some flags and indices at int16, int32 or int64 by
+    version (R16); the store holds one dtype, declared in ``source_dtypes``.
+
+    Args:
+        array (SourceArray): The array as read.
+        dtype (str | None): The declared dtype, or None to keep the source's.
+        granule (str): The granule id, for messages.
+
+    Returns:
+        SourceArray: The array, its values cast when a dtype is declared.
+
+    Raises:
+        ValueError: If a value does not fit the declared dtype.
+    """
+    if dtype is None or array.values.dtype == np.dtype(dtype):
+        return array
+    cast = array.values.astype(dtype)
+    if not np.array_equal(cast.astype(array.values.dtype), array.values):
+        raise ValueError(f'granule {granule}: a value does not fit the declared dtype {dtype}')
+    return array._replace(values=cast)
 
 
 def global_attrs(settings, store, versions):
@@ -838,7 +975,7 @@ def global_attrs(settings, store, versions):
         'original_temporal_frequency': settings['temporal_resolution'],
         'source_processor_version': versions['processor'],
         'nomenclature': NOMENCLATURE_NOTE.format(source_name=source_name),
-        'layout': LAYOUT_NOTE,
+        'layout': layout_note(settings),
         'quality_filtering': (
             'none applied. Every observation in the source files is kept. '
             'Upstream guidance: ' + str(settings.get('filtering_guidance', '')).strip()

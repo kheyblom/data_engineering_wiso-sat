@@ -29,11 +29,16 @@ shared, so this module is the interface between the two halves:
 - ``DeclaredRows`` are observations a config leaves out by name, because they
   repeat others (SCIAMACHY, 2026-10-22). Each declaration states what the
   rows must match, and the build and the verifier each check it from raw.
+- ``declared_masked_values`` are single values a config masks as defects
+  (TROPESS's first ``x`` of each Standard file, R22, 2026-10-23). The reader
+  confirms each against its stated condition and marks it on the
+  ``SourceArray``; shared code stores NaN there.
 
 The granule index every store carries is derived from these: one entry per
-granule with its identifier, first observation, observation count, start and
-end time, and file name (several, joined by ``FILE_SEPARATOR``, for a
-multi-file granule).
+granule with its identifier, first observation, observation count, earliest
+and latest time, and file name (several, joined by ``FILE_SEPARATOR``, for a
+multi-file granule). A reader may add fields of its own (``INDEX_EXTRA``),
+such as TROPESS's per-file algorithm and format versions.
 """
 
 from __future__ import annotations
@@ -64,8 +69,8 @@ INDEX_ATTRS = {
     'granule_id': {'long_name': 'source granule identifier (e.g. orbit number)'},
     'granule_obs_start': {'long_name': 'index along obs of the first observation of the granule'},
     'granule_obs_count': {'long_name': 'number of observations in the granule'},
-    'granule_time_start': {'long_name': 'time of the first observation of the granule'},
-    'granule_time_end': {'long_name': 'time of the last observation of the granule'},
+    'granule_time_start': {'long_name': 'time of the earliest observation of the granule'},
+    'granule_time_end': {'long_name': 'time of the latest observation of the granule'},
     'granule_file': {'long_name': 'source file name(s) of the granule, separated by "; "'},
     'granule_source_rows': {
         'long_name': 'rows the source file(s) declare along their observation dimension',
@@ -111,6 +116,9 @@ class SourceArray(NamedTuple):
         absent (numpy.ndarray | None): Along ``obs``, True where the
             observation is not in the file this variable comes from. None when
             it is present everywhere, as in every single-file granule.
+        masked (numpy.ndarray | None): Along ``obs``, True where the config
+            declares the value a defect (``declared_masked_values``) and the
+            reader has confirmed it; stored as NaN. None where nothing is.
     """
 
     dims: tuple
@@ -118,6 +126,7 @@ class SourceArray(NamedTuple):
     attrs: dict
     dimension_note: str
     absent: np.ndarray | None = None
+    masked: np.ndarray | None = None
 
 
 class GranuleData(NamedTuple):
@@ -134,6 +143,8 @@ class GranuleData(NamedTuple):
             ``n_obs``.
         platform (str | None): The platform the file(s) declare, for a reader
             whose format serves more than one (``PLATFORM_ATTR``); else None.
+        index_extra (dict | None): The reader's own granule index fields
+            (``INDEX_EXTRA``) for this granule, name -> string.
     """
 
     granule: Granule
@@ -143,6 +154,7 @@ class GranuleData(NamedTuple):
     arrays: dict
     n_source_rows: int | None = None
     platform: str | None = None
+    index_extra: dict | None = None
 
 
 # the coordinates a row needs to be an observation: where and when
@@ -199,12 +211,15 @@ class RowRule(NamedTuple):
             computes before it geolocates.
         declared (dict): Granule id -> :class:`DeclaredRows`, from
             ``declared_rows``; only a reader with ``DECLARED_ROWS`` applies it.
+        masked (tuple): The config's ``declared_masked_values`` entries, as
+            dicts; only a reader with ``DECLARED_MASKS`` applies them.
     """
 
     location: tuple
     fills: dict
     allowed: tuple = ()
     declared: dict = {}
+    masked: tuple = ()
 
 
 def declared_rows(settings, granules):
@@ -468,7 +483,11 @@ def check_coverage(granules, settings, frequency='D'):
 
 
 def time_bounds(time):
-    """First and last time of a granule, NaT when it holds no observations.
+    """Earliest and latest time of a granule, NaT when it holds no observations.
+
+    The minimum and maximum, not the first and last: the same for a product
+    whose files are in time order, and the right span for one whose files
+    are not (TROPESS, user decision 2026-10-23).
 
     Args:
         time (numpy.ndarray): The granule's decoded times.
@@ -479,7 +498,31 @@ def time_bounds(time):
     if not time.size:
         nat = np.datetime64('NaT', np.datetime_data(time.dtype)[0])
         return nat, nat
-    return time[0], time[-1]
+    return time.min(), time.max()
+
+
+def index_fields(reader):
+    """Every granule index field a product's stores carry.
+
+    Args:
+        reader (module): The product's reader.
+
+    Returns:
+        tuple: ``INDEX_FIELDS``, then the reader's ``INDEX_EXTRA`` fields.
+    """
+    return INDEX_FIELDS + tuple(getattr(reader, 'INDEX_EXTRA', {}))
+
+
+def index_attrs(reader):
+    """Attributes of every granule index field a product's stores carry.
+
+    Args:
+        reader (module): The product's reader.
+
+    Returns:
+        dict: Field -> attributes.
+    """
+    return INDEX_ATTRS | dict(getattr(reader, 'INDEX_EXTRA', {}))
 
 
 def index_entries(datas, time_source, obs_start):
@@ -491,12 +534,19 @@ def index_entries(datas, time_source, obs_start):
         obs_start (int): Where along ``obs`` the first of them begins.
 
     Returns:
-        dict: Index field -> numpy array, one entry per granule.
+        dict: Index field -> numpy array, one entry per granule, with the
+            reader's own fields last.
+
+    Raises:
+        ValueError: If the granules do not all carry the same extra fields.
     """
     counts = np.array([data.n_obs for data in datas], dtype='int64')
     starts = obs_start + np.concatenate([[0], np.cumsum(counts)[:-1]]).astype('int64')
     bounds = [time_bounds(data.arrays[time_source].values) for data in datas]
     unit = datas[0].arrays[time_source].values.dtype
+    extra = list(datas[0].index_extra or {})
+    if any(list(data.index_extra or {}) != extra for data in datas):
+        raise ValueError('the granules of one append carry different extra index fields')
     return {
         'granule_id': np.array([data.granule.id for data in datas], dtype=object),
         'granule_obs_start': starts,
@@ -512,6 +562,9 @@ def index_entries(datas, time_source, obs_start):
             [data.n_obs if data.n_source_rows is None else data.n_source_rows for data in datas],
             dtype='int64',
         ),
+    } | {
+        field: np.array([data.index_extra[field] for data in datas], dtype=object)
+        for field in extra
     }
 
 
