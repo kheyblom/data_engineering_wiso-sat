@@ -358,36 +358,65 @@ and FS 2025-06-01 (R1p24).
 | `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* (**Q2b**) | 1e-6 | none |
 | `dd_004` | `water_vapor_delta_d_004` *new* (user's name, approved 2026-10-23, Q2c) | 1e-3 | none |
 
-- **The range is 850 to 250 hPa: the 8 retrieval levels between them**
-  (825.4, 749.9, 681.3, 619.0, 510.9, 421.7, 348.1 and 287.3 hPa).
+- **The range is every level of the profile between 850 and 250 hPa.**
+  - **Usually 8 levels:** 825.4, 749.9, 681.3, 619.0, 510.9, 421.7, 348.1 and
+    287.3 hPa (98% of rows on RS 2010-06-15 and FS 2022-06-01).
+  - **5-9 over high ground.** Grid levels below the surface drop out, and the
+    surface level counts when its pressure is in the range (on 66 and 640
+    rows of those two days).
   - `dd_col_p`: `long_name` "mean_delta_d_from_850_to_250_hpa"; `comment`
     "Averaged deuterated water vapor content for the partial column between
     850 and 250 hPa, expressed in parts per thousand relative to the
     deuterium content of ocean waters"; `source` "delta_d = 1000 *
     (np.mean(x_hdo[:] / x_h2o[:]) / 3.11e-4 - 1)".
-  - **Reproduced exactly** (max difference 0.000 per mil) as 1000 × (the
-    unweighted mean of `x` over those 8 levels / 3.11e-4 − 1). Every other
-    range misses by 19-114 per mil: 200-850, 250-900, and the User Guide's
-    825-421 example (its `dd_825_421`, not in these files). An H2O-weighted
-    mean misses by 160-230 per mil.
   - `x_h2o_col_p`: `comment` "Column averaged dry air mixing ratio of water
     vapor content for the partial column between 850 and 250 hPa"; `source`
-    "np.mean(species[:][17:])". Reproduced as the unweighted mean of `x_h2o`
-    over the same 8 levels, x 1e6 (relative difference 2e-7).
+    "np.mean(species[:][17:])".
+  - Every other range misses `dd_col_p` by 19-114 per mil: 200-850, 250-900,
+    and the User Guide's 825-421 example (its `dd_825_421`, not in these
+    files).
+- **Both are unweighted means of the level values** (confirmed 2026-10-23 at
+  the user's request).
+  - **Reproduced exactly** in RS 2010-06-15, FS 2022-06-01 (R1p17) and FS
+    2025-06-01 (R1p24):
+    - `dd_col_p` = 1000 × (mean of `x` over those levels / 3.11e-4 − 1), to
+      0.0001 per mil, the mean of the ratio;
+    - `x_h2o_col_p` = mean of `x_h2o` over those levels x 1e6, to 2e-7.
+  - **Every weighting misses:**
+
+    | weighting | `dd_col_p`, max diff (per mil) | `x_h2o_col_p`, max relative diff |
+    | --- | --- | --- |
+    | pressure thickness | 27-38 | 0.39-0.46 |
+    | log pressure | 56-80 | 0.59-0.60 |
+    | H2O-weighted, or air mass (H2O x dp) | 160-216 | 6.1-6.6 |
+    | ratio of the means (mean HDO / mean H2O) | 160-214 | — |
+
+  - **What the documentation says:**
+    - **In the files:** each variable's `source` attribute gives the formula
+      as `np.mean(...)`, an unweighted arithmetic mean.
+    - **The Standard Product User Guide**, 4.4, gives the recipe for its
+      `dd_825_421` example: "M is a vector with values of 1/5 corresponding to
+      the 5 pressure levels between 825 and 421 hPa and 0 for all other
+      levels". That is equal weights per level, the same method over another
+      range. (The grid has 6 levels in 421.7-825.4 hPa, not 5.)
+    - **The Summary Product User Guide** (2021), Table 2, and the `comment`
+      attributes say only "Averaged …" and "Column averaged …" "for the
+      partial column", with no weighting. Read alone, "column averaged"
+      suggests a pressure-weighted column average, which these are not.
 - **The errors are 1-sigma**, so `standard_error` is right. `dd_col_p_error`
   (`source` "Derived:MUSES:Lite:ObservationErrorCovariance") reproduces as
-  (1000 + δD) × √(M S Mᵀ). M averages the 8 levels and S is Standard's
-  `observation_error`; the match is to 7e-8 on RS 2010-06-15. The -9999 on ~70% of RS
-  rows (R17) is not a negative variance (M S Mᵀ >= 0 on every row); its
-  cause is open for the audit.
+  (1000 + δD) × √(M S Mᵀ). M is the same equal-weight averaging over those
+  levels and S is Standard's `observation_error`; the match is to 7e-8 on RS
+  2010-06-15. The -9999 on ~70% of RS rows (R17) is not a negative variance
+  (M S Mᵀ >= 0 on every row); its cause is open for the audit.
 - **Q2b: drop `column`?** TROPESS calls these "column averaged" over a
-  "partial column", but they are unweighted means of 8 level values, not
+  "partial column", but they are unweighted means of level values, not
   pressure-weighted column averages. The grammar's `column` means "total or
   column-averaged"; no vertical form means "a value at a level, or a layer
   mean". Proposed: drop it, giving:
   - `water_vapor_delta_d_850_250hpa` (+ `_standard_error`);
   - `water_vapor_h2o_mole_fraction_dry_air_850_250hpa` (+ `_standard_error`);
-  - a `long_name` that says "unweighted mean over the 8 retrieval levels
+  - a `long_name` that says "unweighted mean over the retrieval levels
     between 850 and 250 hPa".
 
   Keeping `column` follows TROPESS's wording instead.
@@ -774,6 +803,8 @@ Named in the cross-product naming pass. The grammar and decisions are in
 - TROPESS Forward Stream README (2023-05-09; the same file under the FS
   Standard v1 and v2 folders):
   https://tropess.gesdisc.eosdis.nasa.gov/data/TROPESS_Standard/TRPSDL2HDOAIRSFS.2/doc/TROPESS_Forward_Stream_README.pdf
+- TROPESS HDO/H2O Level 2 Summary Product User Guide (2021):
+  https://docserver.gesdisc.eosdis.nasa.gov/public/project/TROPESS/User_Guides/TROPESS-HDO_L2_Product_Quick_Start_User_Guide_Summary_only.pdf
 - TROPESS HDO/H2O Level 2 Standard Product User Guide (2020-11-02, MUSES
   1.11):
   https://docserver.gesdisc.eosdis.nasa.gov/public/project/TROPESS/User_Guides/TROPESS-AIRS-HDO_L2_Product_User_Guide_20201102.pdf
