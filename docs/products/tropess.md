@@ -204,8 +204,8 @@ kept.
 
 Drafted for the user's in-place review (`#@CLAUDE` comments), as
 `sciamachy.md`'s P1-P6. **Approved 2026-10-23**, including Q1, Q3 and Q4 as
-proposed, except **Q2b and Q2c**, which stay open after the user's questions
-were answered. A full-record audit (P8) follows and may revise the facts here.
+proposed and Q2c as the user named it, except **Q2b**, which is open. A
+full-record audit (P8) follows and may revise the facts here.
 
 ### P1. Products, names and provenance
 
@@ -328,6 +328,22 @@ names table). The evidence that they are the right quantities (checked
   `standard_name` is kept unchanged. Summary carries one for these values and
   Standard does not, so the store keeps Summary's
   `dry_atmosphere_volume_mixing_ratio_of_water_vapor`.
+- **Both stores say they are bias corrected** (user requirement 2026-10-23).
+  The nomenclature rows stay general (TES and IASI share them), so the bias
+  correction goes in each store's variable metadata, three ways:
+  - **`comment`, set in config** so it is the same on every store whatever
+    the first granule says. It states that the profile is TROPESS's
+    bias-corrected product, quoting the source (`x`: "HDO / H2O ratio
+    (includes bias correction)"; `x_h2o`: "H2O only (includes bias
+    correction)"). It cites the User Guide 5.1 ("The data are bias corrected
+    based on comparison with the aircraft measurements (Herman et al. 2014,
+    2020)"), and notes that the uncorrected `retrieval/x_raw` and `x_h2o_raw`
+    are in the source files but not stored (Q4).
+  - **`original_long_name`**, kept from the source, e.g.
+    `bias_corrected_hdo_to_h2o_ratio_profile`.
+  - **`source`**, TROPESS's derivation attribute, retained as published.
+
+  The verifier checks that the `comment` is present on both stores.
 
 **Merged from Summary** (NaN where DOF < 1.1). The definitions come from each
 variable's `comment` and `source` attributes (RS and FS Summary, all files),
@@ -340,7 +356,7 @@ and FS 2025-06-01 (R1p24).
 | `dd_col_p_error` | `water_vapor_column_delta_d_850_250hpa_standard_error` *new* (**Q2b**) | 1e-3 | none |
 | `x_h2o_col_p` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa` *new* (**Q2b**) | 1e-6 | none |
 | `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* (**Q2b**) | 1e-6 | none |
-| `dd_004` | `water_vapor_delta_d_004` *new* (user's name, 2026-10-23; see Q2c) | 1e-3 | none |
+| `dd_004` | `water_vapor_delta_d_004` *new* (user's name, approved 2026-10-23, Q2c) | 1e-3 | none |
 
 - **The range is 850 to 250 hPa: the 8 retrieval levels between them**
   (825.4, 749.9, 681.3, 619.0, 510.9, 421.7, 348.1 and 287.3 hPa).
@@ -393,10 +409,9 @@ and FS 2025-06-01 (R1p24).
     what it measures without the product's context". Read alone, `004` does
     not say what it is.
 
-  If the name stands, its row's `long_name` carries the meaning: "delta D of
-  water vapor where the H2O dry-air mole fraction is 0.004 (4 per mil)". A
-  self-describing alternative would be `water_vapor_delta_d_at_h2o_4e_3`.
-  The user decides.
+  **Decided (user, 2026-10-23): the name stands.** Its row's `long_name`
+  carries the meaning: "delta D of water vapor where the H2O dry-air mole
+  fraction is 0.004 (4 per mil)".
 
 **Filter inputs** (Sarkar et al. filter FS on DOF >= 1 and COD <= 0.5).
 
