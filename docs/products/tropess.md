@@ -200,12 +200,12 @@ kept.
   `cris_jpss1`, as `gosat` and `gosat2`). SNPP and JPSS1 FS overlap
   2021-04-01 .. 2021-05-21. The rest of CrIS is settled when it is reached.
 
-## AIRS v1 production subset (proposed 2026-10-23, for review)
+## AIRS v1 production subset (reviewed 2026-10-23)
 
-A draft for the user to review in place with `#@CLAUDE` comments, as
-`sciamachy.md`'s P1-P6. Items marked **Q** need a decision; the rest restates
-decisions already taken or proposes what follows from them. A full-record
-audit (P8) follows the review and may revise the facts here.
+Drafted for the user's in-place review (`#@CLAUDE` comments), as
+`sciamachy.md`'s P1-P6. **Approved 2026-10-23**, including Q1, Q3 and Q4 as
+proposed, except **Q2b and Q2c**, which stay open after the user's questions
+were answered. A full-record audit (P8) follows and may revise the facts here.
 
 ### P1. Products, names and provenance
 
@@ -237,6 +237,18 @@ audit (P8) follows the review and may revise the facts here.
 
 - **A granule is one day**, from the files below. `*_target.nc` (R5) and
   `AIRS_TROPESS_gridded_*` (R6) are skipped.
+- **Efficiency** (the user's question, answered 2026-10-23): one granule per
+  day costs neither compute nor read speed.
+  - **Commits are set separately.** The build reads granules in batches of
+    `granules_per_commit` and writes each batch as one commit (P7).
+  - **Chunks are fixed by observation count**, so how a finished store reads
+    does not depend on the granule.
+  - **Reading is cheap.** Granules are read in a process pool with the next
+    batch prefetched, so opening two files per day (~0.35 s each on Lustre)
+    is hidden.
+  - **The granule is the provenance unit:** one granule-index entry per day
+    (RS 6,363, FS 1,820), as the style guide requires. A larger granule (a
+    month) would lose that and gain nothing.
 
   | product | Standard | Summary |
   | --- | --- | --- |
@@ -244,7 +256,7 @@ audit (P8) follows the review and may revise the facts here.
   | FS | `TRPSDL2HDOAIRSFS_1-20240912_174250/` and `TRPSDL2HDOAIRSFS.1/<YYYY>/` | `TRPSYL2HDOAIRSFS.1/<YYYY>/` |
 
   The reader fails if a date has two files of one type.
-- **One-sided days (R23), Q1.** Proposed: keep every row.
+- **One-sided days (R23), Q1: keep every row** (approved 2026-10-23).
   - **Standard only** (RS 2, FS 6 days): the five Summary fields are NaN.
   - **Summary only** (RS 1, FS 5 days; 55,043 rows): the Standard-only
     fields are NaN. These are the kernel, prior, errors, DOF and cloud. It
@@ -269,37 +281,122 @@ style_guides before commit). Dims are `(obs)` unless shown. Fill (-999 and
 | source | canonical_name | units | dims | conversion |
 | --- | --- | --- | --- | --- |
 | `x` | `water_vapor_hdo_h2o_ratio` *new* | unitless | (obs, level) | none; row 0 of each Standard file masked (R22) |
-| `x_h2o` | `water_vapor_h2o_mole_fraction_dry_air` *new* | 1e-6 | (obs, level) | x 1e6 from `1` |
+| `x_h2o` | `water_vapor_h2o_mole_fraction_dry_air` *new* | 1e-6 | (obs, level) | x 1e6 from `1` (mol mol-1) |
 
 Both names are implied by the grammar (`docs/model-comparison-naming.md`,
-names table).
+names table). The evidence that they are the right quantities (checked
+2026-10-23 at the user's request):
 
-**Merged from Summary** (NaN where DOF < 1.1). **Q2:** the names, and what
-these are.
+- **`x` is the HDO/H2O mole ratio profile:**
+  - its attributes, in every AIRS collection (RS Summary and Standard R1p6,
+    FS R1p11): `comment: "HDO / H2O ratio (includes bias correction)"` and
+    `source: "Derived: MUSES:Lite:Species: (x_hdo / x_h2o)"`;
+  - its `long_name`, which varies only in case and suffix:
+    `bias_corrected_hdo_to_h2o_ratio_profile` (RS Summary, RS Standard, FS
+    Summary, and 1,551 FS Standard files), `bias_corrected_HDO_to_H2O_ratio`
+    (233 FS Standard files), `bias_corrected_hdo_to_h2o_ratio` (31); units
+    `1` throughout;
+  - the User Guide, 4.1: "After this operation one can compare the modified
+    HDO/H2O profile (x̂) to the "x" variable in the netcdf product file";
+  - the User Guide, 4.3: x̂_R "is the (log) of the ratio of HDO and H2O", with
+    "x̂_R = X". The file stores the ratio itself; the kernel acts on its log;
+  - Sarkar et al. (2026), Methods: "the source Level-2 files provide HDO/H2O
+    ratio profiles";
+  - the values: p50 2.3e-4, which is δD ≈ -260 per mil against TROPESS's
+    3.11e-4 (`dd_col_p`'s `source`).
 
-| source | canonical_name (proposed) | units | conversion |
+  It is a ratio of two mole fractions, so `hdo_h2o_ratio` with no basis, as
+  the existing row `water_vapor_hdo_h2o_ratio_apriori` ("a priori HDO/H2O
+  mole ratio of water vapor").
+- **`x_h2o` is the H2O dry-air mole fraction profile:**
+  - in Summary (RS and FS), the same values (identical on matched rows; see
+    Summary vs Standard) carry `long_name:
+    "bias_corrected_dry_air_volume_mixing_ratio_of_water_vapor"` and
+    `standard_name: "dry_atmosphere_volume_mixing_ratio_of_water_vapor"`;
+  - in Standard, `long_name` `bias_corrected_h2o_vmr_profile` (RS, and 1,551
+    FS files) or `bias_corrected_H2O` / `bias_corrected_h2o` (264 early FS
+    files), units `1`. The `source` is identical in both types: `"Derived:
+    MUSES:Lite:Species: (species[:][17:])"`;
+  - the READMEs (Table 3 and 4.1): `x` is the "Retrieved state, as volume
+    mixing ratio (VMR) relative to dry air";
+  - Sarkar et al. (2026): "water vapor volume mixing ratio (VMR, relative to
+    dry air)", and Table 1: "VMR … relative to dry air";
+  - for an ideal gas a volume mixing ratio is a mole fraction, so `1` is
+    mol mol-1, and x 1e6 gives the canonical `1e-6`.
+
+  **The source `standard_name` is retained.** The style guide says a source
+  `standard_name` is kept unchanged. Summary carries one for these values and
+  Standard does not, so the store keeps Summary's
+  `dry_atmosphere_volume_mixing_ratio_of_water_vapor`.
+
+**Merged from Summary** (NaN where DOF < 1.1). The definitions come from each
+variable's `comment` and `source` attributes (RS and FS Summary, all files),
+and were reproduced from the profiles on RS 2010-06-15, FS 2022-06-01 (R1p17)
+and FS 2025-06-01 (R1p24).
+
+| source | canonical_name | units | conversion |
 | --- | --- | --- | --- |
-| `dd_col_p` | `water_vapor_column_delta_d_850_250hpa` *new* | 1e-3 | none |
-| `dd_col_p_error` | `water_vapor_column_delta_d_850_250hpa_standard_error` *new* | 1e-3 | none |
-| `x_h2o_col_p` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa` *new* | 1e-6 | none |
-| `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* | 1e-6 | none |
-| `dd_004` | `water_vapor_delta_d_at_h2o_mole_fraction_4e_3` *new* | 1e-3 | none |
+| `dd_col_p` | `water_vapor_column_delta_d_850_250hpa` *new* (**Q2b**) | 1e-3 | none |
+| `dd_col_p_error` | `water_vapor_column_delta_d_850_250hpa_standard_error` *new* (**Q2b**) | 1e-3 | none |
+| `x_h2o_col_p` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa` *new* (**Q2b**) | 1e-6 | none |
+| `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* (**Q2b**) | 1e-6 | none |
+| `dd_004` | `water_vapor_delta_d_004` *new* (user's name, 2026-10-23; see Q2c) | 1e-3 | none |
 
-- **`column` … `_850_250hpa`** follows the grammar's rule that a quantity
-  over a range carries a qualifier. TROPESS's own `long_name`s are "mean
-  delta_d from 850 to 250 hpa" and "column averaged dry air mixing ratio of
-  water vapor from 850 to 250 hp[a]". Whether the δD mean is weighted (a
-  column average, as the User Guide's 825-421 hPa example suggests) is not
-  stated for 850-250.
-- **`dd_004`** is "delta_d for water volume mixing ratio of 4 permil". The
-  User Guide promises to explain it but does not. Read literally, it is δD
-  where the H2O mole fraction is 4e-3. The name is a placeholder; the audit
-  can test that reading against the profiles.
-- **`_error` as `standard_error`:** TROPESS says only "uncertainty", so
-  1-sigma is assumed, as R12. The User Guide's δD error formula,
-  `(M S Mᵀ)^½`, is 1-sigma.
-- **`dd_col_p_error` is -9999 on ~70% of RS rows** where `dd_col_p` is
-  written (R17). It is stored as published.
+- **The range is 850 to 250 hPa: the 8 retrieval levels between them**
+  (825.4, 749.9, 681.3, 619.0, 510.9, 421.7, 348.1 and 287.3 hPa).
+  - `dd_col_p`: `long_name` "mean_delta_d_from_850_to_250_hpa"; `comment`
+    "Averaged deuterated water vapor content for the partial column between
+    850 and 250 hPa, expressed in parts per thousand relative to the
+    deuterium content of ocean waters"; `source` "delta_d = 1000 *
+    (np.mean(x_hdo[:] / x_h2o[:]) / 3.11e-4 - 1)".
+  - **Reproduced exactly** (max difference 0.000 per mil) as 1000 × (the
+    unweighted mean of `x` over those 8 levels / 3.11e-4 − 1). Every other
+    range misses by 19-114 per mil: 200-850, 250-900, and the User Guide's
+    825-421 example (its `dd_825_421`, not in these files). An H2O-weighted
+    mean misses by 160-230 per mil.
+  - `x_h2o_col_p`: `comment` "Column averaged dry air mixing ratio of water
+    vapor content for the partial column between 850 and 250 hPa"; `source`
+    "np.mean(species[:][17:])". Reproduced as the unweighted mean of `x_h2o`
+    over the same 8 levels, x 1e6 (relative difference 2e-7).
+- **The errors are 1-sigma**, so `standard_error` is right. `dd_col_p_error`
+  (`source` "Derived:MUSES:Lite:ObservationErrorCovariance") reproduces as
+  (1000 + δD) × √(M S Mᵀ). M averages the 8 levels and S is Standard's
+  `observation_error`; the match is to 7e-8 on RS 2010-06-15. The -9999 on ~70% of RS
+  rows (R17) is not a negative variance (M S Mᵀ >= 0 on every row); its
+  cause is open for the audit.
+- **Q2b: drop `column`?** TROPESS calls these "column averaged" over a
+  "partial column", but they are unweighted means of 8 level values, not
+  pressure-weighted column averages. The grammar's `column` means "total or
+  column-averaged"; no vertical form means "a value at a level, or a layer
+  mean". Proposed: drop it, giving:
+  - `water_vapor_delta_d_850_250hpa` (+ `_standard_error`);
+  - `water_vapor_h2o_mole_fraction_dry_air_850_250hpa` (+ `_standard_error`);
+  - a `long_name` that says "unweighted mean over the 8 retrieval levels
+    between 850 and 250 hPa".
+
+  Keeping `column` follows TROPESS's wording instead.
+- **`dd_004`:** `comment` "Delta-D 004: Deuterated water vapor content for
+  water vapor volume mixing ratio of 0.004, expressed in parts per thousand
+  relative to the deuterium content of ocean waters"; `source` "delta_d =
+  1000 * (x_hdo_004 / x_h2o_004 ) / 3.11e-4 - 1)". That is, δD where the H2O
+  mole fraction is 0.004. It does not reproduce from the stored profiles: log
+  interpolation of `x` to `x_h2o` = 0.004 misses by p50 ~40 per mil (p50 30
+  from the raw profiles). So TROPESS computes it some other way, likely on its
+  finer internal grid (the `_004` inputs are not in the files).
+- **Q2c, `water_vapor_delta_d_004`: no conflict with the style guide.** The
+  guide requires only that names come from `nomenclature_data.md`, through a
+  row added first. Two project conventions it does touch:
+  - **The grammar asks for a qualifier at a level or range**, and `004` is
+    one, but it is TROPESS's token, not a physical label like `850_250hpa`
+    or `2365nm`.
+  - **SCIAMACHY's P3a** set the precedent that "a data-lake name must say
+    what it measures without the product's context". Read alone, `004` does
+    not say what it is.
+
+  If the name stands, its row's `long_name` carries the meaning: "delta D of
+  water vapor where the H2O dry-air mole fraction is 0.004 (4 per mil)". A
+  self-describing alternative would be `water_vapor_delta_d_at_h2o_4e_3`.
+  The user decides.
 
 **Filter inputs** (Sarkar et al. filter FS on DOF >= 1 and COD <= 0.5).
 
@@ -308,7 +405,8 @@ these are.
 | `observation_ops/signal_dof` | `water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal` *new* | unitless | none ("trace of averaging kernel") |
 | `geophysical/average_cloud_eod` | `cloud_effective_optical_depth` *new* | unitless | none |
 
-**Q3: Sarkar et al.'s other Standard outputs.** Proposed: include all four.
+**Q3: Sarkar et al.'s other Standard outputs: include all four** (approved
+2026-10-23).
 They are cheap (one value per obs), and `day_night_flag` documents R13.
 
 | source | canonical_name (proposed) | units | conversion |
@@ -327,7 +425,8 @@ They are cheap (one value per obs), and `day_night_flag` documents R13.
 | `observation_ops/observation_error_h2o` | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | unitless | (obs, level) | none; never scaled (R8); 1-sigma assumed (R12) |
 | `pressure` | `pressure` | Pa | (obs, level) | x 100 from `hPa` |
 
-**Q4: left out, unless you want them.**
+**Q4 (approved 2026-10-23): `altitude` in; `x_raw`, `x_h2o_raw` and
+`target_id` out.**
 - **`altitude`** (m, on `level`). Sarkar et al. grid it, and IASI reports on
   altitude levels. Proposed: **include** as `altitude` *new* (m, (obs,
   level)), so TIR products can be compared by height.
@@ -403,6 +502,13 @@ Recorded, not applied:
 - **Each 17-level store** is FS 3.3 GB and RS 1.2 GB.
 - **Compression** (default zstd, or blosc zstd 5 + shuffle) is measured at the
   bench.
+- **`granules_per_commit`** (P2), to be set at the bench. Each commit rewrites
+  every store's partial last chunk (at most ~36 MiB for the kernel), so fewer,
+  larger commits keep superseded copies few.
+  - A starting point is ~1.3 M obs per commit: **RS 500 days, FS 50**. That
+    makes ~13 and ~37 commits.
+  - At ~1.7 KB per obs over all stores, that is ~2.2 GB per batch, with two
+    in flight.
 
 ### P8. Next, after review
 
@@ -685,7 +791,7 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R14 | **AIRS FS fills 6-10x more 0.7° boxes per day than RS** (corrected 2026-10-23; first read as FS not being box-sampled). All four v1 collections take about one target per box per overpass, as the READMEs describe, measured on 5 days each. <br>- Obs per day, record average: RS 1,739 Summary and 2,689 Standard; FS 10,514 and 26,352. <br>- Boxes filled per day: RS 1,352-2,691; FS 6,788-29,539. <br>- Nearest-neighbour spacing, p50: RS ~110 km; FS 54-78 km. <br>The stream sets the boxes covered. The type thins further (Summary = DOF >= 1.1: 65% of RS rows, 40% of FS). Why RS fills so few boxes is not documented. | record only |
 | R15 | **`observation_error_h2o` fill changes by version:** from R1p12 F0p2 it is written below the surface (level 0 fill 0-3% vs 53-64% for `x`); from R1p15 its top level (0.1 hPa) is fill on ~96-98% of rows. | record only; confirm over the record at the audit |
 | R16 | **FS integer dtypes drift:** int32 → int16 (`airs_*` indices, `day_night_flag`), int32/int64 (`land_flag`, `target_id`). | open: store as int32 with a `_FillValue` (existing rule) |
-| R17 | **`dd_col_p_error` is -9999 on ~70% of RS Summary rows** (747 of 1,017; 1,454 of 2,019; 1,170 of 1,588 in three files), where `dd_col_p` is written. | record only |
+| R17 | **`dd_col_p_error` is -9999 on ~70% of RS Summary rows** (747 of 1,017; 1,454 of 2,019; 1,170 of 1,588 in three files), where `dd_col_p` is written. Where written it equals (1000 + δD) × √(M S Mᵀ) to 7e-8. The fill is not a negative variance: M S Mᵀ >= 0 on every row (RS 2010-06-15). | record only; cause to the audit |
 | R18 | **CrIS-JPSS1 FS Standard v1 was backfilled upstream in 2025:** 108 granules with algorithm R1p24 dated before its R1p24 period (2021-05-21 ..). 5 replace files we hold under older names (2021-05-21, 2022-03-08, 2022-08-13, 2023-12-27, 2024-08-21; upstream updated 2025-09-04 .. 09-11); others fill days missing at our download. One file per date upstream. The 5 new files are downloaded and the old ones kept (the old ones are no longer in CMR). | open, for CrIS: which granule to keep where two exist |
 | R19 | **Days not downloaded at first:** AIRS FS Standard 2023-07-21 and 2023-10-19; CrIS-JPSS1 FS Standard 46 dates within our window (2022-05-29 .. 2024-09-01). | handled: downloaded 2026-10-22 |
 | R20 | **The README's Summary column kernel is absent** from the RS Summary HDO files (v1). | record only |

@@ -22,11 +22,12 @@ Read this first in a new session. Update it whenever work lands.
   - AIRS RS and FS stay separate products, `wisosat.airs.v_1.rs.*` and
     `wisosat.airs.v_1.fs.*`, built to join cleanly, each pointing to the
     other (`tropess.md`, Product scheme).
-- **Now: the AIRS v1 production subset is drafted** (`tropess.md`, P1-P8,
-  2026-10-23). It awaits the user's in-place review (`#@CLAUDE` comments),
-  with Q1-Q4 open.
+- **Now: the AIRS v1 production subset is approved** (`tropess.md`, P1-P8,
+  2026-10-23), except two naming questions still open: Q2b (drop `column`
+  from the 850-250 hPa means) and Q2c (`water_vapor_delta_d_004`).
 - **Next:**
-  1. act on the review;
+  1. settle Q2b and Q2c, then draft the 14 nomenclature rows in style_guides
+     for review;
   2. a full-record audit (batch; show it first);
   3. then nomenclature rows, the reader at fixture level, the shared changes
      (per-granule versions, the Summary merge, declared masking), the bench,
