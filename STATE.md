@@ -23,12 +23,15 @@ Read this first in a new session. Update it whenever work lands.
     `wisosat.airs.v_1.fs.*`, built to join cleanly, each pointing to the
     other (`tropess.md`, Product scheme).
 - **Now: the AIRS v1 production subset is approved** (`tropess.md`, P1-P8,
-  2026-10-23), except Q2b (drop `column` from the 850-250 hPa means). Q2c is
-  decided: `water_vapor_delta_d_004`. `x` and `x_h2o` carry "bias corrected"
-  in their metadata (config `comment`, `original_long_name`, `source`).
+  2026-10-23), all questions settled:
+  - Q2b drops `column` from the 850-250 hPa means, which are unweighted
+    level means;
+  - Q2c is `water_vapor_delta_d_004`;
+  - `x` and `x_h2o` carry "bias corrected" in their metadata (config
+    `comment`, `original_long_name`, `source`).
 - **Next:**
-  1. settle Q2b, then draft the 14 nomenclature rows in style_guides for
-     review;
+  1. the 14 nomenclature rows are drafted in style_guides, uncommitted,
+     awaiting the user's review;
   2. a full-record audit (batch; show it first);
   3. then nomenclature rows, the reader at fixture level, the shared changes
      (per-granule versions, the Summary merge, declared masking), the bench,

@@ -204,7 +204,7 @@ kept.
 
 Drafted for the user's in-place review (`#@CLAUDE` comments), as
 `sciamachy.md`'s P1-P6. **Approved 2026-10-23**, including Q1, Q3 and Q4 as
-proposed and Q2c as the user named it, except **Q2b**, which is open. A
+proposed, Q2c as the user named it, and Q2b (`column` dropped). A
 full-record audit (P8) follows and may revise the facts here.
 
 ### P1. Products, names and provenance
@@ -352,10 +352,10 @@ and FS 2025-06-01 (R1p24).
 
 | source | canonical_name | units | conversion |
 | --- | --- | --- | --- |
-| `dd_col_p` | `water_vapor_column_delta_d_850_250hpa` *new* (**Q2b**) | 1e-3 | none |
-| `dd_col_p_error` | `water_vapor_column_delta_d_850_250hpa_standard_error` *new* (**Q2b**) | 1e-3 | none |
-| `x_h2o_col_p` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa` *new* (**Q2b**) | 1e-6 | none |
-| `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* (**Q2b**) | 1e-6 | none |
+| `dd_col_p` | `water_vapor_delta_d_850_250hpa` *new* | 1e-3 | none |
+| `dd_col_p_error` | `water_vapor_delta_d_850_250hpa_standard_error` *new* | 1e-3 | none |
+| `x_h2o_col_p` | `water_vapor_h2o_mole_fraction_dry_air_850_250hpa` *new* | 1e-6 | none |
+| `x_h2o_col_p_error` | `water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* | 1e-6 | none |
 | `dd_004` | `water_vapor_delta_d_004` *new* (user's name, approved 2026-10-23, Q2c) | 1e-3 | none |
 
 - **The range is every level of the profile between 850 and 250 hPa.**
@@ -409,17 +409,16 @@ and FS 2025-06-01 (R1p24).
   levels and S is Standard's `observation_error`; the match is to 7e-8 on RS
   2010-06-15. The -9999 on ~70% of RS rows (R17) is not a negative variance
   (M S Mᵀ >= 0 on every row); its cause is open for the audit.
-- **Q2b: drop `column`?** TROPESS calls these "column averaged" over a
+- **Q2b, decided (user, 2026-10-23): `column` dropped.** TROPESS calls these "column averaged" over a
   "partial column", but they are unweighted means of level values, not
   pressure-weighted column averages. The grammar's `column` means "total or
   column-averaged"; no vertical form means "a value at a level, or a layer
-  mean". Proposed: drop it, giving:
+  mean". So the names are:
   - `water_vapor_delta_d_850_250hpa` (+ `_standard_error`);
   - `water_vapor_h2o_mole_fraction_dry_air_850_250hpa` (+ `_standard_error`);
   - a `long_name` that says "unweighted mean over the retrieval levels
     between 850 and 250 hPa".
 
-  Keeping `column` follows TROPESS's wording instead.
 - **`dd_004`:** `comment` "Delta-D 004: Deuterated water vapor content for
   water vapor volume mixing ratio of 0.004, expressed in parts per thousand
   relative to the deuterium content of ocean waters"; `source` "delta_d =
