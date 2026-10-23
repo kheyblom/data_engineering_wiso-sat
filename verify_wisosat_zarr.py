@@ -1379,13 +1379,13 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
                 f'{stored_attrs.get("standard_name")!r}, declared {declared!r}, against source '
                 f'{sorted(names)!r}',
             )
-            continue
-        raw = next(iter(names)) if names else None
-        report.check(
-            f'{store}/{name}: standard_name is the source one, or absent with it',
-            stored_attrs.get('standard_name') == raw,
-            f'{stored_attrs.get("standard_name")!r} against source {raw!r}',
-        )
+        else:
+            raw = next(iter(names)) if names else None
+            report.check(
+                f'{store}/{name}: standard_name is the source one, or absent with it',
+                stored_attrs.get('standard_name') == raw,
+                f'{stored_attrs.get("standard_name")!r} against source {raw!r}',
+            )
         if store != GEOLOCATION:
             expected_dtypes = {casts[source]} if source in casts else seen.dtypes.get(source, set())
             report.check(
