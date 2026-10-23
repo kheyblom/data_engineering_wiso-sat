@@ -22,9 +22,11 @@ Read this first in a new session. Update it whenever work lands.
   - AIRS RS and FS stay separate products, `wisosat.airs.v_1.rs.*` and
     `wisosat.airs.v_1.fs.*`, built to join cleanly, each pointing to the
     other (`tropess.md`, Product scheme).
+- **Now: the AIRS v1 production subset is drafted** (`tropess.md`, P1-P8,
+  2026-10-23). It awaits the user's in-place review (`#@CLAUDE` comments),
+  with Q1-Q4 open.
 - **Next:**
-  1. draft the AIRS production subset in `tropess.md` for in-place review,
-     as `sciamachy.md`'s P1-P6;
+  1. act on the review;
   2. a full-record audit (batch; show it first);
   3. then nomenclature rows, the reader at fixture level, the shared changes
      (per-granule versions, the Summary merge, declared masking), the bench,

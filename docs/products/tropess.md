@@ -200,6 +200,232 @@ kept.
   `cris_jpss1`, as `gosat` and `gosat2`). SNPP and JPSS1 FS overlap
   2021-04-01 .. 2021-05-21. The rest of CrIS is settled when it is reached.
 
+## AIRS v1 production subset (proposed 2026-10-23, for review)
+
+A draft for the user to review in place with `#@CLAUDE` comments, as
+`sciamachy.md`'s P1-P6. Items marked **Q** need a decision; the rest restates
+decisions already taken or proposes what follows from them. A full-record
+audit (P8) follows the review and may revise the facts here.
+
+### P1. Products, names and provenance
+
+- **Two products, one config each** (`config/airs/config_zarr_rs.yaml`,
+  `config_zarr_fs.yaml`; `source: tropess`):
+
+  | product | stores named | days (span) | obs |
+  | --- | --- | --- | --- |
+  | RS | `wisosat.airs.v_1.rs.inst.native_swath.<variable>.zarr` | 6,363 (2002-08-30 .. 2020-03-31; 61 missing) | 17,109,546 |
+  | FS | `wisosat.airs.v_1.fs.inst.native_swath.<variable>.zarr` | 1,820 (2021-02-01 .. 2026-05-31; 126 missing) | 47,882,856 |
+
+  The obs counts are Standard's rows plus the rows of Summary-only days (R23):
+  RS 1,588, FS 53,455.
+- **The checked version** is `v_1.rs` or `v_1.fs`. The reader derives it from
+  each file's `ShortName` and `VersionID` (Standard `TRPSDL2HDOAIRS{ORS,FS}`,
+  Summary `TRPSYL2HDOAIRS{ORS,FS}`, `VersionID` 1). Every file must match the
+  config.
+- **Per granule, in the granule index** (approved 2026-10-22; shared change):
+  the algorithm (`R1pNN`), format (`F0pN`) and joint flag of each of the
+  granule's two files. Both file names go in `granule_file`.
+- **Store attributes:**
+  - both collections (`ShortName`, version, DOI);
+  - the span of each algorithm version;
+  - the Summary merge (Product scheme);
+  - the declared defect (R22);
+  - the pointer to the other stream, and the seam (Product scheme).
+
+### P2. Granules and sources
+
+- **A granule is one day**, from the files below. `*_target.nc` (R5) and
+  `AIRS_TROPESS_gridded_*` (R6) are skipped.
+
+  | product | Standard | Summary |
+  | --- | --- | --- |
+  | RS | `TRPSDL2HDOAIRSORS.1/<YYYY>/` | `TRPSYL2HDOAIRSORS_1-20240806_185241/` |
+  | FS | `TRPSDL2HDOAIRSFS_1-20240912_174250/` and `TRPSDL2HDOAIRSFS.1/<YYYY>/` | `TRPSYL2HDOAIRSFS.1/<YYYY>/` |
+
+  The reader fails if a date has two files of one type.
+- **One-sided days (R23), Q1.** Proposed: keep every row.
+  - **Standard only** (RS 2, FS 6 days): the five Summary fields are NaN.
+  - **Summary only** (RS 1, FS 5 days; 55,043 rows): the Standard-only
+    fields are NaN. These are the kernel, prior, errors, DOF and cloud. It
+    also includes `x` row 0's defect check, which needs Standard.
+
+  The alternative is to leave Summary-only days out, which would drop
+  observations.
+- **Missing days** are declared (`expected_missing_days`): RS 61 and FS 126,
+  all upstream gaps (CMR, 2026-10-22).
+
+### P3. Stores
+
+Rows marked *new* need adding to `nomenclature_data.md` (reviewed in
+style_guides before commit). Dims are `(obs)` unless shown. Fill (-999 and
+-9999, R2) is masked to NaN; integers are stored as int32 with a `_FillValue`
+(R16).
+
+**Geolocation:** `time`, `lat`, `lon` (no pixel corners are published).
+
+**Core: the retrieval.**
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `x` | `water_vapor_hdo_h2o_ratio` *new* | unitless | (obs, level) | none; row 0 of each Standard file masked (R22) |
+| `x_h2o` | `water_vapor_h2o_mole_fraction_dry_air` *new* | 1e-6 | (obs, level) | x 1e6 from `1` |
+
+Both names are implied by the grammar (`docs/model-comparison-naming.md`,
+names table).
+
+**Merged from Summary** (NaN where DOF < 1.1). **Q2:** the names, and what
+these are.
+
+| source | canonical_name (proposed) | units | conversion |
+| --- | --- | --- | --- |
+| `dd_col_p` | `water_vapor_column_delta_d_850_250hpa` *new* | 1e-3 | none |
+| `dd_col_p_error` | `water_vapor_column_delta_d_850_250hpa_standard_error` *new* | 1e-3 | none |
+| `x_h2o_col_p` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa` *new* | 1e-6 | none |
+| `x_h2o_col_p_error` | `water_vapor_column_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* | 1e-6 | none |
+| `dd_004` | `water_vapor_delta_d_at_h2o_mole_fraction_4e_3` *new* | 1e-3 | none |
+
+- **`column` … `_850_250hpa`** follows the grammar's rule that a quantity
+  over a range carries a qualifier. TROPESS's own `long_name`s are "mean
+  delta_d from 850 to 250 hpa" and "column averaged dry air mixing ratio of
+  water vapor from 850 to 250 hp[a]". Whether the δD mean is weighted (a
+  column average, as the User Guide's 825-421 hPa example suggests) is not
+  stated for 850-250.
+- **`dd_004`** is "delta_d for water volume mixing ratio of 4 permil". The
+  User Guide promises to explain it but does not. Read literally, it is δD
+  where the H2O mole fraction is 4e-3. The name is a placeholder; the audit
+  can test that reading against the profiles.
+- **`_error` as `standard_error`:** TROPESS says only "uncertainty", so
+  1-sigma is assumed, as R12. The User Guide's δD error formula,
+  `(M S Mᵀ)^½`, is 1-sigma.
+- **`dd_col_p_error` is -9999 on ~70% of RS rows** where `dd_col_p` is
+  written (R17). It is stored as published.
+
+**Filter inputs** (Sarkar et al. filter FS on DOF >= 1 and COD <= 0.5).
+
+| source | canonical_name (proposed) | units | conversion |
+| --- | --- | --- | --- |
+| `observation_ops/signal_dof` | `water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal` *new* | unitless | none ("trace of averaging kernel") |
+| `geophysical/average_cloud_eod` | `cloud_effective_optical_depth` *new* | unitless | none |
+
+**Q3: Sarkar et al.'s other Standard outputs.** Proposed: include all four.
+They are cheap (one value per obs), and `day_night_flag` documents R13.
+
+| source | canonical_name (proposed) | units | conversion |
+| --- | --- | --- | --- |
+| `geophysical/cloud_top_pressure` | `cloud_top_pressure` *new* | Pa | x 100 from `hPa` |
+| `geophysical/surface_temperature` | `temperature_surface` *new* (quantity first, as `albedo_surface_2365nm`) | K | none |
+| `geophysical/land_flag` | `land_flag` *new* | unitless | none (1 land, 0 other; int32) |
+| `geophysical/day_night_flag` | `day_night_flag` *new* | unitless | none (1 day, 0 night, -999 fill on up to ~2% of FS rows; int32) |
+
+**Model comparison** (rows exist, named 2026-10-19).
+
+| source | canonical_name | units | dims | conversion |
+| --- | --- | --- | --- | --- |
+| `observation_ops/xa` | `water_vapor_hdo_h2o_ratio_apriori` | unitless | (obs, level) | none |
+| `observation_ops/averaging_kernel` | `water_vapor_hdo_h2o_ratio_averaging_kernel_log` | unitless | (obs, level, level_2) | none; rows retrieved, columns true (confirmed exactly) |
+| `observation_ops/observation_error_h2o` | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | unitless | (obs, level) | none; never scaled (R8); 1-sigma assumed (R12) |
+| `pressure` | `pressure` | Pa | (obs, level) | x 100 from `hPa` |
+
+**Q4: left out, unless you want them.**
+- **`altitude`** (m, on `level`). Sarkar et al. grid it, and IASI reports on
+  altitude levels. Proposed: **include** as `altitude` *new* (m, (obs,
+  level)), so TIR products can be compared by height.
+- **`retrieval/x_raw`, `x_h2o_raw`** (before bias correction). Absent from
+  264 FS files (R1p11 and early R1p12). Proposed: leave out, since the
+  bias-corrected profile is TROPESS's product.
+- **`target_id`.** Unique across TROPESS products (O3, CO, TATM), so useful
+  for matching other species, but absent from early FS Standard (R4).
+  Proposed: leave out; time and position match as well.
+- Always out:
+  - `observation_error` (R11) and `x_test` (R21);
+  - `airs_atrack`, `airs_xtrack`, `airs_granule`, `airs_view_ang` (no rows
+    are left out, so the granule index gives each obs's source row);
+  - `year_fraction`, the microwindow variables;
+  - `datetime_utc`, which is used only to check `time` (P4).
+
+That makes **19 stores per product** with Q3 and Q4 as proposed:
+- geolocation;
+- 2 core;
+- 5 merged from Summary;
+- 2 filter inputs;
+- 4 Sarkar outputs;
+- 3 model comparison, `pressure` and `altitude`.
+
+That is **14 new nomenclature rows**.
+
+### P4. Time
+
+- `time` is TAI93 (R3), in whole seconds in every file probed. The reader
+  subtracts the leap seconds since 1993 from a fixed table (1993-07-01 to
+  2017-01-01, 10 seconds by 2017). No new leap second has been announced,
+  and the table is pinned in code with a test.
+- Every row's result must equal `datetime_utc`, or the build fails. The
+  verifier repeats the check from raw.
+- The stored unit is **seconds**: the coarsest unit that holds the source
+  exactly (GOSAT uses ns, TROPOMI ms).
+
+### P5. Declared, never detected
+
+- **R22:** row 0's `x` in every Standard file is masked. The reader confirms
+  it equals `x_test` before masking, so a file where it does not fails the
+  build.
+- **The Summary merge** is checked on every day: Summary rows are exactly the
+  Standard rows with DOF >= 1.1, in order, with identical shared variables
+  (Product scheme).
+- **Missing days** (P2), and the one-sided days (Q1).
+- **No `declared_rows_left_out`:** every row has time, lat and lon (to be
+  confirmed by the audit), so none is left out.
+
+### P6. Filtering guidance in the metadata
+
+Recorded, not applied:
+- **Sarkar et al. (2026):** FS filtered with DOF >= 1 and COD <= 0.5. RS was
+  gridded from Summary, which is Standard with DOF >= 1.1.
+- **TROPESS:**
+  - the Summary product is the Standard rows with DOF >= 1.1 (measured; not
+    stated by TROPESS);
+  - the User Guide's rule of thumb is "DOFS > 0.7";
+  - the User Guide says "the degrees of freedom for signal are 0.8 or larger
+    for all profiles", which the Standard files contradict (DOF down to
+    ~0.001).
+- **The seam** between RS and FS (Product scheme), and R22.
+
+### P7. Chunks and compression
+
+- **Chunk rule** (obs 4,194,304, halved until the chunk fits 40 MiB):
+  - scalars: 4,194,304 obs (16 MiB);
+  - 17-level profiles: 524,288 obs (34 MiB);
+  - the 17 x 17 kernel: 32,768 obs (36 MiB).
+- **The kernel** is FS 55.4 GB and RS 19.8 GB uncompressed, in 1,462 and 523
+  chunks. That is few enough that no shards are needed (TROPOMI's ~249,000
+  were the reason for its shards).
+- **Each 17-level store** is FS 3.3 GB and RS 1.2 GB.
+- **Compression** (default zstd, or blosc zstd 5 + shuffle) is measured at the
+  bench.
+
+### P8. Next, after review
+
+1. **The 14 new nomenclature rows**, drafted in style_guides for review
+   before commit.
+2. **A full-record audit, as a batch job shown first.** Every RS and FS file
+   (~142 GB), checking:
+   - layout per version;
+   - time against `datetime_utc` with the leap table;
+   - R22 on every Standard file;
+   - the Summary merge on every day;
+   - fill patterns (R10, R15, R17);
+   - dtype drift;
+   - every row has time, lat and lon;
+   - `dd_004` and the column means (Q2).
+3. The reader and fixture. The shared changes:
+   - multi-file Standard + Summary granules;
+   - per-granule versions in the granule index;
+   - declared masking;
+   - the TAI93 decode.
+
+   Then the test over every product, the bench and production.
+
 ## Summary vs Standard, v1 (measured 2026-10-23)
 
 Five day pairs tested: RS 2003-03-01 and 2010-06-15; FS 2021-02-01 (R1p11),
