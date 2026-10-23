@@ -558,8 +558,11 @@ Recorded, not applied:
   chunks. That is few enough that no shards are needed (TROPOMI's ~249,000
   were the reason for its shards).
 - **Each 17-level store** is FS 3.3 GB and RS 1.2 GB.
-- **Compression** (default zstd, or blosc zstd 5 + shuffle) is measured at the
-  bench.
+- **Compression, decided 2026-10-23 (user) from the bench** (TESTING.md Tier
+  2d): blosc zstd 5 + byte shuffle on the kernel, `altitude`, the ratio, its
+  a priori, H2O and H2O's error (5-28% smaller than the default zstd; ~9 GB
+  over both streams). `pressure` keeps the default, which beats blosc on it
+  by 2-7%, as do the 1-D arrays.
 - **`granules_per_commit`** (P2), to be set at the bench. Each commit rewrites
   every store's partial last chunk (at most ~36 MiB for the kernel), so fewer,
   larger commits keep superseded copies few.
