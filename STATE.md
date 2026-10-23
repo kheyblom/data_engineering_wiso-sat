@@ -5,12 +5,20 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-23)
 
 **Nothing is running.** No batch jobs are queued.
-- **Current task: CrIS (task 6), next.** AIRS v1 is finished (below). On
-  2026-10-22 the user chose CrIS once AIRS was finalized. Settled so far:
-  platform tokens `cris_snpp` and `cris_jpss1`; AIRS v2 (FS 2026-06 on) is
-  taken up with CrIS. Everything else about CrIS is open (`tropess.md`,
-  Product scheme). Every CrIS collection is on disk (downloaded 2026-10-22;
-  `~/work/data_access/access_tropess/HANDBACK.md`).
+- **Current task: CrIS (task 6), next; to be started in a new session.**
+  **Read `docs/products/tropess.md`, section "CrIS: handoff", first.** It
+  holds what is settled, the five decisions the user must make before any
+  code (SNPP RS is Summary-only upstream; SNPP FS overlaps; R18 duplicate
+  files; the SC Australian-fire collection; v2 with AIRS v2), the reader
+  changes known to be needed (filter by instrument first: SNPP and JPSS1 FS
+  folders would otherwise collide), and the lessons from AIRS (scan every
+  file's attributes in the audit: R33 reached production).
+  - Settled: tokens `cris_snpp` and `cris_jpss1` with `source: tropess`;
+    AIRS v2 is designed with CrIS-JPSS1 v2.
+  - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
+    2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
+  - Start by laying the collections and decisions out for the user (as for
+    AIRS), then generalise and run the audit.
 - **AIRS v1 is finished: 38 stores, all finalized** 2026-10-23, tag
   `v1-verified-20261023`, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`: two products of

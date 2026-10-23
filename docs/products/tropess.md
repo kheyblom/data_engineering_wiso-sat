@@ -1,6 +1,8 @@
 # AIRS and CrIS (NASA TROPESS / MUSES HDO)
 
-Not built yet. Sources:
+**AIRS v1 is built and finalized** (2026-10-23, tag `v1-verified-20261023`;
+TESTING.md, AIRS v1 run log). **CrIS is next: start at "CrIS: handoff"
+below.** Sources:
 - **Surveyed 2026-10-22:** a header scan of every AIRS file then on disk
   (7,612 files, no read errors), value probes of one file per version, the
   NASA catalog (CMR), the TROPESS READMEs and User Guide, and Sarkar et al.
@@ -11,9 +13,10 @@ Not built yet. Sources:
   header-scanned on 2026-10-23 (8,740 files, no read errors), and Summary was
   matched against Standard on five day pairs.
 
-AIRS v1 is built first. AIRS v2 waits for CrIS (user decision 2026-10-23),
-which has 139 days of the same v2 layout. One reader serves every v1
-collection (one file format).
+AIRS v1 was built first. AIRS v2 waits for CrIS (user decision 2026-10-23),
+which has 139 days of the same v2 layout. One reader (`products/tropess.py`)
+serves every v1 collection (one file format); it needs the changes listed in
+the CrIS handoff before it can read CrIS.
 
 ## Collections: stream, product type, platform
 
@@ -163,9 +166,8 @@ records what was held *before* that download.
   - the matched rows are exactly those with `signal_dof` > 1.1;
   - every variable both files carry is identical on the matched rows, except
     `x` of target 0 (R22).
-- **Summary's `target_id`** fills in where the Standard file lacks it (FS
-  R1p11 and early R1p12), if the audit confirms it agrees wherever both have
-  it.
+- **`target_id` is not stored** (Q4; it overflows int32 in 52 FS files,
+  R16).
 - **Metadata:** each store records the merge:
   - both collections (`ShortName`, version, DOI) and both files per granule
     (`granule_file`);
@@ -176,7 +178,8 @@ records what was held *before* that download.
   - A Standard-only day gives rows with the Summary fields NaN.
   - A Summary-only day gives rows with no Standard diagnostics (kernel,
     prior, DOF and so on are NaN), so every observation is kept.
-  - Open: confirm with the user when the production subset is drafted.
+  - Decided with the production subset (Q1): every row of a one-sided day
+    is kept.
 
 ### The first-row defect (R22; decided 2026-10-23: masked, declared)
 
@@ -199,6 +202,97 @@ kept.
 - **CrIS carries the platform in the product token** (`cris_snpp`,
   `cris_jpss1`, as `gosat` and `gosat2`). SNPP and JPSS1 FS overlap
   2021-04-01 .. 2021-05-21. The rest of CrIS is settled when it is reached.
+
+## CrIS: handoff (written 2026-10-23, for a new session)
+
+AIRS v1 is finished; CrIS is the user's next task (chosen 2026-10-22: CrIS
+once AIRS is finalized). Nothing about CrIS has been built. Follow the AIRS
+path: decisions with the user, then the audit, the production subset
+reviewed in place, the reader at fixture level, the full fixture test, a
+bench, production, and finalize with sign-off on every `--apply` (CLAUDE.md;
+STATE.md, How we work).
+
+**Settled already (user):**
+- one product per platform, stream and collection version, each its own
+  config, obs axis and stores (Product scheme). Product tokens `cris_snpp`
+  and `cris_jpss1`, with `source: tropess`, so the stores are
+  `wisosat.cris_snpp.v_1.rs...`, `wisosat.cris_jpss1.v_1.fs...` and so on;
+- Summary merged into Standard per day, R22 masked as declared, rows in
+  source order with the repeat check (style-guide exception, style_guides
+  `43b6b51`), RS and FS kept separate. All were decided for TROPESS, not for
+  AIRS alone, but confirm each carries over before building;
+- AIRS v2 (30 days, 2026-06) is designed together with CrIS-JPSS1 v2 (138
+  days); v2's layout differs (R25) and is a separate `v_2` store set.
+
+**On disk** (`raw/CRIS/`; every collection complete to its cutoff,
+`~/work/data_access/access_tropess/HANDBACK.md`). Measured 2026-10-23 on one
+file each: `Platform` is `SUOMI-NPP` or `JPSS-1`, `Instrument` `CrIS`, 17
+levels in v1, and the variables are AIRS's apart from the instrument's own
+geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
+`cris_view_ang`), which AIRS does not store. So the AIRS 18-variable subset
+(P3) should carry over; confirm with the user.
+
+| candidate product | collections | days | note |
+| --- | --- | --- | --- |
+| `cris_snpp` v1 RS | `TRPSYL2HDOCRSRS_1-20240923_230130/` (flat) | 1,865, 2015-12-01 .. 2021-05-21 | **Summary only**: there is no RS Standard collection upstream |
+| `cris_snpp` v1 FS | `TRPSDL2HDOCRSFS.1/`, `TRPSYL2HDOCRSFS.1/` | 110, 2021-02-01 .. 05-21 | R1p11, R1p12; overlaps SNPP RS (R26) and JPSS1 FS |
+| `cris_jpss1` v1 FS | `TRPSDL2HDOCRS1FS_1-20240912_023602/` (flat) and `TRPSDL2HDOCRS1FS.1/`; `TRPSYL2HDOCRS1FS.1/` | 1,887, 2021-04-01 .. 2026-05-31 | R1p12 .. R1p24; the backfill duplicates (R18) |
+| `cris_jpss1` v2 FS | `TRPS{D,Y,F}L2HDOCRS1FS.2/` | 138, 2026-06-01 .. 10-16 | with AIRS v2; layout R25; Full 85.8 GB |
+| `cris_snpp` SC (Australian fires) | `TRPSDL2HDOCRSAUS.1/` | 91, 2019-11 .. 2020-01 | Standard only, R1p9, stream token `SC_AUS`; in or out? |
+
+**Decisions for the user, before code:**
+1. **SNPP RS has no Standard upstream.** A Summary-only product would have
+   only DOF > 1.1 rows and no kernel, prior or errors. Build it as
+   Summary-only (the reader's obs axis becomes Summary's rows), or leave it
+   out? Sarkar et al. (2026) list CrIS 2016-2024 from "Summary products and
+   standard products" without naming collections; before 2021 only this RS
+   Summary exists, so it is likely theirs (inferred).
+2. **SNPP FS** (110 days) overlaps SNPP RS on the same targets (R26) and
+   JPSS1 FS (7 weeks). Its own product, or left out?
+3. **R18:** where two JPSS1 FS Standard files exist for one date (5 dates,
+   an old name and an R1p24 backfill), which to keep? The listing refuses
+   two files per date today; whichever is chosen should be declared in
+   config (declared, never detected), with the other file checked.
+4. **SC Australian fires:** in or out (CLAUDE.md lists SC as out of the
+   initial scope only by omission)?
+5. **v2**, for AIRS and CrIS-JPSS1 together: Standard on 34 levels cut at
+   DOF >= 1.1 vs Full with every row (R25); which, and with what subset.
+
+**Reader changes known to be needed** (`products/tropess.py`):
+- **Filter by instrument:** `list_granules` selects folders by stream and
+  collection only; under `raw/CRIS` the SNPP and JPSS1 FS v1 folders both
+  match, and every overlapping day would fail as "two Standard files". Match
+  the folder's `instrument` group (`CRS` vs `CRS1`) to the config, e.g. from
+  `platform` or a new listing option.
+- **Summary-only granules,** if decision 1 is yes; today a missing Standard
+  file is allowed only on declared one-sided days.
+- **Declared duplicate files** (R18), if decision 3 keeps one.
+- **`FILE_RE`** accepts only `RS|FS`; the `SC_AUS` files are skipped
+  silently, which is right only if decision 4 is out.
+- **The audit script** `tools/survey/tropess_file_audit.py` hard-codes the
+  AIRS folders, file pattern and `Instrument`; generalise it, then run it on
+  every CrIS file (develop job, ~1 core-hour for AIRS).
+
+**Lessons from AIRS to apply up front:**
+- **Scan every file's variable attributes for changes over the record**
+  (`standard_name`, `units`, `long_name`) in the audit. R33
+  (`day_night_flag`'s `standard_name`, renamed mid-FS) reached production
+  because neither the fixture nor the bench month held an early file; it
+  cost a rebuild and two re-verifies. A declared `standard_name` must be
+  one the source uses (the verifier checks it).
+- Choose the fixture and bench days to span the algorithm versions, the
+  folder layouts (flat and per-year) and one-sided days.
+- Seams between FS days overlap in time (R32): the repeat check covers
+  them, so expect `time_order: source`.
+- Fill values must occur in the record to be declared (the verifier fails
+  otherwise): take them from the audit, and the bench config's from the
+  bench month (`validation/stage_bench_tropess.py` reports them).
+- Compression: blosc on the 2-D arrays, default on `pressure` (Tier 2d);
+  re-measure only if CrIS differs.
+- The fixture test now takes ~12 min (the AIRS fixtures ~5 of it); CrIS
+  fixtures should be cut small, as the AIRS FS one is (400 rows).
+- `qstat` may not list a job id for some seconds after `qsub`; a wait loop
+  must not treat "not listed" as "finished" on its first check.
 
 ## AIRS v1 production subset (reviewed 2026-10-23)
 
