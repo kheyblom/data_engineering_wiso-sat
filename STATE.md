@@ -4,7 +4,10 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-23)
 
-**Nothing is running.** No batch jobs are queued.
+**Running: the AIRS bench** (approved 2026-10-23; develop, 8 cores, 32 GB,
+30 min each): RS build 7924508, then verify 7924509 (`afterany`); FS build
+7924511, then verify 7924514. Configs `config/airs_{rs,fs}/config_zarr_bench.yaml`
+(RS 2020-03, FS 2024-04), stores in `wisosat_bench/zarr/airs_{rs,fs}/`.
 - **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
   chose AIRS first and CrIS once AIRS is finalized.
 - Every AIRS and CrIS collection is on disk (downloaded 2026-10-22; see
@@ -13,7 +16,7 @@ Read this first in a new session. Update it whenever work lands.
   - every collection, the definitions and every version;
   - the Summary = Standard (DOF >= 1.1) finding;
   - the product scheme;
-  - issues R1-R26.
+  - issues R1-R32.
 - **Decided 2026-10-23:**
   - Summary is merged into Standard: one product per stream, with no
     summary/standard token in the name;
@@ -57,16 +60,17 @@ Read this first in a new session. Update it whenever work lands.
   files; production covers every seam.
 - **Tests pass:** 216 cases, 0 failures, over every product (TESTING.md
   Tier 1).
-- **Waiting on the user:** the style-guide exception, reworded to be narrow
-  and to require the repeat check (style_guides, uncommitted; under
-  "`time` must never decrease").
-- **Next:** commit, then the AIRS bench (shown with its cost first), then
-  production for RS and FS, then finalize with sign-off on each `--apply`,
-  then CrIS.
+- **The style-guide exception is approved and committed** (style_guides
+  `43b6b51`): an unordered source's row order may be kept, approved per
+  product, once a full-record check finds no repeats, and every build then
+  checks for repeats in place of the time order.
+- **Next:** the bench results (timings, and blosc against the default zstd
+  on three chunks of each 2-D store, login node, as P7 planned), then
+  production for RS and FS (shown with its cost first), then finalize with
+  sign-off on each `--apply`, then CrIS.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place. The fixture test passes 132
-  cases over TROPOMI, GOSAT, GOSAT-2 and SCIAMACHY.
+  testing tiers (`TESTING.md`) are in place.
 - **TROPOMI is finished: 25 stores, all finalized**, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`, on one obs
   axis (32,657,526,234 obs, 38,645 orbits) and one granule index.
