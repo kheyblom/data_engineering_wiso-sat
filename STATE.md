@@ -50,10 +50,16 @@ Read this first in a new session. Update it whenever work lands.
   - `version_product` puts the stream in the version slot (`v_1.rs`);
     `source_dtypes` stores the flags as int32;
   - the TAI93 decode, checked against `datetime_utc` on every row.
-- **Tests pass:** both AIRS fixtures (71 cases) and the full suite over every
-  product (TESTING.md Tier 1).
-- **Waiting on the user:** the style-guide time-order exception
-  (style_guides, uncommitted; added after "`time` must never decrease").
+- **Repeat check (user decision 2026-10-23):** under `time_order: source`,
+  the build and the verifier check that no observation repeats another's
+  time, lat and lon in its granule or across a seam, in place of the time
+  check (which caught SCIAMACHY S8 and S9). The audit covered repeats within
+  files; production covers every seam.
+- **Tests pass:** 216 cases, 0 failures, over every product (TESTING.md
+  Tier 1).
+- **Waiting on the user:** the style-guide exception, reworded to be narrow
+  and to require the repeat check (style_guides, uncommitted; under
+  "`time` must never decrease").
 - **Next:** commit, then the AIRS bench (shown with its cost first), then
   production for RS and FS, then finalize with sign-off on each `--apply`,
   then CrIS.

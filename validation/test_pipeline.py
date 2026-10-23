@@ -62,12 +62,16 @@ import numpy as np
 import yaml # type: ignore
 import zarr
 
-from utils.granules import COVERAGE_KEYS
+from utils.granules import COVERAGE_KEYS, check_repeats
+from utils.nomenclature import coordinates
 from utils.nomenclature import variable as key_variable
 from utils.path_utils import (
-    GEOLOCATION, load_config, load_reader, run_stores, source_product, store_path,
+    GEOLOCATION, listing_options, load_config, load_reader, run_stores, source_product,
+    store_path,
 )
-from utils.zarr_utils import BRANCH, COMMIT_PREFIX, COMMIT_RE, sharded_stores
+from utils.zarr_utils import (
+    BRANCH, COMMIT_PREFIX, COMMIT_RE, row_rule, sharded_stores, stored_seam_keys, time_source,
+)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -255,6 +259,35 @@ def test_product(results, config, scratch):
         last_line(output, f'{target}/{target}: every'),
     )
     repo.reset_branch(BRANCH, tip)
+
+    # ... and, where the files are not in time order, an observation that
+    # repeats another, the check that takes the time order's place: obs 1 made
+    # a copy of obs 0, then the third granule's first a copy of the second's
+    # last, which is also a seam between the verifier's ranges
+    if settings.get('time_order') == 'source':
+        geolocation = repository(settings, GEOLOCATION)
+        tip = next(iter(geolocation.ancestry(branch=BRANCH))).id
+        starts = index['granule_obs_start'].values
+        for where, (source, destination) in (
+            ('within a granule', (int(starts[0]), int(starts[0]) + 1)),
+            ('across a seam', (int(starts[2]) - 1, int(starts[2]))),
+        ):
+            session = geolocation.writable_session(BRANCH)
+            group = zarr.open_group(session.store, mode='r+')
+            for name in ('time', 'lat', 'lon'):
+                group[name][destination] = group[name][source]
+            session.commit('write granules tamper')
+            status, output = run(
+                'verify_wisosat_zarr.py', '--config', base, '--phases', 'values',
+                '--stores', GEOLOCATION,
+            )
+            results.check(
+                f'{product}: verifier fails on an observation repeated {where}',
+                status != 0 and 'FAIL  no observation repeats another' in output,
+                last_line(output, 'no observation repeats'),
+            )
+            geolocation.reset_branch(BRANCH, tip)
+        test_repeats(results, settings)
 
     # --stores compares only the stores it names: the geolocation store is
     # opened for the index, but its values are not compared again
@@ -500,6 +533,58 @@ def test_product(results, config, scratch):
     status, output = run('verify_wisosat_zarr.py', '--config', base)
     results.check(f'{product}: finalized stores still verify',
                   status == 0 and 'stores verified' in output, last_line(output, 'checks,'))
+
+
+def test_repeats(results, settings):
+    """The build's repeat check, on a real granule of the fixture.
+
+    A build that meets a repeat would need a raw file written with one, so the
+    check itself is called here, on one granule read as the build reads it:
+    twice in a row (a seam), and with its observations doubled (within).
+
+    Args:
+        results (Results): Where to record cases.
+        settings (dict): The fixture configuration.
+    """
+    product = settings['product']
+    source_name = source_product(settings)
+    reader = load_reader(settings)
+    granules = reader.list_granules(settings['directories']['raw'], **listing_options(settings, reader))
+    time = time_source(source_name)
+    location = tuple(coordinates(source_name)[name].original for name in ('lat', 'lon'))
+    data = reader.read_granule(granules[1], [time, *location], time, row_rule(settings, granules))
+    doubled = data._replace(n_obs=2 * data.n_obs, arrays={
+        source: array._replace(values=np.concatenate([array.values, array.values]))
+        for source, array in data.arrays.items()
+    })
+    for where, datas, message in (
+        ('across a seam', [data, data], 'observations of the granule before it'),
+        ('within a granule', [doubled], 'repeat another of the granule'),
+    ):
+        try:
+            check_repeats(datas, time, location)
+            error = ''
+        except ValueError as raised:
+            error = str(raised)
+        results.check(f'{product}: the build refuses an observation repeated {where}',
+                      message in error, error)
+    results.check(f'{product}: the build passes a granule without repeats',
+                  check_repeats([data], time, location) is not None)
+    # a resumed build reads the seam from the store: granule 1 as stored must
+    # give the keys granule 1 gives as read, or a repeat across a restart
+    # would pass unseen
+    stored = stored_seam_keys(repository(settings, GEOLOCATION), 2)
+    try:
+        check_repeats([data], time, location, stored)
+        error = ''
+    except ValueError as raised:
+        error = str(raised)
+    results.check(
+        f'{product}: a resumed build checks its seam against the stored granule',
+        stored is not None and len(stored) == data.n_obs
+        and 'observations of the granule before it' in error,
+        error or f'{len(stored or ())} stored keys',
+    )
 
 
 def test_rules(results):

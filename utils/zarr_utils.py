@@ -46,7 +46,7 @@ from zarr.codecs import BloscCodec
 
 from .granules import (
     GRANULE_DIM, LOCATION_COORDINATES, RowRule, declared_rows, index_attrs, index_entries,
-    index_fields,
+    index_fields, location_keys,
 )
 from .nomenclature import (
     conversion_factor,
@@ -1110,6 +1110,33 @@ def committed_state(repository, granules, store):
         )
     last = stored['granule_time_end'].values[-1] if ids else None
     return {'n_granules': len(ids), 'n_obs': n_obs, 'last_time': last}
+
+
+def stored_seam_keys(repository, before):
+    """The location keys of the last stored granule with observations before a point.
+
+    A resumed run checks its first granule against these for repeats
+    (``check_repeats``), as ``last_time`` serves ``check_time``.
+
+    Args:
+        repository (icechunk.Repository): The geolocation store's repository.
+        before (int): The position of the first granule the run writes.
+
+    Returns:
+        set | None: From ``location_keys``; None if no earlier granule has
+            observations.
+    """
+    stored = open_store(repository)
+    if stored is None or not before:
+        return None
+    counts = stored['granule_obs_count'].values[:before]
+    nonzero = np.flatnonzero(counts)
+    if not nonzero.size:
+        return None
+    last = int(nonzero[-1])
+    lo = int(stored['granule_obs_start'].values[last])
+    rows = slice(lo, lo + int(counts[last]))
+    return set(location_keys(*(stored[name][rows].values for name in LOCATION_COORDINATES)))
 
 
 def write_append(repository, observations, index, encoding, message):

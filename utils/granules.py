@@ -608,6 +608,75 @@ def check_time(datas, time_source, previous_end=None):
     return last
 
 
+def location_keys(time, lat, lon):
+    """Each observation's time, lat and lon as one hashable key, bit for bit.
+
+    Time is compared as integer nanoseconds and the position as float64, which
+    holds any float32 exactly, so values freshly read and values read back from
+    a store give the same key exactly when they are the same observation.
+
+    Args:
+        time (numpy.ndarray): datetime64 times.
+        lat (numpy.ndarray): Latitudes.
+        lon (numpy.ndarray): Longitudes.
+
+    Returns:
+        list: One ``(int, int, int)`` per observation, in order.
+    """
+    columns = (
+        np.asarray(time).astype('datetime64[ns]').view('int64'),
+        np.asarray(lat, dtype='float64').view('uint64'),
+        np.asarray(lon, dtype='float64').view('uint64'),
+    )
+    return list(zip(*(column.tolist() for column in columns)))
+
+
+def check_repeats(datas, time_source, location_sources, previous=None):
+    """Fail if an observation repeats another, within a granule or across a seam.
+
+    Where a config keeps the order of files that are not in time order
+    (``time_order: source``), ``check_time`` cannot run, and it is the check
+    that caught repeated and overlapping retrievals (SCIAMACHY S8 and S9). This
+    takes its place there: no two observations may share time, lat and lon,
+    within a granule or between a granule and the one before it, where an
+    overlap of consecutive files lands.
+
+    Args:
+        datas (list): :class:`GranuleData` in source order.
+        time_source (str): The source path of the time coordinate.
+        location_sources (tuple): The source paths of lat and lon.
+        previous (set, optional): The keys of the last granule with
+            observations already in the store, to check the seam with it.
+
+    Returns:
+        set | None: The keys of the last of these granules with observations,
+            to pass as ``previous`` next time; the incoming value if none has.
+
+    Raises:
+        ValueError: If any observation repeats.
+    """
+    for data in datas:
+        if not data.n_obs:
+            continue
+        keys = location_keys(
+            data.arrays[time_source].values,
+            *(data.arrays[source].values for source in location_sources),
+        )
+        unique = set(keys)
+        if len(unique) < len(keys):
+            raise ValueError(
+                f'{len(keys) - len(unique)} observations of granule {data.granule.id} '
+                f'repeat another of the granule in time, lat and lon'
+            )
+        if previous is not None and not unique.isdisjoint(previous):
+            raise ValueError(
+                f'granule {data.granule.id} repeats {len(unique & previous)} '
+                f'observations of the granule before it in time, lat and lon'
+            )
+        previous = unique
+    return previous
+
+
 def squeeze_dims(values, source_dims, observation_dim, renames):
     """Put a source array onto the store's dimensions.
 

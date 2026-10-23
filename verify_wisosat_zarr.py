@@ -40,7 +40,8 @@ Four phases, all run by default, selectable with ``--phases``:
     granule's index entry (observation count, earliest and latest time, and
     any fields of the reader's own) against the file; time never decreasing,
     unless the config keeps an unordered source's order (``time_order:
-    source``); the processor version, and the platform where the reader reads
+    source``), where no observation may repeat another's time, lat and lon
+    within a granule or across a seam instead; the processor version, and the platform where the reader reads
     one; the product's swath layout, and the reader's checks across a
     granule's files; values the config declares defects
     (``declared_masked_values``) confirmed in raw and stored as NaN; every
@@ -724,6 +725,9 @@ class Pass:
         platforms (set): Platforms seen; None where the reader names none.
         bounds (list): ``[lat_min, lat_max, lon_min, lon_max]``.
         decreasing (int): Places where time decreases.
+        repeated (int): Observations that repeat another's time, lat and lon
+            within a granule or across a seam (checked under ``time_order:
+            source``, in place of the time order).
         dtypes (dict): Source -> dtypes seen.
         attrs (dict): Source -> the first granule's attributes.
         standard_names (dict): Source -> the ``standard_name`` attributes any
@@ -754,6 +758,7 @@ class Pass:
         self.platforms = set()
         self.bounds = [np.inf, -np.inf, np.inf, -np.inf]
         self.decreasing = 0
+        self.repeated = 0
         self.dtypes = {}
         self.attrs = {}
         self.standard_names = {}
@@ -939,12 +944,28 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     stored_start = index['granule_time_start']
     stored_end = index['granule_time_end']
     source_rows = index['granule_source_rows']
+    # files not in time order are checked for repeated observations instead
+    repeats = primary and time_order(settings) == 'source'
     # the geolocation arrays every granule needs, compared or not
-    reference = sorted({'time'} | {coordinate_names[source] for source in match_sources})
+    reference = sorted(
+        {'time'} | {coordinate_names[source] for source in match_sources}
+        | (set(LOCATION_COORDINATES) if repeats else set())
+    )
 
     seen = Pass()
     spans = ChunkSpans()
     previous = None
+    previous_keys = None
+    if repeats:
+        # the seam with the range before: the last stored granule with
+        # observations before this range's first
+        earlier = np.flatnonzero(counts[:begin])
+        if earlier.size:
+            lo = int(starts[earlier[-1]])
+            rows = slice(lo, lo + int(counts[earlier[-1]]))
+            previous_keys = set(observation_keys(
+                [np.asarray(groups[GEOLOCATION][name][rows]) for name in LOCATION_COORDINATES]
+            ))
     for offset, granule in enumerate(granules):
         position = begin + offset
         files = read_expected(
@@ -1018,6 +1039,15 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                 if previous is not None and stored_time[0] < previous:
                     seen.decreasing += 1
                 previous = stored_time[-1]
+                if repeats:
+                    keys = observation_keys(
+                        [stored[(GEOLOCATION, name)] for name in LOCATION_COORDINATES]
+                    )
+                    unique = set(keys)
+                    seen.repeated += len(keys) - len(unique)
+                    if previous_keys is not None:
+                        seen.repeated += len(unique & previous_keys)
+                    previous_keys = unique
                 if seen.first_time is None:
                     seen.first_time = stored_time[0]
                 seen.last_time = stored_time[-1]
@@ -1124,6 +1154,7 @@ def merge_pass(total, part):
     total.unprocessed += part.unprocessed
     total.timed += part.timed
     total.decreasing += part.decreasing
+    total.repeated += part.repeated
     total.versions |= part.versions
     total.platforms |= part.platforms
     total.bounds = [
@@ -1264,6 +1295,10 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
         report.note(
             f'time order kept from the source (time_order: source): time decreases '
             f'{seen.decreasing} times along obs, as the files have it'
+        )
+        report.check(
+            'no observation repeats another in time, lat and lon, within a granule '
+            'or across a seam', seen.repeated == 0, f'{seen.repeated} repeats',
         )
     for entry in settings.get('declared_masked_values') or []:
         source = entry['source']

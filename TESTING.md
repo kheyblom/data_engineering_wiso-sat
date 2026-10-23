@@ -9,7 +9,7 @@ core-hours against a finite allocation.
 | Tier | What it is | Cost | Status |
 |------|-----------|------|--------|
 | 0 | Guards that refuse a bad config or raw tree before anything is written | seconds | **passed** (2026-10-14, in the Tier 1 test) |
-| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~12 min, login node | **passed** (2026-10-23): 204 cases, TROPOMI, GOSAT, GOSAT-2 (`source` and `platform`), SCIAMACHY (declared rows, monthly coverage) and AIRS RS and FS (two-file days with one-sided days declared, a declared masked defect, source time order, a stream in the version slot, extra index fields, lossless integer casts), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
+| 1 | Per-product fixtures, end to end: build, verify, resume, tamper, finalize | ~12 min, login node | **passed** (2026-10-23): 216 cases, TROPOMI, GOSAT, GOSAT-2 (`source` and `platform`), SCIAMACHY (declared rows, monthly coverage) and AIRS RS and FS (two-file days with one-sided days declared, a declared masked defect, source time order with the repeat check, a stream in the version slot, extra index fields, lossless integer casts), with the 2-D model-comparison stores, the per-array codec and shards, `finalize --expire`, stores in processes of their own and range scans in the verifier |
 | 2 | One real month of TROPOMI, production settings, throwaway stores | develop-queue job | **passed** (2026-10-16): build 189 s, verify 328 s, 0 failures |
 | 3 | Production builds and verification, one product at a time | batch chain | TROPOMI: **done** (2026-10-18): built, verified with 0 failures, finalized. GOSAT: **done** (2026-10-19): built, verified with 0 failures, finalized. GOSAT-2: **done** (2026-10-22): built, verified with 0 failures, finalized |
 
@@ -45,7 +45,13 @@ Per product, the test:
      declaration that does not match raw;
    - (AIRS) an undeclared one-sided day, a declared defect that is not what
      it says, `time_order: sorted` on files that are not, and declared
-     masks for a reader that cannot apply them (the others).
+     masks for a reader that cannot apply them (the others);
+   - (AIRS, `time_order: source`) an observation repeated within a granule
+     or across a seam, also against the stored granule a resume reads back
+     (the repeat check called on a real granule; a raw file with a repeat
+     would have to be written for an end-to-end build). The verifier must
+     fail both repeats tampered into the stored geolocation, one across a
+     seam between its ranges.
 
    A refused version must leave no store behind.
 6. **Finalizes.** `--attrs` must refuse an unverified store. Then `--attrs`,

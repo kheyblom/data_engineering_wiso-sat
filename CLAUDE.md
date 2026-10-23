@@ -145,8 +145,13 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
 - **Added for TROPESS (2026-10-23):**
   - `version_product` appends a stream to the version slot (`v_1.rs`);
   - `time_order: source` keeps rows in file order where the files are not
-    in time order (style-guide exception); the build's time check then
-    applies only to `sorted`, and the `layout` attribute states which;
+    in time order (style-guide exception); the `layout` attribute states
+    which. The time check then gives way to a repeat check (user decision
+    2026-10-23): no observation may share time, lat and lon with another in
+    its granule or the granule before, in the build (`check_repeats`, the
+    seam read back from the store on a resume) and in the verifier. The time
+    check caught SCIAMACHY S8 and S9, which the exception alone would have
+    let through;
   - `declared_masked_values` masks a declared defect to NaN, confirmed from
     raw by the reader (`DECLARED_MASKS`, `declared_masks`) and the verifier;
   - `source_dtypes` casts an integer source losslessly (checked);

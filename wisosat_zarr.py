@@ -16,7 +16,8 @@ The pass, per batch of ``granules_per_commit`` granules:
 2. check that every granule declares the configured processor version and
    that time never decreases, within or across granules, unless the config
    keeps the source order of files that are not in time order
-   (``time_order: source``, the style guide's exception; TROPESS). Rows a
+   (``time_order: source``, the style guide's exception; TROPESS), where no
+   observation may repeat another's time, lat and lon instead. Rows a
    config declares as repeats of others (``declared_rows_left_out``) are
    left out by the reader, once their declared match is confirmed;
 3. append each store's slice, data and granule index together, as one commit
@@ -44,10 +45,11 @@ import logging
 import multiprocessing
 import os
 
-from utils.granules import check_coverage, check_order, check_time
+from utils.granules import check_coverage, check_order, check_repeats, check_time
 from utils.log_utils import log_peak_memory, setup_logging
 from utils.nomenclature import coordinates, variables
 from utils.path_utils import (
+    GEOLOCATION,
     listing_options,
     load_config,
     load_reader,
@@ -72,6 +74,7 @@ from utils.zarr_utils import (
     resolve_compression,
     row_rule,
     store_sources,
+    stored_seam_keys,
     time_order,
     time_source,
     write_append,
@@ -296,6 +299,11 @@ def run_pass(settings, granules, revision, stores, num_workers):
     # committed by a store that stopped exactly at the restart point
     behind = [store for store in stores if states[store]['n_granules'] == start]
     previous_end = states[behind[0]]['last_time']
+    # files not in time order are checked for repeats instead, on the pass
+    # that writes the geolocation store, from the stored granule before it
+    repeats = time_order(settings) == 'source' and GEOLOCATION in stores
+    location = tuple(coordinates(source_name)[name].original for name in ('lat', 'lon'))
+    previous_keys = stored_seam_keys(repositories[GEOLOCATION], start) if repeats else None
 
     batches = [
         (begin, min(begin + per_commit, len(granules)))
@@ -308,7 +316,7 @@ def run_pass(settings, granules, revision, stores, num_workers):
     # so the list is fixed for the whole pass rather than per batch
     incomplete = [store for store in stores if states[store]['n_granules'] < len(granules)]
     sources = sorted(
-        {time} | {
+        {time} | (set(location) if repeats else set()) | {
             source for store in incomplete
             for source in store_sources(source_name, store).values()
         }
@@ -330,6 +338,8 @@ def run_pass(settings, granules, revision, stores, num_workers):
             check_versions(datas, settings)
             if time_order(settings) == 'sorted':
                 previous_end = check_time(datas, time, previous_end)
+            elif repeats:
+                previous_keys = check_repeats(datas, time, location, previous_keys)
             versions = versions or {'processor': datas[0].version}
 
             for store in needed:
