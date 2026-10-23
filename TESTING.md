@@ -503,6 +503,44 @@ than a 1-D chunk's share, so it paid this far less.
   + 0.03 h sys), 1.32 GiB per scan (was 0.58: the spans it holds), **879
   checks, 0 failures**.
 
+## Tier 2d: the AIRS bench (passed 2026-10-23)
+
+**What it is:** one real month per stream at production settings
+(`config/airs_{rs,fs}/config_zarr_bench.yaml`; files symlinked by
+`validation/stage_bench_tropess.py`, which also reports the month's fills):
+- **RS 2020-03:** 31 days, 77,588 obs (~0.45% of RS), ending on the
+  Summary-only day 03-31.
+- **FS 2024-04:** 30 days, 856,652 obs (~1.8% of FS), with the R1p22 to
+  R1p23 change on 04-25 and the Summary-only day 04-03.
+
+| job | what | wall | cpu | memory | result |
+| --- | --- | --- | --- | --- | --- |
+| 7924508 | RS build, 19 stores, 1 commit | 28 s (pass 4 s) | 16 s | 0.50 GiB main process (job 1.6 GB) | done |
+| 7924509 | RS verify | 28 s | 14 s | 0.45 GiB per scan | **841 checks, 0 failures**; 30 R22 defects confirmed, 0 repeats |
+| 7924511 | FS build, 19 stores, 1 commit | 21 s (pass 11 s) | 44 s | 3.67 GiB main process (job 7.2 GB) | done |
+| 7924514 | FS verify | ~20 s (scan 18 s) | (not yet in accounting) | 1.27 GiB per scan | **843 checks, 0 failures**; 29 R22 defects confirmed, 0 repeats |
+
+All on develop, 8 cores and 32 GB; ~0.1 core-hours in all. The verifier
+notes 11,372 (RS) and 302,893 (FS) places where time decreases, as the files
+have it (R32). Stores: RS 98 MB, FS 1.1 GB, ~85% of it the kernel.
+
+**Compression** (login node; three chunks of each 2-D array, FS, two or one
+in RS; zarr's default zstd against blosc zstd 5 + byte shuffle at the
+dtype's size):
+
+| array | FS zstd | FS blosc | blosc saves | RS blosc saves |
+| --- | --- | --- | --- | --- |
+| averaging kernel (17 x 17) | 1.14x | 1.26x | 10.1% | 11.4% |
+| `altitude` | 1.20x | 1.67x | 28.4% | 27.5% |
+| `water_vapor_hdo_h2o_ratio` | 1.24x | 1.61x | 23.0% | 22.1% |
+| `water_vapor_hdo_h2o_ratio_apriori` | 3.30x | 3.94x | 16.3% | 16.8% |
+| `water_vapor_h2o_mole_fraction_dry_air` | 1.13x | 1.27x | 11.7% | 11.3% |
+| `..._observation_standard_error_log` | 1.25x | 1.32x | 5.2% | 9.5% |
+| `pressure` | 16.36x | 15.28x | **-7.0%** | -1.9% |
+
+Over the record, blosc on the six arrays where it wins saves ~6.6 GB of
+FS's ~59 GB and ~2.7 GB of RS's ~23 GB (the kernel 4.6 and 1.9 of that).
+
 ## Tier 3: production
 
 Per product:
