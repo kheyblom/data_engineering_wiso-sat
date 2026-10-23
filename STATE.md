@@ -19,8 +19,9 @@ Read this first in a new session. Update it whenever work lands.
     summary/standard token in the name;
   - Standard's row-0 `x` is masked as a declared defect (R22);
   - AIRS v2 waits for CrIS.
-- **Pending (user):** whether AIRS RS and FS become one product. The analysis
-  was given in chat on 2026-10-23.
+  - AIRS RS and FS stay separate products, `wisosat.airs.v_1.rs.*` and
+    `wisosat.airs.v_1.fs.*`, built to join cleanly, each pointing to the
+    other (`tropess.md`, Product scheme).
 - **Next:**
   1. draft the AIRS production subset in `tropess.md` for in-place review,
      as `sciamachy.md`'s P1-P6;

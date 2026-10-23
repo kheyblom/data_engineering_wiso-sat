@@ -51,8 +51,16 @@ TROPESS_AIRS-Aqua_L2_Summary_HDO_20100615_MUSES_R1p6_RS_F0p8_J0.nc
   - **Joint processing indicator:** `J0` single, `J1` joint retrieval.
 - **Sampling** (both READMEs): "subsampled using a grid sampling approach"
   with 0.7° boxes for AIRS and 0.8° for CrIS, keeping "the single, center most
-  target within each box", with "both day and night time coverage". This fits
-  AIRS RS Summary but not AIRS FS Standard (R13, R14).
+  target within each box", with "both day and night time coverage".
+  - **The box sampling holds in all four AIRS v1 collections** (measured
+    2026-10-23 on 5 days each, R14): about one target per 0.7° box per
+    overpass.
+  - **What differs is how many boxes are filled**, which depends on the
+    stream: RS fills 6-10x fewer boxes per day than FS, at ~110 km spacing
+    against 54-78 km. The documents don't say why.
+  - **"Day and night" fits RS only** (R13).
+  - **The product type thins the rows further:** Summary keeps only rows with
+    DOF >= 1.1.
 - **FS v2 is a continuation, not a reprocessing.** It starts 2026-06-01 with
   algorithm R1p25 and format **F2p10**, the first change of the format's
   leading digit. v1 runs to 2026-05-31. The v2 README is the v1 document
@@ -117,9 +125,24 @@ records what was held *before* that download.
   - `wisosat.airs.v_1.rs.inst.native_swath.<variable>.zarr`
   - `wisosat.airs.v_1.fs.inst.native_swath.<variable>.zarr`
 
-  **Pending:** whether RS and FS become one product (`wisosat.airs.v_1...`)
-  is under the user's consideration (2026-10-23). v2 would be a separate
-  `v_2` store set either way: its layout differs.
+- **RS and FS stay separate products** (user decision 2026-10-23). They are
+  built to join cleanly: the same variables, names, units, dims, chunking and
+  filtering guidance, so concatenating on `obs` is one call. Each store's
+  metadata points to the other ("continued by" / "preceded by") and states
+  the seam:
+  - RS fills 6-10x fewer 0.7° boxes per day (R14);
+  - RS is about half night, FS almost all day (R13);
+  - RS is reanalysis with one algorithm (R1p6), FS forward processing with
+    14 versions;
+  - TROPESS's "1.12.0 Fixed HDO error calculation" postdates R1p6 by version
+    number (inferred; TROPESS does not say what RS contains);
+  - no data 2020-04 .. 2021-01 (R1).
+
+  Why: a merged store would present a changing sample and processing as one
+  record, with nothing overlapping to measure the step; the style guide keeps
+  a low-latency stream apart (`v_3_5.nrt`); and CrIS-SNPP's RS and FS retrieve
+  the same targets where they overlap (R26), so merging would not carry over
+  to CrIS. v2 is a separate `v_2` store set: its layout differs.
 - **Full and special collections:** added when wanted. The user's "four max"
   was a guideline, not a rule. A v2 Full product would be its own question,
   because in v2 only Full keeps every row (R25).
@@ -215,10 +238,12 @@ across RS and every FS version.
 7. **v2 is different** (R25): Standard v2 is already cut at DOF >= 1.1, so it
    has the same rows as Summary v2; only Full v2 keeps every row.
 
-**Stream vs type, resolved.** RS Standard is still the sparse subsample
-(~2,600 rows per day) with both overpasses (57% local night on 2010-06-15),
-while FS is dense and mostly daytime. So R13 and R14 are properties of the
-stream. The product type sets only the DOF >= 1.1 filter and the contents.
+**Stream vs type, resolved** (20 days measured, R13 and R14). All four
+collections take about one target per 0.7° box per overpass.
+- **The stream** sets how many boxes are filled (RS 6-10x fewer) and the
+  overpasses (RS about half night, FS almost all day).
+- **The product type** sets the DOF >= 1.1 filter (Summary keeps 65% of RS
+  rows and 40% of FS rows) and the contents.
 
 ## AIRS RS Summary vs FS Standard (measured 2026-10-22)
 
@@ -431,7 +456,7 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R11 | **FS `observation_error` is not a valid covariance.** Its `source` attribute says `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. Negative variances appear in all three files sampled (AIRS R1p11 2021-02-10, CrIS-JPSS1 R1p17 2022-07-10, AIRS R1p20 2023-06-15), in 16-31% of targets at 750-619 hPa, where the kernel is largest. R1p17 and R1p20 are also asymmetric, by as much as the variances (2026-10-19). | decided (user, 2026-10-19): left out, with no nomenclature row (`docs/model-comparison-naming.md` N16). Revisit if TROPESS documents or fixes it; worth reporting to them |
 | R12 | **`observation_error_h2o` looks 1-sigma**: p50 0.093, against p50 0.089 for the square root of TES's H2O observation-error variance. Neither the files nor the User Guide state it. | open |
 | R13 | **AIRS FS is almost all daytime**: ~13:30 local solar time, against both overpasses in RS (55-57% local night in RS Summary and RS Standard). Night-side FS rows only at \|lat\| ~67-76 in summer. The READMEs say both streams have "day and night time coverage". A property of the stream, not the type (2026-10-23). | record only |
-| R14 | **AIRS FS is ~10x denser than RS** (Standard: p50 27,079 vs ~2,700 obs per day). The READMEs describe one 0.7° subsample for both streams; it fits RS only. A property of the stream (2026-10-23). | record only |
+| R14 | **AIRS FS fills 6-10x more 0.7° boxes per day than RS** (corrected 2026-10-23; first read as FS not being box-sampled). All four v1 collections take about one target per box per overpass, as the READMEs describe, measured on 5 days each. <br>- Obs per day, record average: RS 1,739 Summary and 2,689 Standard; FS 10,514 and 26,352. <br>- Boxes filled per day: RS 1,352-2,691; FS 6,788-29,539. <br>- Nearest-neighbour spacing, p50: RS ~110 km; FS 54-78 km. <br>The stream sets the boxes covered. The type thins further (Summary = DOF >= 1.1: 65% of RS rows, 40% of FS). Why RS fills so few boxes is not documented. | record only |
 | R15 | **`observation_error_h2o` fill changes by version:** from R1p12 F0p2 it is written below the surface (level 0 fill 0-3% vs 53-64% for `x`); from R1p15 its top level (0.1 hPa) is fill on ~96-98% of rows. | record only; confirm over the record at the audit |
 | R16 | **FS integer dtypes drift:** int32 → int16 (`airs_*` indices, `day_night_flag`), int32/int64 (`land_flag`, `target_id`). | open: store as int32 with a `_FillValue` (existing rule) |
 | R17 | **`dd_col_p_error` is -9999 on ~70% of RS Summary rows** (747 of 1,017; 1,454 of 2,019; 1,170 of 1,588 in three files), where `dd_col_p` is written. | record only |
