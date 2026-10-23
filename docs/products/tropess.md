@@ -60,7 +60,7 @@ TROPESS_AIRS-Aqua_L2_Summary_HDO_20100615_MUSES_R1p6_RS_F0p8_J0.nc
     against 54-78 km. The documents don't say why.
   - **"Day and night" fits RS only** (R13).
   - **The product type thins the rows further:** Summary keeps only rows with
-    DOF >= 1.1.
+    DOF > 1.1.
 - **FS v2 is a continuation, not a reprocessing.** It starts 2026-06-01 with
   algorithm R1p25 and format **F2p10**, the first change of the format's
   leading digit. v1 runs to 2026-05-31. The v2 README is the v1 document
@@ -117,7 +117,7 @@ records what was held *before* that download.
   - Summary is merged into Standard, so there is no Summary product and no
     `summary`/`standard` token in the name. This replaces the 2026-10-22 plan
     of one product per product type.
-  - The reason: Summary v1 is exactly Standard's rows with DOF >= 1.1, with
+  - The reason: Summary v1 is exactly Standard's rows with DOF > 1.1, with
     identical values (Summary vs Standard, below).
   - Each product gets its own obs axis, geolocation store and config.
 - **Store names follow the style guide's version rule:** the collection
@@ -157,10 +157,10 @@ records what was held *before* that download.
 - **The obs axis is Standard's rows.** The five Summary-only fields
   (`dd_col_p`, `dd_col_p_error`, `dd_004`, `x_h2o_col_p`, `x_h2o_col_p_error`)
   are placed on their Standard rows by matching `time`, `latitude` and
-  `longitude`. They are NaN on rows with DOF < 1.1, which Summary leaves out.
+  `longitude`. They are NaN on rows with DOF <= 1.1, which Summary leaves out.
 - **Checked from raw, by the build and by the verifier:**
   - every Summary row matches one Standard row, in the same order;
-  - the matched rows are exactly those with `signal_dof` >= 1.1;
+  - the matched rows are exactly those with `signal_dof` > 1.1;
   - every variable both files carry is identical on the matched rows, except
     `x` of target 0 (R22).
 - **Summary's `target_id`** fills in where the Standard file lacks it (FS
@@ -169,9 +169,9 @@ records what was held *before* that download.
 - **Metadata:** each store records the merge:
   - both collections (`ShortName`, version, DOI) and both files per granule
     (`granule_file`);
-  - the DOF >= 1.1 relationship;
+  - the DOF > 1.1 relationship;
   - for the five Summary fields, that they come from the Summary product and
-    are absent where DOF < 1.1.
+    are absent where DOF <= 1.1.
 - **Days with only one of the two files** (R23): RS 3 days, FS v1 11 days.
   - A Standard-only day gives rows with the Summary fields NaN.
   - A Summary-only day gives rows with no Standard diagnostics (kernel,
@@ -345,7 +345,7 @@ names table). The evidence that they are the right quantities (checked
 
   The verifier checks that the `comment` is present on both stores.
 
-**Merged from Summary** (NaN where DOF < 1.1). The definitions come from each
+**Merged from Summary** (NaN where DOF <= 1.1). The definitions come from each
 variable's `comment` and `source` attributes (RS and FS Summary, all files),
 and were reproduced from the profiles on RS 2010-06-15, FS 2022-06-01 (R1p17)
 and FS 2025-06-01 (R1p24).
@@ -358,7 +358,7 @@ and FS 2025-06-01 (R1p24).
 | `x_h2o_col_p_error` | `water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error` *new* | 1e-6 | none |
 | `dd_004` | `water_vapor_delta_d_004` *new* (user's name, approved 2026-10-23, Q2c) | 1e-3 | none |
 
-- **The range is every level of the profile between 850 and 250 hPa.**
+- **The range is every level of the profile from 250 hPa up to, but not including, 850 hPa** (`250 <= p < 850`; R30).
   - **Usually 8 levels:** 825.4, 749.9, 681.3, 619.0, 510.9, 421.7, 348.1 and
     287.3 hPa (98% of rows on RS 2010-06-15 and FS 2022-06-01).
   - **5-9 over high ground.** Grid levels below the surface drop out, and the
@@ -513,7 +513,7 @@ That is **14 new nomenclature rows**.
   it equals `x_test` before masking, so a file where it does not fails the
   build.
 - **The Summary merge** is checked on every day: Summary rows are exactly the
-  Standard rows with DOF >= 1.1, in order, with identical shared variables
+  Standard rows with DOF > 1.1, in order, with identical shared variables
   (Product scheme).
 - **Missing days** (P2), and the one-sided days (Q1).
 - **No `declared_rows_left_out`:** every row has time, lat and lon (to be
@@ -523,9 +523,9 @@ That is **14 new nomenclature rows**.
 
 Recorded, not applied:
 - **Sarkar et al. (2026):** FS filtered with DOF >= 1 and COD <= 0.5. RS was
-  gridded from Summary, which is Standard with DOF >= 1.1.
+  gridded from Summary, which is Standard with DOF > 1.1.
 - **TROPESS:**
-  - the Summary product is the Standard rows with DOF >= 1.1 (measured; not
+  - the Summary product is the Standard rows with DOF > 1.1 (measured; not
     stated by TROPESS);
   - the User Guide's rule of thumb is "DOFS > 0.7";
   - the User Guide says "the degrees of freedom for signal are 0.8 or larger
@@ -555,9 +555,9 @@ Recorded, not applied:
 
 ### P8. Next, after review
 
-1. **The 14 new nomenclature rows**, drafted in style_guides for review
-   before commit.
-2. **A full-record audit, as a batch job shown first.** Every RS and FS file
+1. **Done 2026-10-23: the 14 new nomenclature rows** (style_guides
+   `f18168e`).
+2. **Done 2026-10-23 (TESTING.md finding 15): a full-record audit, as a batch job shown first.** Every RS and FS file
    (~142 GB), checking:
    - layout per version;
    - time against `datetime_utc` with the leap table;
@@ -582,7 +582,7 @@ Five day pairs tested: RS 2003-03-01 and 2010-06-15; FS 2021-02-01 (R1p11),
 across RS and every FS version.
 
 1. **Same rows, filtered.** Summary is exactly Standard's rows with
-   `signal_dof` >= 1.1, in the same order, with no mismatches in any pair.
+   `signal_dof` > 1.1, in the same order, with no mismatches in any pair.
    The Summary minimum DOF is 1.100.
 2. **Same values.** All 16-17 per-observation variables they share are
    identical on matched rows: geolocation, `time`, `datetime_utc`, `x`,
@@ -594,7 +594,7 @@ across RS and every FS version.
 4. **Only in Standard:** `averaging_kernel`, `xa`, `observation_error`,
    `observation_error_h2o`, `signal_dof`, `average_cloud_eod`,
    `cloud_top_pressure`, `surface_temperature`, `x_raw`, `x_h2o_raw`, and the
-   rows with DOF < 1.1.
+   rows with DOF <= 1.1.
 5. **Totals** (header scans 2026-10-22 and 10-23):
 
    | collection | files | obs | Summary / Standard |
@@ -617,7 +617,7 @@ across RS and every FS version.
 collections take about one target per 0.7° box per overpass.
 - **The stream** sets how many boxes are filled (RS 6-10x fewer) and the
   overpasses (RS about half night, FS almost all day).
-- **The product type** sets the DOF >= 1.1 filter (Summary keeps 65% of RS
+- **The product type** sets the DOF > 1.1 filter (Summary keeps 65% of RS
   rows and 40% of FS rows) and the contents.
 
 ## AIRS RS Summary vs FS Standard (measured 2026-10-22)
@@ -826,23 +826,28 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R4 | **FS layout drifts by version** (16 algorithm/format periods on disk): variable presence (`target_id`, `retrieval/*`, microwindows), dtypes (R16) and `long_name` wording. Units are stable. | open: the reader tolerates absent variables; stores keep only variables present throughout, or are declared per period |
 | R5 | **173 AIRS FS files end `_target.nc`** (2022-03-01 .. 08-31). They are local copies: `ncks -O --mk_rec_dmn target` run on 2024-09-29 against the plain file, with the same variables and rows. Not upstream. | handled: the reader skips `*_target.nc` |
 | R6 | **The AIRS FS folder holds L3 files** (`AIRS_TROPESS_gridded_*`). | handled: glob `TROPESS_*` |
-| R7 | **`x_h2o` reaches 0.72 mol mol-1**, which is unphysical. | record only |
+| R7 | **`x_h2o` reaches 0.93 (RS) and 0.985 (FS) mol mol-1** over the record (audit 2026-10-23), which is unphysical. | record only |
 | R8 | **`observation_error_h2o` is a ln-space relative error** with units `1`, sitting next to mole-fraction variables. | open: must never be scaled x 1e6 (project rule) |
 | R9 | **RS Summary files are pre-filtered**; FS Standard files are not (DOF down to ~0). The documents disagree on which type is filtered (Format). | record only |
 | R10 | **Level 0 of `pressure` is fill on 25-64% of rows in every version**, RS included (resolved 2026-10-22; first read as version drift). Levels below the surface are fill, and the lowest valid level holds the surface pressure. | record only; the fill is masked as usual |
-| R11 | **FS `observation_error` is not a valid covariance.** Its `source` attribute says `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. Negative variances appear in all three files sampled (AIRS R1p11 2021-02-10, CrIS-JPSS1 R1p17 2022-07-10, AIRS R1p20 2023-06-15), in 16-31% of targets at 750-619 hPa, where the kernel is largest. R1p17 and R1p20 are also asymmetric, by as much as the variances (2026-10-19). | decided (user, 2026-10-19): left out, with no nomenclature row (`docs/model-comparison-naming.md` N16). Revisit if TROPESS documents or fixes it; worth reporting to them |
+| R11 | **FS `observation_error` is not a valid covariance.** Its `source` attribute says `obs_dd + obs_hh - obs_hd - obs_dh`, which must be symmetric with a non-negative diagonal. Negative variances appear in all three files sampled (AIRS R1p11 2021-02-10, CrIS-JPSS1 R1p17 2022-07-10, AIRS R1p20 2023-06-15), in 16-31% of targets at 750-619 hPa, where the kernel is largest. R1p17 and R1p20 are also asymmetric, by as much as the variances (2026-10-19). The audit's probes (2026-10-23) found a negative variance somewhere in the profile on every row of RS 2010-06-15 and FS 2022-06-01, and FS's asymmetric on every row; RS Standard (R1p6) has the same defect. | decided (user, 2026-10-19): left out, with no nomenclature row (`docs/model-comparison-naming.md` N16). Revisit if TROPESS documents or fixes it; worth reporting to them |
 | R12 | **`observation_error_h2o` looks 1-sigma**: p50 0.093, against p50 0.089 for the square root of TES's H2O observation-error variance. Neither the files nor the User Guide state it. | open |
 | R13 | **AIRS FS is almost all daytime**: ~13:30 local solar time, against both overpasses in RS (55-57% local night in RS Summary and RS Standard). Night-side FS rows only at \|lat\| ~67-76 in summer. The READMEs say both streams have "day and night time coverage". A property of the stream, not the type (2026-10-23). | record only |
-| R14 | **AIRS FS fills 6-10x more 0.7° boxes per day than RS** (corrected 2026-10-23; first read as FS not being box-sampled). All four v1 collections take about one target per box per overpass, as the READMEs describe, measured on 5 days each. <br>- Obs per day, record average: RS 1,739 Summary and 2,689 Standard; FS 10,514 and 26,352. <br>- Boxes filled per day: RS 1,352-2,691; FS 6,788-29,539. <br>- Nearest-neighbour spacing, p50: RS ~110 km; FS 54-78 km. <br>The stream sets the boxes covered. The type thins further (Summary = DOF >= 1.1: 65% of RS rows, 40% of FS). Why RS fills so few boxes is not documented. | record only |
-| R15 | **`observation_error_h2o` fill changes by version:** from R1p12 F0p2 it is written below the surface (level 0 fill 0-3% vs 53-64% for `x`); from R1p15 its top level (0.1 hPa) is fill on ~96-98% of rows. | record only; confirm over the record at the audit |
-| R16 | **FS integer dtypes drift:** int32 → int16 (`airs_*` indices, `day_night_flag`), int32/int64 (`land_flag`, `target_id`). | open: store as int32 with a `_FillValue` (existing rule) |
-| R17 | **`dd_col_p_error` is -9999 on ~70% of RS Summary rows** (747 of 1,017; 1,454 of 2,019; 1,170 of 1,588 in three files), where `dd_col_p` is written. Where written it equals (1000 + δD) × √(M S Mᵀ) to 7e-8. The fill is not a negative variance: M S Mᵀ >= 0 on every row (RS 2010-06-15). | record only; cause to the audit |
+| R14 | **AIRS FS fills 6-10x more 0.7° boxes per day than RS** (corrected 2026-10-23; first read as FS not being box-sampled). All four v1 collections take about one target per box per overpass, as the READMEs describe, measured on 5 days each. <br>- Obs per day, record average: RS 1,739 Summary and 2,689 Standard; FS 10,514 and 26,352. <br>- Boxes filled per day: RS 1,352-2,691; FS 6,788-29,539. <br>- Nearest-neighbour spacing, p50: RS ~110 km; FS 54-78 km. <br>The stream sets the boxes covered. The type thins further (Summary = DOF > 1.1: 65% of RS rows, 40% of FS). Why RS fills so few boxes is not documented. | record only |
+| R15 | **`observation_error_h2o` fill changes by version:** from R1p12 F0p2 it is written below the surface (level 0 fill 0-3% vs 53-64% for `x`); from R1p15 its top level (0.1 hPa) is fill on ~96-98% of rows. Confirmed over the record by the audit (2026-10-23), version by version. That fill is **NaN**, not -999: 42.2 M NaN and 210,014 -999 values in FS, and 2,388 NaN and 4,371 -999 in RS. | handled: the reader masks NaN as well as -999 |
+| R16 | **FS integer dtypes drift:** int32 → int16 (`airs_*` indices, `day_night_flag`), int32/int64 (`land_flag`, `target_id`). The 52 FS R1p15 F0p3 Standard files store `target_id` as int32, which **overflows** (e.g. -1585826092, against Summary's 24006205300); the audit found every Summary `target_id` disagreeing on those 52 days. `target_id` is not stored (Q4). | open: store the flags and indices as int32 with a `_FillValue` (existing rule) |
+| R17 | **`dd_col_p_error` is -9999 on ~70% of RS Summary rows** (747 of 1,017; 1,454 of 2,019; 1,170 of 1,588 in three files), where `dd_col_p` is written. Where written it equals (1000 + δD) × √(M S Mᵀ) to 7e-8. **Cause found (2026-10-23):** it is -9999 exactly where some level between 850 and 250 hPa has a negative `observation_error` variance (R11). That matches 100% of rows on RS 2010-06-15 and 99.6% on FS 2022-06-01; M S Mᵀ itself is usually >= 0. Over the record: RS 8,017,256 of 11,063,132 rows (72%), FS 13,225,737 of 19,071,666 (69%), plus NaN on 195 RS and 73,836 FS rows. | record only; stored as published, with the cause in the metadata |
 | R18 | **CrIS-JPSS1 FS Standard v1 was backfilled upstream in 2025:** 108 granules with algorithm R1p24 dated before its R1p24 period (2021-05-21 ..). 5 replace files we hold under older names (2021-05-21, 2022-03-08, 2022-08-13, 2023-12-27, 2024-08-21; upstream updated 2025-09-04 .. 09-11); others fill days missing at our download. One file per date upstream. The 5 new files are downloaded and the old ones kept (the old ones are no longer in CMR). | open, for CrIS: which granule to keep where two exist |
 | R19 | **Days not downloaded at first:** AIRS FS Standard 2023-07-21 and 2023-10-19; CrIS-JPSS1 FS Standard 46 dates within our window (2022-05-29 .. 2024-09-01). | handled: downloaded 2026-10-22 |
 | R20 | **The README's Summary column kernel is absent** from the RS Summary HDO files (v1). | record only |
 | R21 | **`x_test` is one 17-level profile per file** (target 0), not per target: the guide's check of the kernel convention, and the value written over `x[0]` (R22). | handled: not stored |
-| R22 | **`x` of the first target in every Standard file is `x_test`, not the retrieval** (all 40 Standard files sampled: RS R1p6 and every FS version R1p11 .. R1p24). It is the kernel applied to the true profile, which Summary holds where that row has DOF >= 1.1 (it reproduces to 5e-8). It differs from the retrieval by up to ~6%. Only `x` is affected; the rest of the row is identical to Summary's. One obs per file: 8,177 in AIRS v1. | decided (user, 2026-10-23): masked as a declared defect, recorded in docs and metadata; confirmed from raw (row-0 `x` equals `x_test`) on every file at build and verify |
-| R23 | **Standard and Summary dates differ slightly:** RS 2 Standard-only days (2002-08-30, 08-31) and 1 Summary-only (2020-03-31); FS v1 6 Standard-only and 5 Summary-only (listed under Summary vs Standard). | open: the merge's one-sided days (Product scheme) |
+| R22 | **`x` of the first target in every Standard file is `x_test`, not the retrieval** (all 8,177 Standard files, audit 2026-10-23: RS R1p6 and every FS version R1p11 .. R1p24). It is the kernel applied to the true profile, which Summary holds where that row has DOF > 1.1 (it reproduces to 5e-8). It differs from the retrieval by up to ~6%. Only `x` is affected; the rest of the row is identical to Summary's. One obs per file: 8,177 in AIRS v1. | decided (user, 2026-10-23): masked as a declared defect, recorded in docs and metadata; confirmed from raw (row-0 `x` equals `x_test`) on every file at build and verify |
+| R23 | **Standard and Summary dates differ slightly:** RS 2 Standard-only days (2002-08-30, 08-31) and 1 Summary-only (2020-03-31); FS v1 6 Standard-only and 5 Summary-only (listed under Summary vs Standard). | decided (user, 2026-10-23, Q1): every row kept |
 | R24 | **AIRS FS v1 has 72 upstream gap days after 2024-09-05**, in 18 runs (e.g. 2024-09-17 .. 19, 2024-10-04 .. 19). | record only (`known_data_gaps`) |
 | R25 | **v2 (R1p25, format F2p10) changes the layout:** <br>- Standard is on 34 levels, cut at DOF >= 1.1, and adds `averaging_kernel_h2o`, the five column fields and `air_density`; `target_id` becomes a 36-character string. <br>- Summary stays on 17 levels with the same rows as Standard. <br>- Full keeps every row, on 67 forward-model and 34 retrieval levels, with every HDO/H2O kernel and covariance block (some as compressed int8 bytes). | record only; v2 designed with CrIS (user, 2026-10-23) |
 | R26 | **CrIS-SNPP RS and FS retrieve the same targets where they overlap** (2021-02-01 .. 05-21): on 2021-03-01, 326 of RS's 1,111 targets are also in FS (R1p17 vs R1p11). `x` differs by p50 0.17%, up to 10%, and the matched times differ by up to 87 s. TROPESS 1.10 "Fixed to use correct observation time in CrIS products". | open, for CrIS |
+| R27 | **Each file runs from ~00:05 UTC to ~00:05 the next day**, so its last AIRS granule ends past midnight: 69,024 RS and 209,149 FS Standard rows are dated the next day. They are not duplicates: consecutive days share no rows. | handled: the granule is the file; every row keeps its own time |
+| R28 | **`signal_dof` goes negative**, to -0.90 (RS) and -0.90 (FS). | record only |
+| R29 | **More fill to mask**, counted over the record by the audit: `day_night_flag` -999 on 28 RS and 793,403 FS rows; `x_h2o_col_p_error` -999 on 223,959 FS Summary rows; `dd_col_p_error` NaN as well as -9999 (R17). | handled: -999, -9999 and NaN all masked |
+| R30 | **The 850 hPa end of the 850-250 hPa means is exclusive**: one FS row (2024-07-01) has its surface at exactly 850.0 hPa, and TROPESS leaves it out. With `250 <= p < 850` both fields reproduce on every row. | record only (in the variables' metadata) |
+| R31 | **The Summary rule is strict, DOF > 1.1**: the only 5 rows that broke `>= 1.1` (RS 2010-03-27; FS 2023-03-17, 2023-08-23, 2025-05-21, 2026-03-22) have DOF exactly 1.1 (float32), and Summary leaves each out. | handled: the merge check uses > 1.1 |

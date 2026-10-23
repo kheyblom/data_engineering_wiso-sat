@@ -29,13 +29,21 @@ Read this first in a new session. Update it whenever work lands.
   - Q2c is `water_vapor_delta_d_004`;
   - `x` and `x_h2o` carry "bias corrected" in their metadata (config
     `comment`, `original_long_name`, `source`).
-- **Next:**
-  1. the 14 nomenclature rows are drafted in style_guides, uncommitted,
-     awaiting the user's review;
-  2. a full-record audit (batch; show it first);
-  3. then nomenclature rows, the reader at fixture level, the shared changes
-     (per-granule versions, the Summary merge, declared masking), the bench,
-     and production.
+- **Done 2026-10-23:**
+  - the 14 nomenclature rows (style_guides `f18168e`);
+  - the full-record audit (develop job 7921827, 6 min, ~1 core-hour;
+    TESTING.md finding 15). No blocker: R22 holds on every Standard file,
+    the merge is exact on every day, and TAI93 matches `datetime_utc`
+    everywhere. The audit added R27-R31 in `tropess.md`.
+- **Next:** the reader at fixture level and the shared changes:
+  - multi-file Standard + Summary granules, matched on time and position,
+    with DOF > 1.1;
+  - per-granule versions in the granule index;
+  - declared masking of R22;
+  - the TAI93 decode;
+  - NaN masked as fill.
+
+  Then the test over every product, the bench and production.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place. The fixture test passes 132

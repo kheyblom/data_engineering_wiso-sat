@@ -224,6 +224,43 @@ core-hours).
 - The output is in `/glade/derecho/scratch/$USER/data/wisosat/audit/`
   (`sciamachy_file_audit.jsonl`; the first run kept as `_run1`).
 
+### 15. Every AIRS v1 day audited (2026-10-23, develop job 7921827, 6 min)
+
+`tools/survey/tropess_file_audit.py` read every RS and FS Standard and Summary
+file in full: 8,183 days, 16,352 files, ~142 GB. It ran on 8 cores with 16
+workers, in 358 s (~1 core-hour), with no read errors. Output:
+`/glade/derecho/scratch/$USER/data/wisosat/audit/tropess_airs_file_audit.jsonl`
+and `.log`. Follow-up probes on the login node explained every anomaly
+(`tropess.md`, R27-R31).
+
+- **The pipeline's assumptions hold on every file:**
+  - every row has time, lat and lon, so no row is left out;
+  - lat and lon are in range;
+  - time is whole seconds, and TAI93 less the leap seconds (5-10 over the
+    record) equals `datetime_utc` on all ~95M rows (R3);
+  - one vertical grid in every file, with no gaps above the lowest valid
+    level; `x`, `x_h2o`, `xa` and `altitude` share `pressure`'s fill (R10);
+  - `ShortName`, `VersionID`, `Platform`, `Instrument` and `source` match
+    every file's name;
+  - one layout in RS (each type); 8 in FS Standard and 5 in FS Summary
+    (R4).
+- **R22 holds on all 8,177 Standard files:** row 0's `x` equals `x_test`.
+- **The Summary merge holds on all 8,169 days with both files:** 0
+  unmatched Summary rows, 0 order breaks, 0 differing shared variables. The
+  rule is strict, **DOF > 1.1**: the only 5 rows that broke `>= 1.1` have
+  DOF exactly 1.1 (float32), and Summary leaves each out.
+- **The 850-250 hPa means reproduce on every row with `250 <= p < 850`.**
+  The one miss with `<= 850` was a surface at exactly 850.0 hPa (FS
+  2024-07-01).
+- **Explained by probes:**
+  - **Rows past midnight are not duplicates:** each file runs ~00:05 to
+    ~00:05 the next day, and consecutive days share no rows.
+  - **`target_id` disagrees on 52 days** because the 52 FS R1p15 F0p3
+    Standard files store it as int32, which overflows (R16).
+  - **`dd_col_p_error` is -9999 exactly where some level in 850-250 hPa has
+    a negative `observation_error` variance** (RS 100%, FS 99.6%; R17). Every
+    row has a negative variance somewhere in its profile (R11).
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445
