@@ -4,10 +4,12 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-23)
 
-**Running: the AIRS bench** (approved 2026-10-23; develop, 8 cores, 32 GB,
-30 min each): RS build 7924508, then verify 7924509 (`afterany`); FS build
-7924511, then verify 7924514. Configs `config/airs_{rs,fs}/config_zarr_bench.yaml`
-(RS 2020-03, FS 2024-04), stores in `wisosat_bench/zarr/airs_{rs,fs}/`.
+**Running: AIRS v1 production** (approved 2026-10-23; develop, 8 cores, 32
+GB, 1 h each, from `259bf2d`): RS build 7924565, then verify 7924567
+(`afterany`); FS build 7924569, then verify 7924572. Stores in
+`/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`. The bench passed
+(TESTING.md Tier 2d, jobs 7924508-7924514); blosc on the six 2-D arrays
+(user decision 2026-10-23).
 - **Current task: AIRS v1, then CrIS (task 6).** On 2026-10-22 the user
   chose AIRS first and CrIS once AIRS is finalized.
 - Every AIRS and CrIS collection is on disk (downloaded 2026-10-22; see
@@ -64,10 +66,11 @@ Read this first in a new session. Update it whenever work lands.
   `43b6b51`): an unordered source's row order may be kept, approved per
   product, once a full-record check finds no repeats, and every build then
   checks for repeats in place of the time order.
-- **Next:** the bench results (timings, and blosc against the default zstd
-  on three chunks of each 2-D store, login node, as P7 planned), then
-  production for RS and FS (shown with its cost first), then finalize with
-  sign-off on each `--apply`, then CrIS.
+- **Next:** check the production verify results, then finalize each stream
+  with sign-off on each `--apply` (`--attrs`, `--tag
+  v1-verified-YYYYMMDD`, `--gc`; no shards, so no `--expire`), then CrIS.
+  The bench stores in `wisosat_bench/zarr/airs_{rs,fs}/` (~1.2 GB) and links
+  in `wisosat_bench/raw/airs_{rs,fs}/` are throwaway: delete with approval.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place.
