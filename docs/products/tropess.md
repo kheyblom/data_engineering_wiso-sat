@@ -266,6 +266,17 @@ full-record audit (P8) follows and may revise the facts here.
   observations.
 - **Missing days** are declared (`expected_missing_days`): RS 61 and FS 126,
   all upstream gaps (CMR, 2026-10-22).
+- **Row order: the source order is kept (user decision 2026-10-23), so `time`
+  is not monotonic.** TROPESS files are not in time order (R32), so the style
+  guide's two rules conflict: keep the source order, and `time` never
+  decreases. The style guide gains an exception for sources not in time
+  order (drafted 2026-10-23, for review).
+  - Each day stays one contiguous granule, its rows as published.
+  - The granule index records each day's earliest and latest time.
+  - The stores' metadata says `time` is not monotonic.
+  - Sorting within each day was the alternative (with a new store of source
+    row positions). It would still leave `time` decreasing at 175 FS day
+    seams.
 
 ### P3. Stores
 
@@ -851,3 +862,4 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R29 | **More fill to mask**, counted over the record by the audit: `day_night_flag` -999 on 28 RS and 793,403 FS rows; `x_h2o_col_p_error` -999 on 223,959 FS Summary rows; `dd_col_p_error` NaN as well as -9999 (R17). | handled: -999, -9999 and NaN all masked |
 | R30 | **The 850 hPa end of the 850-250 hPa means is exclusive**: one FS row (2024-07-01) has its surface at exactly 850.0 hPa, and TROPESS leaves it out. With `250 <= p < 850` both fields reproduce on every row. | record only (in the variables' metadata) |
 | R31 | **The Summary rule is strict, DOF > 1.1**: the only 5 rows that broke `>= 1.1` (RS 2010-03-27; FS 2023-03-17, 2023-08-23, 2025-05-21, 2026-03-22) have DOF exactly 1.1 (float32), and Summary leaves each out. | handled: the merge check uses > 1.1 |
+| R32 | **TROPESS rows are not in time order** (2026-10-23). <br>- **RS** lists each AIRS granule's rows south to north (latitude increases on 96% of steps), so time runs forward on daytime ascending passes and backward on night-time descending ones. The backward jumps are short (p50 64 s, max 6.4 min; on RS 2010-06-15 sorting would move rows a median of 11 places). <br>- **FS** interleaves AIRS granules from different times of day, apparently in processing order. 36% of steps go back, up to 23 h; sorting would move rows a median of 8,212 places (FS 2022-06-01). <br>- Across days, RS never overlaps, but 175 FS files hold observations later than the next file's first, with no row in both (12 seams checked, 6,929 rows). | decided (user, 2026-10-23): source order kept; style-guide exception drafted |
