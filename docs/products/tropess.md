@@ -534,7 +534,9 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
    JPSS1 with an R18 date, the R36 boundary (2021-10-31 / 11-01), an
    algorithm-change repeat and a lag-2 repeat (2023-09-28 .. 30).
 5. The full fixture test (done), a bench (**done 2026-10-26**, TESTING.md
-   Tier 2e: 0 failures on all three), production, finalize.
+   Tier 2e: 0 failures on all three), production (**built and verified
+   2026-10-26**, 0 failures on all three; TESTING.md, CrIS v1 run log),
+   finalize.
 
 ## AIRS v1 production subset (reviewed 2026-10-23)
 

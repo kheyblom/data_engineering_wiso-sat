@@ -36,10 +36,16 @@ Read this first in a new session. Update it whenever work lands.
     cases over 9 fixtures** (~15 min).
   - **The CrIS bench passed** (2026-10-26, TESTING.md Tier 2e): one month
     per product, 568, 883 and 884 checks, 0 failures; ~0.5 core-hours.
-    Compression as AIRS. **Next: production**, shown to the user first.
-    Bench data in `wisosat_bench/` (stores ~1.7 GB and symlinks) to delete
-    with approval once production is verified. Was: the reader and
-    shared changes
+    Compression as AIRS. Bench data in `wisosat_bench/` (stores ~1.7 GB and
+    symlinks) to delete with approval now that production is verified.
+  - **CrIS v1 production is built and verified** (2026-10-26, from
+    `537d3ca`; TESTING.md, CrIS v1 run log; ~4.2 core-hours): SNPP RS 12
+    stores, 2,597,674 obs, 568 checks; SNPP FS 19 stores, 2,858,343 obs,
+    883 checks; JPSS1 FS 19 stores, 47,391,889 obs, 885 checks; **0
+    failures**, R37, R36, R22, R18 and R38 confirmed on the full record.
+    **Next: finalize** (`--attrs`, then `--tag v1-verified-YYYYMMDD`; no
+    `--expire` or `--gc` needed), each `--apply` signed off by the user.
+    Was: the reader and shared changes
   - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
     (`time_order: source`, option 1), approved per product after
     measuring every file; it had been carried over from AIRS without asking
@@ -132,7 +138,8 @@ Read this first in a new session. Update it whenever work lands.
   for the 6 model-comparison stores (benches and diagnostic ~19, production
   ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2;
   SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8); AIRS v1
-  ~6.6 (audit ~1, benches ~0.1, production ~5.5).
+  ~6.6 (audit ~1, benches ~0.1, production ~5.5); CrIS v1 ~5.3 (audit
+  ~0.6, bench ~0.5, production ~4.2).
 
 ## Next: candidates (ask the user which)
 

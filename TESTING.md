@@ -1093,3 +1093,44 @@ estimated.
 - **Size:** RS 20.1 GiB, FS 55.6 GiB, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`. The kernel is
   ~75% of each.
+
+### CrIS v1 run log (2026-10-26)
+
+The three CrIS v1 products, each built and verified on develop (8 cores, 32
+GB) from `537d3ca`, after the bench (Tier 2e), each verify chained
+`afterany` on its build. ~4.2 core-hours (8 cores x 31.5 min), against ~7
+estimated.
+
+| job | what | wall | cpu | result |
+| --- | --- | --- | --- | --- |
+| 7963437 | SNPP RS build, 12 stores, 3 commits | 1 min 55 s | 1 min | 1,865 Summary days, 2015-12-01 .. 2021-05-21; 2,597,674 obs |
+| 7963438 | SNPP RS verify | 2 min 44 s | 1 min 40 s | **568 checks, 0 failures** |
+| 7963439 | SNPP FS build, 19 stores, 4 commits | 1 min 9 s | 2 min 46 s | 110 days, 2021-02-01 .. 05-21; 2,858,343 obs; peak 6.45 GiB |
+| 7963440 | SNPP FS verify | 39 s | 1 min 41 s | **883 checks, 0 failures** |
+| 7963441 | JPSS1 FS build, 19 stores, 39 commits | 11 min 53 s | 49 min | 1,887 days, 2021-04-01 .. 2026-05-31; 47,391,889 obs; peak 7.45 GiB |
+| 7963443 | JPSS1 FS verify | 13 min 7 s | 57 min | **885 checks, 0 failures** |
+
+Every observation matched raw bit for bit. The obs counts are the subset's
+(`tropess.md` C1). On the full record the verifier confirmed:
+- **R37:** its own selection from raw leaves out 620, 8,057 and 136,707
+  rows, equal to the declared counts and to the listing's, granule by
+  granule;
+- **R36:** `land_flag` masked on 2,858,343 obs in SNPP FS (every day) and
+  5,047,264 in JPSS1; no undeclared file holds 1 on every row (Q1);
+- **R22:** 110 (SNPP FS) and 1,876 (JPSS1) first-row `x` defects confirmed;
+  SNPP RS has no Standard files;
+- **R18:** only the replacements read; **R38:** `sunlit_binary_mask`;
+- **no repeats** within any granule or across any seam, looking back two
+  granules. Time decreases along obs 1,419, 9,444 and 45,760 times, as the
+  files have it (R40).
+
+- **Job memory:** PBS reports 32 GB, the job's cap, for both JPSS1 jobs, but
+  the processes' own peaks were 7.45 GiB (build, main) and 2.43 GiB (verify,
+  largest worker). The rest is most likely page cache counted against the
+  cgroup; neither job was killed. SNPP's jobs reported 3-16 GB.
+- **Provenance:** `ce338c3` (a docs commit) landed at 14:34, after the last
+  build started (14:30); every commit is stamped `537d3ca`.
+- **Size:** SNPP RS 0.5 GB, SNPP FS 3.4 GB, JPSS1 57 GB (the kernel 42 GB),
+  in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_{snpp,jpss1}/`.
+- **Finalize:** every store needs `--attrs` then `--tag`; none is sharded
+  and none holds anything unreachable, so no `--expire` or `--gc`.
