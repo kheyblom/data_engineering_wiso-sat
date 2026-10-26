@@ -331,6 +331,204 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 - `qstat` may not list a job id for some seconds after `qsub`; a wait loop
   must not treat "not listed" as "finished" on its first check.
 
+## CrIS v1 production subset (draft 2026-10-26, for review)
+
+Drafted for the user's in-place review (`#@CLAUDE` comments), on the AIRS v1
+subset below: where a point is the same as AIRS's, it says so and points
+there. Facts are from the full CrIS audit (TESTING.md finding 16) and the
+R37 probes. Decisions already made: the CrIS handoff's Answers, R36, R37,
+R38. Open questions are marked **Q**.
+
+### C1. Products, names and provenance
+
+- **Three products, one config each** (`config/cris_snpp_rs/`,
+  `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; `source: tropess`,
+  `version_product: rs` or `fs`):
+
+  | product | `product` | stores named | days (span) | obs |
+  | --- | --- | --- | --- | --- |
+  | SNPP RS | `cris_snpp` | `wisosat.cris_snpp.v_1.rs.inst.native_swath.<variable>.zarr` | 1,865 (2015-12-01 .. 2021-05-21; 134 missing, R35) | ~2,597,674 (Summary only) |
+  | SNPP FS | `cris_snpp` | `wisosat.cris_snpp.v_1.fs.inst.native_swath.<variable>.zarr` | 110 (2021-02-01 .. 2021-05-21; none missing) | ~2,858,343 |
+  | JPSS1 FS | `cris_jpss1` | `wisosat.cris_jpss1.v_1.fs.inst.native_swath.<variable>.zarr` | 1,887 (2021-04-01 .. 2026-05-31; none missing) | ~47,391,873 |
+
+  The obs are the audit's rows less the R37 repeats (SNPP RS 620, SNPP FS
+  8,057, JPSS1 136,723 pairs). A footprint in three files is two of those
+  pairs plus one more, so the rows left out may be slightly fewer; the exact
+  counts come from the R37 implementation's first full pass and are then
+  declared.
+- **The checked version** is `v_1.rs` or `v_1.fs`, from `ShortName` and
+  `VersionID` as for AIRS (P1). `ShortName`s: SNPP RS `TRPSYL2HDOCRSRS`;
+  SNPP FS `TRPS{D,Y}L2HDOCRSFS`; JPSS1 `TRPS{D,Y}L2HDOCRS1FS`.
+- **The platform is checked on every file** (the reader's `PLATFORM_ATTR`,
+  as GOSAT-2's): `Platform` `SUOMI-NPP` or `JPSS-1`, and `Instrument` `CrIS`.
+- **Per granule, in the granule index:** algorithm, format and joint flag of
+  each file, as AIRS (P1); and, new, **the rows left out under R37** per
+  granule. `granule_source_rows` keeps each file's own count.
+- **Store attributes:** as AIRS (P1), plus:
+  - SNPP RS: that it is the Summary product only (DOF > 1.1, no kernel,
+    prior or errors), because no RS Standard exists upstream;
+  - the R36 mask, the R37 rule with its counts, and R18 (which old files
+    were superseded);
+  - the overlaps, as pointers: SNPP RS and SNPP FS retrieve the same targets
+    over 2021-02-01 .. 05-21 (R26); SNPP FS and JPSS1 FS overlap
+    2021-04-01 .. 05-21 (two satellites). R37 applies within a product only,
+    so these overlaps are kept.
+
+### C2. Granules and sources
+
+- **A granule is one day**, as AIRS (P2). The folders:
+
+  | product | Standard | Summary |
+  | --- | --- | --- |
+  | SNPP RS | none upstream | `CRIS/TRPSYL2HDOCRSRS_1-20240923_230130/` |
+  | SNPP FS | `CRIS/TRPSDL2HDOCRSFS.1/<YYYY>/` | `CRIS/TRPSYL2HDOCRSFS.1/<YYYY>/` |
+  | JPSS1 FS | `CRIS/TRPSDL2HDOCRS1FS_1-20240912_023602/` and `CRIS/TRPSDL2HDOCRS1FS.1/<YYYY>/` | `CRIS/TRPSYL2HDOCRS1FS.1/<YYYY>/` |
+
+  - **Files are matched on the platform token** (`CrIS-SNPP`, `CrIS-JPSS1`)
+    and stream as well as the type, so the SNPP and JPSS1 folders never mix.
+  - `SC_AUS` files (out of scope) are skipped by name, stated in config.
+- **SNPP RS is Summary only:** its granule is one Summary file, and its obs
+  axis is the Summary rows. A config key declares the product Summary-only;
+  the reader refuses a Standard file for it.
+- **R18, declared:** JPSS1 2021-05-21, 2022-03-08, 2022-08-13, 2023-12-27 and
+  2024-08-21 each have an old file and an R1p24 replacement. The config
+  lists the 5 old files as superseded; the reader confirms each replacement
+  exists, has a newer algorithm and a later `ProductionDateTime`, and reads
+  only the replacement. Any other date with two files of one type fails, as
+  today.
+- **One-sided days:** none in SNPP FS or JPSS1 (every day has both files).
+- **Missing days** declared: SNPP RS 134 (R35: 2015-12-05, 2015-12-30 ..
+  2016-01-01, 2017-12-24, 2019-02-17, 2019-03-27 .. 2019-07-31, 2021-01-14);
+  none in the FS products.
+- **Row order: the source order** (`time_order: source`), as AIRS (P2,
+  R32). Files run up to 48 h either side of their date (R37), so `time` is
+  far from monotonic; the index records each day's earliest and latest time.
+- **R37, decided:** each repeated footprint stored once, newest algorithm
+  then latest `ProductionDateTime`; look-back 2 files, look-ahead 2 files
+  (`docs/cris-repeats-r37.md`, Decision). `check_repeats` runs on the stored
+  rows with a look-back of 2 and must find none.
+
+### C3. Stores
+
+**SNPP FS and JPSS1 FS: AIRS's 19 stores, unchanged** (P3): geolocation; `x`
+and `x_h2o`; the five merged from Summary; DOF and COD; the four Sarkar
+outputs; the a priori, kernel and H2O error; `pressure` and `altitude`. Every
+nomenclature row exists (style_guides `f18168e`); none is new. The CrIS
+files carry the same attributes as AIRS's (checked 2026-10-26 on SNPP RS,
+SNPP FS R1p11, JPSS1 R1p12 and R1p24): `x`'s comment "HDO / H2O ratio
+(includes bias correction)", the same `source`s, and Summary `x_h2o`'s
+`standard_name` `dry_atmosphere_volume_mixing_ratio_of_water_vapor`, so the
+bias-correction comments and retained `standard_name` carry over (P3).
+
+**SNPP RS: 12 stores**, the ones Summary holds:
+
+| store | from |
+| --- | --- |
+| geolocation | `time`, `latitude`, `longitude` |
+| `water_vapor_hdo_h2o_ratio`, `water_vapor_h2o_mole_fraction_dry_air` | `x`, `x_h2o` |
+| the five 850-250 hPa and `_004` fields | `dd_col_p`, `dd_col_p_error`, `x_h2o_col_p`, `x_h2o_col_p_error`, `dd_004` |
+| `land_flag`, `day_night_flag` | `geophysical/*` |
+| `pressure`, `altitude` | `pressure`, `altitude` |
+
+No DOF, COD, cloud top, surface temperature, a priori, kernel or H2O error:
+Summary has none. R22 does not apply (Summary's row 0 is the retrieval, and
+there is no `x_test` to confirm against).
+
+**Flags:**
+- **`land_flag`, R36 (decided):** masked to fill on the 324 declared files
+  (SNPP FS all 110; JPSS1 2021-04-01 .. 10-31 and 2021-11-10). The config
+  lists them; the reader and the verifier each confirm every row of each is
+  1 before masking. **Q1:** should the verifier also fail on an *undeclared*
+  file whose `land_flag` is 1 on every row? It is a check, not an action, so
+  it keeps "declared, never detected". Proposed: yes.
+- **`day_night_flag`, R38 (decided):** the store carries
+  `sunlit_binary_mask`, declared in config, the old name in its `comment`.
+  It covers more than JPSS1's early files: **SNPP FS Standard says
+  `day_binary_mask` in all 110 files** while its Summary files say
+  `sunlit_binary_mask`; SNPP RS says `sunlit_binary_mask` throughout. So all
+  three products declare `sunlit_binary_mask`, which every product's files
+  use somewhere.
+
+**Q2: the CrIS instrument indices** (`cris_atrack`, `cris_xtrack`,
+`cris_fov`, `cris_granule`, `cris_view_ang`; present in every file). AIRS
+left its four out because no row was left out, so an obs's position and the
+granule index give its source row (P3, Q4). Under R37 rows are left out, so
+that no longer holds. Options:
+- **leave them out** (proposed): the R37 rule is deterministic from raw and
+  declared, and the index records the rows left out per granule, so a source
+  row can still be found; no new nomenclature rows;
+- store a source-row store (the row's index in its file), as TROPOMI's
+  `scanline_index` / `ground_pixel_index` serve: one new row;
+- store the five indices: five new rows.
+
+**Always out**, as AIRS: `observation_error` (R11), `x_test` (R21),
+`target_id` (and it is not unique in practice, R37), `x_raw` / `x_h2o_raw`,
+`year_fraction`, the microwindows, `datetime_utc` (used only to check
+`time`).
+
+That makes **50 stores**: SNPP RS 12, SNPP FS 19, JPSS1 FS 19.
+
+### C4. Time
+
+As AIRS (P4): TAI93 less the leap seconds from the pinned table (9 to 10 at
+2017-01-01 in SNPP RS), checked against `datetime_utc` on every row (the
+audit found no mismatch); stored in seconds.
+
+### C5. Declared, never detected
+
+- **R18:** the 5 superseded old files (C2).
+- **R22:** row 0 of every Standard file (SNPP FS, JPSS1), as AIRS.
+- **R36:** the 324 `land_flag` files (C3).
+- **R37:** the repeat rule, with the exact counts per product once measured.
+- **R38:** `sunlit_binary_mask`.
+- **The Summary merge** on every day with both files (SNPP FS, JPSS1), as
+  AIRS; the audit found it exact on all 1,997.
+- **Missing days** (R35, SNPP RS only), and SNPP RS declared Summary-only.
+
+### C6. Filtering guidance in the metadata
+
+As AIRS (P6), plus:
+- **Sarkar et al. (2026)** gridded CrIS from Summary before 2021 (SNPP RS,
+  2015-12 .. 2021-05) and Standard after (JPSS1, 2021-04 .. 2024-09) with
+  DOF >= 1 and COD <= 0.5. Their scripts very likely counted the R37
+  repeats twice and read the old R18 files.
+- **SNPP RS** is pre-filtered (DOF > 1.1; R31 holds for CrIS, checked on the
+  merge days).
+- **R36** masks `land_flag` on early files; anyone filtering on land/ocean
+  before 2021-11 has no flag there.
+
+### C7. Chunks and compression
+
+As AIRS (P7): the same chunk rule (scalars 4,194,304 obs, profiles 524,288,
+kernel 32,768) and blosc zstd 5 + shuffle on the six 2-D arrays, default
+elsewhere. Sizes uncompressed: JPSS1 kernel ~54.8 GB (1,447 chunks), each
+JPSS1 17-level store ~3.2 GB; SNPP FS kernel ~3.3 GB; SNPP RS profiles
+~0.18 GB each. Re-measure compression only if the bench differs from AIRS's.
+`granules_per_commit`, ~1.3 M obs per commit: SNPP RS 1,000 days (2
+commits), SNPP FS 50 (3), JPSS1 50 (~38).
+
+### C8. Next, after review
+
+1. **No nomenclature rows** (unless Q2 adds some).
+2. **The reader and shared changes**, each tested:
+   - the instrument filter and Summary-only products (C2);
+   - superseded files (R18);
+   - whole-file declared masks (R36), with Q1's check;
+   - the R37 rule: look-ahead in the build, the selection in the verifier,
+     per-granule counts in the index, look-back 2 in `check_repeats`;
+   - `sunlit_binary_mask` declared for all three (R38). SNPP FS's Standard
+     files never use it, only its Summary files, so the verifier's check
+     (a declared `standard_name` must be one the source uses) must see the
+     Summary file's attribute; the SNPP FS fixture tests that.
+3. **The exact R37 counts**, from a dry pass of the selection over every
+   file (light: time, lat, lon and attributes only), then declared.
+4. **Fixtures**, cut small (~400 rows) and chosen to span: SNPP RS with a
+   repeat and a leap second; SNPP FS with the R36 defect and a repeat;
+   JPSS1 with an R18 date, the R36 boundary (2021-10-31 / 11-01), an
+   algorithm-change repeat and a lag-2 repeat (2023-09-28 .. 30).
+5. The full fixture test, a bench (one month per product), production,
+   finalize.
+
 ## AIRS v1 production subset (reviewed 2026-10-23)
 
 Drafted for the user's in-place review (`#@CLAUDE` comments), as

@@ -26,8 +26,9 @@ Read this first in a new session. Update it whenever work lands.
     declared as for AIRS FS; R37 each repeated footprint stored once, the
     newest algorithm's copy, then the latest `ProductionDateTime`
     (`docs/cris-repeats-r37.md`, Decision).
-  - **Next:** the CrIS production subset (as AIRS P1-P8) for review in
-    place, then the reader and shared changes (instrument filter,
+  - **The CrIS production subset is drafted** for the user's review in
+    place: `tropess.md`, "CrIS v1 production subset" (C1-C8; 50 stores,
+    open Q1 and Q2). After review: the reader and shared changes (instrument filter,
     Summary-only granules, R18 declared file, whole-file declared mask,
     the R37 rule with look-ahead), fixtures, the full test, a bench.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
