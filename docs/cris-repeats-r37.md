@@ -131,6 +131,29 @@ kept, as under option 1.
   - "keep the first" is arbitrary at algorithm changes, where the later copy
     is the newer algorithm.
 
+### Option 3 with the newest copy kept (asked by the user, 2026-10-26)
+
+Measured over every repeat (look-back 3 files; none at 3), with each file's
+algorithm and root `ProductionDateTime`:
+
+| product | repeats | across an algorithm change | same algorithm |
+| --- | --- | --- | --- |
+| SNPP RS | 620 | 0 | 620 |
+| SNPP FS | 8,057 | 0 | 8,057 |
+| JPSS1 FS | 136,723 | 3,771 (later file newer 2,115; earlier file newer 1,656) | 132,952 |
+
+- **The algorithm alone resolves 3,771 of 145,400 repeats (2.6%).** The
+  algorithm changes at a repeat almost only where an R1p24 backfill file (R18)
+  sits among R1p15 .. R1p23 days, so it alternates in both directions.
+- **`ProductionDateTime` resolves the rest:** within one algorithm the two
+  files never share a production time; the later-dated file was produced
+  later for 131,855 JPSS1 rows (and every SNPP row), earlier for 1,097.
+- **So "newest algorithm, then latest production" picks exactly one copy of
+  every repeat**, and every footprint is stored once.
+- **Build consequence:** the copy kept is often in the later file, so the
+  build must look ahead up to two files before writing a granule (its keys
+  and attributes only); the verifier repeats the selection from raw.
+
 ## Recommendation
 
 **Option 1, keep every row**, with the same-footprint condition and the
