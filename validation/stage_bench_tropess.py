@@ -1,4 +1,4 @@
-"""Stage the AIRS RS and FS bench trees: one real month each, by symlink.
+"""Stage the AIRS and CrIS bench trees: one real month each, by symlink.
 
 The bench reads real days at production settings, so it links each of the
 month's files into a tree of its own, at the same path relative to the raw
@@ -10,10 +10,18 @@ drift:
   Summary-only day 2020-03-31.
 - **FS 2024-04:** the R1p22 to R1p23 change on 04-25 and the Summary-only
   day 2024-04-03; 30 days, ~1.8 GB.
+- **CrIS-SNPP RS 2015-12** (2026-10-26): Summary only, 28 days to 12-29, with
+  a missing day (12-05) and repeated footprints (R37).
+- **CrIS-SNPP FS 2021-04:** R36 on every day, repeats; 30 days.
+- **CrIS-JPSS1 FS 2021-05:** the R1p24 replacement of 05-21 (R18; its old
+  file is linked too), R36 on every day but that one, repeats between R1p12
+  and R1p24 files; 31 days.
 
 The verifier fails a declared fill value that never occurs, so this also
 reports, for each fill the production config declares, whether the month
-holds it: the bench config declares only those that occur.
+holds it: the bench config declares only those that occur. Where the config
+declares the repeat rule (R37), it also reports how many rows the rule leaves
+out of the month alone, which the bench config declares.
 
 Run from the repo root (symlinks, and reads the declared variables of the
 month's files, ~2 GB at most):
@@ -24,6 +32,7 @@ month's files, ~2 GB at most):
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 
 import h5py
@@ -37,6 +46,9 @@ from utils.path_utils import listing_options, load_config
 BENCHES = {
     'airs_rs': ('config/airs_rs/config_zarr.yaml', 'config/airs_rs/config_zarr_bench.yaml', '202003'),
     'airs_fs': ('config/airs_fs/config_zarr.yaml', 'config/airs_fs/config_zarr_bench.yaml', '202404'),
+    'cris_snpp_rs': ('config/cris_snpp_rs/config_zarr.yaml', 'config/cris_snpp_rs/config_zarr_bench.yaml', '201512'),
+    'cris_snpp_fs': ('config/cris_snpp_fs/config_zarr.yaml', 'config/cris_snpp_fs/config_zarr_bench.yaml', '202104'),
+    'cris_jpss1_fs': ('config/cris_jpss1_fs/config_zarr.yaml', 'config/cris_jpss1_fs/config_zarr_bench.yaml', '202105'),
 }
 
 
@@ -73,9 +85,17 @@ def stage(production, bench, month):
     settings = load_config(production)
     raw = settings['directories']['raw']
     target = load_config(bench)['directories']['raw'] if os.path.exists(bench) else None
-    granules = [granule for granule in list_granules(raw, **listing_options(settings, reader))
-                if granule.id.startswith(month)]
+    # the repeat rule reads every production file; the month is applied below
+    options = dict(listing_options(settings, reader))
+    rule = options.get('repeated_footprints')
+    options['repeated_footprints'] = None
+    granules = [granule for granule in list_granules(raw, **options) if granule.id.startswith(month)]
     paths = [path for granule in granules for path in granule.paths]
+    # R18: a replaced file of the month is linked too, so the bench declares it
+    superseded = {day: name for day, name in (settings.get('superseded_files') or {}).items()
+                  if str(day).startswith(month)}
+    for name in superseded.values():
+        paths += glob.glob(os.path.join(raw, '*', name))
     if target is not None:
         for path in paths:
             link = os.path.join(target, os.path.relpath(path, raw))
@@ -87,14 +107,20 @@ def stage(production, bench, month):
         print(f'{bench} does not exist yet: {len(paths)} files of {len(granules)} days, nothing linked')
     partial = sorted(granule.id for granule in granules if len(granule.paths) == 1)
     print(f'  one-sided days: {partial}')
+    print(f'  replaced files (superseded_files): {superseded}')
+    if rule:
+        try:
+            reader.select_repeats(granules, dict(rule, expected_left_out=None))
+        except ValueError as error:
+            print(f'  repeat rule over the month: {str(error).split(", but")[0]}')
     for source, found in fills_present(paths, settings['source_fill_values']).items():
         print(f'  fill {source}: {found or "none"}')
 
 
 def main():
-    parser = argparse.ArgumentParser(description='stage the airs rs and fs bench trees.')
+    parser = argparse.ArgumentParser(description='stage the airs and cris bench trees.')
     parser.add_argument('--products', type=str, default=','.join(BENCHES),
-                        help=f'Comma separated subset of {sorted(BENCHES)}. Default: both.')
+                        help=f'Comma separated subset of {sorted(BENCHES)}. Default: all.')
     args = parser.parse_args()
     for product in args.products.split(','):
         stage(*BENCHES[product])

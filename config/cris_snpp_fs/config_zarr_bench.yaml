@@ -1,0 +1,294 @@
+# Bench for the CrIS-SNPP FS build (TESTING.md): one real month, 2021-04 (30
+# days, R1p12, land_flag masked on every day under R36), symlinked into a
+# bench raw tree by validation/stage_bench_tropess.py. Everything else is the
+# production config, so what the bench measures is what production will do,
+# except that only the month's declarations apply: the rows the repeat rule
+# leaves out of the month alone (R37), and only the fill values the month
+# holds. Every output path differs from production.
+product: cris_snpp
+source: tropess
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_bench/raw/cris_snpp_fs
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_bench/zarr/cris_snpp_fs
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_cris_snpp_fs_bench.log
+# the collection version every file declares (VersionID), checked on every file
+version: '1'
+# the stream, after the version in the store names; it also selects the
+# stream's collection folders under the raw root (LISTING_OPTIONS)
+version_product: fs
+# the files' Platform attribute, checked on every file; it also selects the
+# platform's folders and files, as JPSS1's sit beside these (C2)
+platform: SUOMI-NPP
+temporal_resolution: observation
+grid_name: native_swath
+# the style guide's exception, approved for CrIS by the user 2026-10-26
+# (R40): rows kept in source order, which is not time order (day edges, a
+# 64 s jitter, and in JPSS1 some blocks), with the repeat check in its place
+time_order: source
+
+# canonical names, each a row of nomenclature-key_tropess.md; the AIRS FS set
+# (C3, approved 2026-10-26). TROPESS publishes no quality flag.
+variables:
+  - water_vapor_hdo_h2o_ratio
+  - water_vapor_h2o_mole_fraction_dry_air
+  - water_vapor_delta_d_850_250hpa
+  - water_vapor_delta_d_850_250hpa_standard_error
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error
+  - water_vapor_delta_d_004
+  - water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal
+  - cloud_effective_optical_depth
+  - cloud_top_pressure
+  - temperature_surface
+  - land_flag
+  - day_night_flag
+  - water_vapor_hdo_h2o_ratio_apriori
+  - water_vapor_hdo_h2o_ratio_averaging_kernel_log
+  - water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log
+  - pressure
+  - altitude
+
+# every day 2021-02-01 .. 2021-05-21 has both files (audit 2026-10-26); SNPP
+# HDO ends on 2021-05-21, when its mid-wave band failed
+expected_missing_days: []
+
+# R37, decided by the user 2026-10-26: a footprint (time, lat, lon) held by two
+# files is stored once, the newest algorithm's copy, then the latest produced.
+# The listing applies it and fails unless it leaves out exactly this many; the
+# verifier works it out again from raw. An approved exception to keeping every
+# observation, for CrIS only (docs/cris-repeats-r37.md)
+repeated_footprints:
+  keep: newest_algorithm_then_latest_production
+  look_back: 2
+  # measured over the month alone (validation/stage_bench_tropess.py)
+  expected_left_out: 1474
+  reason: >-
+    A TROPESS CrIS file covers its processing day, holding observations from up
+    to two days either side of its date, so some footprints are delivered in
+    two files (R37). Each is stored once: the copy from the newest MUSES
+    algorithm, and between copies of one algorithm, the one from the file with
+    the latest ProductionDateTime. The copies left out are counted per granule
+    in granule_rows_left_out.
+
+# every row has time, latitude and longitude (audit 2026-10-26), so none is
+# left out as not an observation, and nothing may be written on one that is
+allowed_on_rows_left_out: []
+
+# fill each source holds (audit 2026-10-26, TESTING.md finding 16); NaN is
+# fill wherever it occurs. The verifier fails if a declared value never
+# occurs, so only what occurs is declared
+source_fill_values:
+  x: [-999]
+  x_h2o: [-999]
+  pressure: [-999]
+  altitude: [-999]
+  observation_ops/xa: [-999]
+  geophysical/day_night_flag: [-999]
+  dd_col_p_error: [-9999]
+
+# integers whose width drifts between versions (R16, R39), stored as one dtype
+source_dtypes:
+  geophysical/land_flag: int32
+  geophysical/day_night_flag: int32
+
+# what the integer land_flag holds where R36 masks it: a value it never writes
+absent_fill_values:
+  geophysical/land_flag: -999
+
+declared_masked_values:
+  # R22, decided by the user 2026-10-23: the reader and the verifier each
+  # confirm, from raw, that the value equals x_test
+  - source: x
+    where: first_row_of_standard_file
+    equals: observation_ops/x_test
+    reason: >-
+      The first observation of every TROPESS Standard file holds x_test, the
+      averaging kernel applied to the retrieved profile (TROPESS's check of
+      the kernel convention), not the retrieved HDO/H2O profile itself; it
+      differs from the retrieval by up to ~6% (docs/products/tropess.md R22).
+      That one profile per day is stored as NaN; the rest of the observation
+      is kept.
+  # R36, decided by the user 2026-10-26: the reader and the verifier each
+  # confirm every row of the day's files is 1; the verifier also fails on an
+  # undeclared Standard file that is (Q1). Every day of this product
+  - source: geophysical/land_flag
+    where: every_row_of_listed_days
+    value: 1
+    days:
+      - ['20210201', '20210521']
+    reason: >-
+      land_flag is 1 on every row of every Standard and Summary file of this
+      product (R1p11 and R1p12, format F0p1), open ocean included: the flag was
+      not set in those files (docs/products/tropess.md R36). It is stored as
+      fill throughout.
+
+# blosc zstd 5 + byte shuffle on the six 2-D arrays, as AIRS (bench, TESTING.md
+# Tier 2d; C7). pressure and every 1-D array keep zarr's default zstd. No
+# shards: the kernel has ~1,450 chunks
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_hdo_h2o_ratio_averaging_kernel_log
+    - altitude
+    - water_vapor_hdo_h2o_ratio
+    - water_vapor_hdo_h2o_ratio_apriori
+    - water_vapor_h2o_mole_fraction_dry_air
+    - water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log
+
+# scale settings (condition 3; C7). ~2.86 M obs: the 17x17 kernel takes
+# 32,768-obs chunks (36 MiB), the 17-level arrays 524,288, the rest 4,194,304.
+# ~26,000 obs a day, so 50 days make a ~1.3 M-obs commit
+chunks:
+  obs: 4194304
+  granule: 8192
+granules_per_commit: 50
+num_workers: 8
+
+filtering_guidance: >-
+  None applied: every Standard observation is kept, each footprint once (R37).
+  Sarkar et al. (2026) filter CrIS Standard data with DOF >= 1 and COD <= 0.5
+  (water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal and
+  cloud_effective_optical_depth). TROPESS's Summary product is exactly the
+  Standard observations with DOF > 1.1 (measured on every day, 2026-10-26;
+  TROPESS does not state it). The TROPESS User Guide gives "DOFS > 0.7" as a
+  rule of thumb. The fields merged from Summary (the 850-250 hPa means and
+  their errors, and delta D at an H2O mole fraction of 0.004) exist only where
+  DOF > 1.1. land_flag is fill throughout (R36), so a land/ocean selection
+  has no flag in this product.
+
+attrs:
+  title: >-
+    WISO-SAT CrIS-SNPP Level 2 HDO/H2O (TROPESS forward stream, collection
+    {version_label}): {variable}
+  summary: >-
+    One variable of the NASA TROPESS CrIS-SNPP (Suomi-NPP) HDO/H2O retrievals of
+    the forward stream as distributed for WISO-SAT, every observation of the
+    record, each footprint once, stored as an icechunk-backed zarr store. Each
+    day's Standard and Summary files are merged onto the Standard observations.
+    Join with the geolocation store of the same product on obs for time,
+    latitude and longitude, and with the pressure store for the 17 retrieval
+    levels.
+  Conventions: ACDD-1.3
+  source: >-
+    NASA TROPESS CrIS-SNPP L2 Deuterated Water Vapor for Forward Stream,
+    Standard Product V1 (TRPSDL2HDOCRSFS, doi:10.5067/XTPEDYJ62GGN) and
+    Summary Product V1 (TRPSYL2HDOCRSFS, doi:10.5067/5X25TK595WAF), one netCDF
+    file of each per day, GES DISC
+  source_collection_version: >-
+    {version_label} (VersionID), every file
+  source_algorithm: >-
+    MUSES v1.11 to 2021-03-31 and v1.12 from 2021-04-01 (R1p11, R1p12),
+    Standard format F0p1 and Summary F0p6; recorded per granule in the granule
+    index (granule_algorithm, granule_format)
+  institution: NASA Jet Propulsion Laboratory, TROPESS project (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Sarkar, M., Dee, S., Frazer, M., Bailey, A., Good, S., et al. (2026), WISO-SAT:
+    A global database of stable hydrogen isotopes in water vapor from eight
+    satellite missions, Scientific Data, doi:10.1038/s41597-026-08218-8.
+    TROPESS HDO/H2O Level 2 Standard and Summary Product User Guides and the
+    Forward Stream README, GES DISC.
+  product_merge: >-
+    Each day's Standard and Summary files are merged onto the Standard
+    observations: the Summary product is exactly the Standard observations with
+    DOF > 1.1, in the same order and with identical values (checked on every
+    day by the build and the verifier). The five Summary-only fields are placed
+    on their observations by time, latitude and longitude and are NaN
+    elsewhere; every other variable comes from the Standard file.
+  repeated_footprints: >-
+    A TROPESS CrIS file covers its processing day, with observations from up to
+    two days either side of its date, so some footprints (the same time,
+    latitude and longitude, and the same CrIS field of view) are delivered in
+    two files: ~0.3% of rows. Each is stored once: the copy from the newest
+    MUSES algorithm, and between copies of one algorithm, the one from the file
+    with the latest ProductionDateTime (user decision 2026-10-26; an exception
+    to keeping every observation). Most copies are identical; some carry
+    different errors or a second retrieval. granule_rows_left_out counts the
+    copies left out per granule. WISO-SAT's own gridding counted them twice.
+  stream: >-
+    Forward stream (FS): low-latency processing, its algorithm updated as it
+    goes. It samples one target per 0.8 degree box per overpass (~26,000
+    observations a day), both overpasses. Suomi-NPP's CrIS mid-wave band
+    failed on 2021-05-21, after which TROPESS made no SNPP HDO.
+  related_product: >-
+    The reanalysis stream of the same platform,
+    wisosat.cris_snpp.v_1.rs.{frequency}.{grid_name}.<variable>.zarr (Summary
+    only, 2015-12 to 2021-05), retrieves the same targets from 2021-02-01 to
+    2021-05-21 with another algorithm (MUSES v1.17; R26): x differs by a median
+    0.17%, and matched times by up to 87 s. CrIS on JPSS-1 continues,
+    wisosat.cris_jpss1.v_1.fs.{frequency}.{grid_name}.<variable>.zarr, from
+    2021-04-01 (two satellites, overlapping this product to 2021-05-21).
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs, and
+    wisosat.{product}.{version}.{frequency}.{grid_name}.pressure.zarr the 17
+    retrieval levels, surface first; every store of this product shares one
+    obs axis and granule index.
+  granule: >-
+    one day; granule_id is the date, and granule_file names the day's Standard
+    and Summary files, in that order. A file holds observations from up to two
+    days either side of its date. Rows keep their source order, which is not
+    time order.
+  known_data_gaps: >-
+    none: every day from 2021-02-01 to 2021-05-21 has both files upstream.
+
+variable_attrs:
+  water_vapor_hdo_h2o_ratio:
+    comment: >-
+      TROPESS's bias-corrected HDO/H2O profile: the source says "HDO / H2O
+      ratio (includes bias correction)". The data are bias corrected based on
+      comparison with aircraft measurements (TROPESS User Guide 5.1; Herman et
+      al. 2014, 2020). The uncorrected profile (retrieval/x_raw) is in some
+      source files but not stored.
+  water_vapor_h2o_mole_fraction_dry_air:
+    # retained from the Summary files, which carry it for these same values;
+    # the Standard files carry none. Set here because a store's attributes are
+    # written with its first commit; the verifier checks it equals the source's
+    standard_name: dry_atmosphere_volume_mixing_ratio_of_water_vapor
+    comment: >-
+      TROPESS's bias-corrected H2O dry-air mole fraction profile: the source
+      says "H2O only (includes bias correction)" (TROPESS User Guide 5.1). The
+      uncorrected profile (retrieval/x_h2o_raw) is in some source files but
+      not stored.
+  water_vapor_delta_d_850_250hpa:
+    comment: >-
+      From the Summary file, NaN where DOF <= 1.1. TROPESS's formula (the
+      source attribute): 1000 * (mean(x) / 3.11e-4 - 1), an unweighted mean of
+      the HDO/H2O ratio over the retrieval levels with 250 <= p < 850 hPa
+      (usually 8; 5-9 over high ground).
+  water_vapor_delta_d_850_250hpa_standard_error:
+    comment: >-
+      From the Summary file, NaN where DOF <= 1.1. 1-sigma: (1000 + delta D)
+      sqrt(M S M^T), M the equal-weight mean over the same levels and S the
+      Standard observation error. TROPESS writes no value where a level in the
+      range has a negative variance in S (R17).
+  water_vapor_h2o_mole_fraction_dry_air_850_250hpa:
+    comment: >-
+      From the Summary file, NaN where DOF <= 1.1. The unweighted mean of the
+      H2O profile over the retrieval levels with 250 <= p < 850 hPa.
+  water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error:
+    comment: From the Summary file, NaN where DOF <= 1.1.
+  water_vapor_delta_d_004:
+    comment: >-
+      From the Summary file, NaN where DOF <= 1.1. TROPESS: "Deuterated water
+      vapor content for water vapor volume mixing ratio of 0.004". It does not
+      reproduce by interpolating the stored profiles; TROPESS computes it on
+      its own grid.
+  land_flag:
+    comment: >-
+      Fill on every observation: every source file of this product holds 1 on
+      every row, open ocean included (R36), declared and confirmed from raw.
+      The source defines it as 1 land, 0 other.
+  day_night_flag:
+    # R38: TROPESS renamed it during the record; the verifier checks this is
+    # one of the source's names. The current one
+    standard_name: sunlit_binary_mask
+    comment: >-
+      The source standard_name is sunlit_binary_mask in every Summary file and
+      day_binary_mask in every Standard file of this product (R1p11, R1p12);
+      TROPESS renamed it in March 2022 (R38). The store carries the current
+      name.
