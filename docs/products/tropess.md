@@ -1,8 +1,10 @@
 # AIRS and CrIS (NASA TROPESS / MUSES HDO)
 
 **AIRS v1 is built and finalized** (2026-10-23, tag `v1-verified-20261023`;
-TESTING.md, AIRS v1 run log). **CrIS is next: start at "CrIS: handoff"
-below.** Sources:
+TESTING.md, AIRS v1 run log). **CrIS v1 is built and finalized**
+(2026-10-26, tag `v1-verified-20261026`; TESTING.md, CrIS v1 run log).
+**v2 (AIRS and CrIS-JPSS1) is next: start at "v2: handoff" below.**
+Sources:
 - **Surveyed 2026-10-22:** a header scan of every AIRS file then on disk
   (7,612 files, no read errors), value probes of one file per version, the
   NASA catalog (CMR), the TROPESS READMEs and User Guide, and Sarkar et al.
@@ -13,10 +15,10 @@ below.** Sources:
   header-scanned on 2026-10-23 (8,740 files, no read errors), and Summary was
   matched against Standard on five day pairs.
 
-AIRS v1 was built first. AIRS v2 waits for CrIS (user decision 2026-10-23),
-which has 139 days of the same v2 layout. One reader (`products/tropess.py`)
-serves every v1 collection (one file format); it needs the changes listed in
-the CrIS handoff before it can read CrIS.
+AIRS v1 was built first, then CrIS v1. AIRS v2 is designed with CrIS-JPSS1
+v2 (user decision 2026-10-23), which has 139 days of the same v2 layout.
+One reader (`products/tropess.py`) serves every v1 collection (one file
+format); it assumes v1 in the places the v2 handoff lists.
 
 ## Collections: stream, product type, platform
 
@@ -202,6 +204,98 @@ kept.
 - **CrIS carries the platform in the product token** (`cris_snpp`,
   `cris_jpss1`, as `gosat` and `gosat2`). SNPP and JPSS1 FS overlap
   2021-04-01 .. 2021-05-21. The rest of CrIS is settled when it is reached.
+
+## v2: handoff (written 2026-10-26, for a new session)
+
+AIRS v1 and CrIS v1 are finished (tags `v1-verified-20261023` and
+`v1-verified-20261026`). What remains of TROPESS is **v2, for AIRS and
+CrIS-JPSS1 together** (user decision 2026-10-23): decision 5 of the CrIS
+handoff, deferred on 2026-10-26. Nothing about v2 has been built, and
+nothing about it is decided beyond the points below. Follow the same path:
+decisions with the user, the audit, the production subset reviewed in
+place, the reader at fixture level, the full fixture test, a bench,
+production, finalize with sign-off on every `--apply`.
+
+**Settled already (user):**
+- v2 is **a separate `v_2` store set** (Product scheme): `wisosat.airs.v_2.fs...`
+  and `wisosat.cris_jpss1.v_2.fs...`, each its own product, config, obs
+  axis and stores. Its layout differs (R25), so v1 and v2 are not one
+  store.
+- v2 is a continuation, not a reprocessing: FS only, from 2026-06-01, where
+  v1 ends 2026-05-31. No SNPP v2 exists (SNPP HDO ended 2021-05-21).
+
+**On disk** (counted 2026-10-26; every collection complete to its cutoff
+when downloaded on 2026-10-22, by the `access_tropess` codebase, not this
+repo):
+
+| product | type | folder under `raw/` | files | days | size |
+| --- | --- | --- | --- | --- | --- |
+| AIRS v2 FS | Summary | `AIRS/TRPSYL2HDOAIRSFS.2/` | 30 | 2026-06-01 .. 06-30 | 0.1 GB |
+| AIRS v2 FS | Standard | `AIRS/TRPSDL2HDOAIRSFS.2/` | 30 | 2026-06-01 .. 06-30 | 1.5 GB |
+| AIRS v2 FS | Full | `AIRS/TRPSFL2HDOAIRSFS.2/` | 30 | 2026-06-01 .. 06-30 | 19 GB |
+| CrIS-JPSS1 v2 FS | Summary | `CRIS/TRPSYL2HDOCRS1FS.2/` | 139 | 2026-06-01 .. 10-17 | 0.8 GB |
+| CrIS-JPSS1 v2 FS | Standard | `CRIS/TRPSDL2HDOCRS1FS.2/` | 139 | 2026-06-01 .. 10-17 | 9.8 GB |
+| CrIS-JPSS1 v2 FS | Full | `CRIS/TRPSFL2HDOCRS1FS.2/` | 137 | 2026-06-01 .. 10-15 | 86 GB |
+
+All files are R1p25, format F2p10 (`_J1` for AIRS, `_J0` for CrIS). AIRS
+v2 had not advanced past June when CMR was last queried (2026-10-22). The
+CrIS v2 collections are still growing upstream.
+
+**What is known of the layout** (R25, from probes on 2026-10-23; not yet
+audited over every file):
+- **Standard v2** is on 34 levels and already cut at DOF >= 1.1, so it has
+  the same rows as Summary v2. It adds `averaging_kernel_h2o`, five column
+  fields and `air_density`. `target_id` becomes a 36-character string.
+- **Summary v2** stays on 17 levels, with the same rows as Standard v2.
+- **Full v2** keeps every row, on 67 forward-model and 34 retrieval levels,
+  with every HDO/H2O kernel and covariance block, some as compressed int8
+  bytes. It is 9-13x Standard's size per day on disk.
+- In v1, by contrast, Standard kept every row and Summary was the DOF > 1.1
+  subset, so the v1 stores hold every row (Summary vs Standard, v1).
+
+**Decision 5, for the user.** Lay it out with measurements before asking:
+the user decides exceptions, and wants evidence first.
+1. **Which v2 type or types become products:**
+   - Standard (with Summary merged, as in v1?): small, but every row has
+     DOF >= 1.1, a sample TROPESS chose, so the v1/v2 seam changes the
+     sample as well as the levels;
+   - Full: every row, as the v1 stores. About 86 GB raw for CrIS's 137
+     days, and its int8-packed blocks need new reader code and an
+     independent decode in the verifier;
+   - or both, as separate products (Product scheme: "a v2 Full product
+     would be its own question").
+2. **The variable subset:** v1's set (C3, P3) as the base, plus any of v2's
+   new fields (`averaging_kernel_h2o`, the columns, `air_density`). Each
+   needs a nomenclature row first, and its levels named under
+   `docs/model-comparison-naming.md` (34 and 67 levels are new).
+3. **When:** CrIS v2 grows each day. Build now and append later (builds
+   resume from the granule index; each later append needs a verify and a
+   new tag), or wait. AIRS v2 has 30 days.
+4. **The v1 rules do not carry over by default.** R40 (`time_order:
+   source`) and R37 (one copy of each repeated footprint) were approved for
+   CrIS v1 per product, after measurement. For v2, measure and ask again:
+   the user's rule is no exception without their approval (2026-10-26).
+   Likewise re-check R22 (first-row `x`), R36 (`land_flag` all 1), R38
+   (`sunlit_binary_mask`) and the merge's one-sided days in the audit.
+5. **The v1/v2 seam:** CrIS files hold rows up to ±2 days from their date
+   (finding 16), so the v1 file of 2026-05-31 and the v2 file of 06-01 may
+   share footprints (as R37, but across two products). Measure it, and
+   state it in both products' metadata if it occurs.
+
+**Code that assumes v1** (`products/tropess.py`, unless named):
+- `LEVELS = 17` sets the profile shapes (`ABSENT_LAYOUT`, the level-count
+  check); v2 Standard has 34 levels, Full 34 and 67;
+- `FILE_RE` here and in `tools/survey/tropess_file_audit.py` accepts only
+  `Standard|Summary`; Full needs its own token (and `granule_types`);
+- the audit tool's `PRODUCTS` has no v2 entries;
+- `target_id` (a 36-character string) and Full's int8-packed blocks are
+  read nowhere yet;
+- the `nomenclature-key_tropess.md` rows map v1's datasets only.
+
+**First steps in the new session:** read this section and R25; probe one
+file of each v2 type (headers, row counts, levels); measure the v1/v2
+seam; then lay out decision 5 for the user, as the CrIS decisions were.
+The audit over every v2 file follows the decision.
 
 ## CrIS: handoff (written 2026-10-23, for a new session)
 

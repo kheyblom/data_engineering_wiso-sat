@@ -5,11 +5,21 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-26)
 
 **Nothing is running.** No batch jobs are queued.
+- **Current task: TROPESS v2 (AIRS and CrIS-JPSS1 together), decision 5;
+  to be started in a new session (user, 2026-10-26).** **Read
+  `docs/products/tropess.md`, section "v2: handoff", first.** It holds what
+  is settled (a separate `v_2` store set), what is on disk (AIRS 30 days,
+  CrIS-JPSS1 139 days, each in Summary, Standard and Full), the layout
+  known from R25, the decision to lay out for the user (which type: Standard
+  is already cut at DOF >= 1.1, Full keeps every row at 9-13x the size; the
+  variables; when; the v1/v2 seam), and the code that assumes v1. **No v1
+  exception carries over without the user's approval** (R40 time order,
+  R37 repeats): measure, then ask.
 - **CrIS v1 is finished (task 6): 50 stores finalized 2026-10-26**, tag
   `v1-verified-20261026`, in
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_{snpp,jpss1}/`.
-  Next: ask the user which candidate (below). The history of the CrIS work
-  follows. **`docs/products/tropess.md`, section "CrIS: handoff"**
+  The history of the CrIS work follows. **`docs/products/tropess.md`,
+  section "CrIS: handoff"**
   holds what is settled, the five decisions the user must make before any
   code (SNPP RS is Summary-only upstream; SNPP FS overlaps; R18 duplicate
   files; the SC Australian-fire collection; v2 with AIRS v2), the reader
@@ -152,10 +162,11 @@ Read this first in a new session. Update it whenever work lands.
 The data-lake home for finished stores is not a candidate: the user will say
 when it is time (2026-10-22).
 
-1. **The other products** (task 6): AIRS and CrIS (TROPESS), IASI, TES. Each gets a reader at fixture level first, then bench, then
+1. **The other products** (task 6): TROPESS v2 (next, see above), IASI,
+   TES. Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
-   AIRS v1 is finished; CrIS is next (see above).
+   AIRS v1 and CrIS v1 are finished.
 2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`
@@ -213,6 +224,11 @@ when it is time (2026-10-22).
   but it shows in `history`).
 - **Never run two verifies of one config at once** (shared evidence log;
   CLAUDE.md). Chain them `afterany`.
+- **No exception to the style guide or the project rules without the
+  user's approval** (2026-10-26), even one approved for another product:
+  `time_order: source` was carried from AIRS to CrIS without asking and
+  had to be held, measured and put to the user (R40). Measure first, lay
+  out the options, let the user decide.
 - **Edits to style_guides** are shown to the user before commit; they review
   in place with `#@CLAUDE` comments.
 - **Proposals for the user** go in a repo doc reviewed in place with

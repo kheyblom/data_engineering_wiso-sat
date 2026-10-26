@@ -65,10 +65,12 @@ GOSAT-2 production built, verified and finalized 2026-10-22: 12 stores,
 1,620,006 observations, 0 failures, tag `v3.0.1-verified-20261022`, read with
 the GOSAT reader and key (`source: gosat`; TESTING.md Tier 3).
 
-AIRS (then CrIS) started 2026-10-22: surveyed, and the product scheme
-decided (`docs/products/tropess.md`). Waiting on downloads of every missing
-collection, by a separate data-access session
-(`docs/handoff-tropess-download.md`).
+AIRS v1 production built, verified and finalized 2026-10-23: two products
+(RS, FS), 38 stores, 0 failures, tag `v1-verified-20261023`. CrIS v1
+2026-10-26: three products (SNPP RS, SNPP FS, JPSS1 FS), 50 stores, 0
+failures, tag `v1-verified-20261026` (`docs/products/tropess.md`; TESTING.md
+run logs). Next for TROPESS: v2, AIRS and CrIS-JPSS1 together
+(`tropess.md`, "v2: handoff").
 
 GOSAT production built, verified and finalized 2026-10-19: 12 stores,
 8,856,028 observations, 0 failures, tag `v3.0.1-verified-20261019`
