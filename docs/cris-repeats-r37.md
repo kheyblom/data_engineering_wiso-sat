@@ -1,9 +1,37 @@
 # R37: CrIS rows repeated across days — outline for a decision
 
-Written 2026-10-26 for the user's review, in place with `#@CLAUDE` comments
-(as `docs/model-comparison-naming.md` was). Nothing is built until the user
-decides. Evidence: TESTING.md finding 16, `tropess.md` R37; the probes ran on
-the login node and are described under "How it was measured".
+Written 2026-10-26 for the user's review. Evidence: TESTING.md finding 16,
+`tropess.md` R37; the probes ran on the login node and are described under
+"How it was measured".
+
+## Decision (user, 2026-10-26)
+
+**Each repeated footprint is stored once: the copy from the newest
+algorithm, and between copies of one algorithm, the one from the file with
+the latest root `ProductionDateTime`.** Option 3 below, with the newest copy
+kept rather than the first.
+
+- **Scope:** every CrIS v1 product (SNPP RS, SNPP FS, JPSS1 FS). A repeat is
+  a row whose time, lat and lon equal a row of another file of the same
+  product within the look-back (2 files; none was found at 3). In merged
+  products the Standard row decides, and its Summary row goes with it.
+- **An exception to "every observation kept"**, approved for these products
+  only, like SCIAMACHY S9: the copies left out include second retrievals
+  (class C) and second error estimates (class B). The rule, its reason and
+  the counts left out go in each store's metadata.
+- **Declared, never detected:** the config declares the rule (with the
+  look-back), and the build and the verifier each apply it from raw on their
+  own. A tie (same algorithm and production time) fails the build, as does a
+  repeat within one file. Expected counts: SNPP RS 620, SNPP FS 8,057,
+  JPSS1 136,723 Standard rows left out.
+- **Build:** before writing a granule, the reader looks ahead up to two
+  files (their time, lat, lon and attributes only), since the copy kept is
+  often in the later file. `check_repeats` then runs unchanged on the
+  stored rows, with the look-back widened to 2, and must find none.
+- **Index:** `granule_source_rows` keeps each file's own count; the rows left
+  out per granule are recorded in the index too.
+- **WISO-SAT differs here:** its scripts very likely counted every repeat
+  twice (below).
 
 ## What happens
 

@@ -23,11 +23,13 @@ Read this first in a new session. Update it whenever work lands.
     core-hours; TESTING.md finding 16). The AIRS assumptions hold; new
     issues R36-R39 in `tropess.md`. Decided 2026-10-26: R36 `land_flag`
     masked as a declared defect on the 324 files; R38 `sunlit_binary_mask`
-    declared as for AIRS FS. **Open, for the user: R37** (rows repeated
-    across days, ~0.3% of SNPP FS and JPSS1; same footprint, but only part
-    bit-identical). Outline and options for review in place:
-    `docs/cris-repeats-r37.md` (recommended: keep every row, with a
-    same-footprint check and per-granule counts).
+    declared as for AIRS FS; R37 each repeated footprint stored once, the
+    newest algorithm's copy, then the latest `ProductionDateTime`
+    (`docs/cris-repeats-r37.md`, Decision).
+  - **Next:** the CrIS production subset (as AIRS P1-P8) for review in
+    place, then the reader and shared changes (instrument filter,
+    Summary-only granules, R18 declared file, whole-file declared mask,
+    the R37 rule with look-ahead), fixtures, the full test, a bench.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
     2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
   - Start by laying the collections and decisions out for the user (as for
@@ -292,5 +294,11 @@ when it is time (2026-10-22).
   - per-granule algorithm, format and joint flag go in the granule index, a
     shared change approved for every product that needs it;
   - CrIS products carry the platform: `cris_snpp`, `cris_jpss1`.
+- **CrIS (2026-10-26; `tropess.md` CrIS handoff, Answers):** SNPP RS built
+  Summary-only; SNPP FS its own product; R18 keeps the R1p24 replacement;
+  the SC Australian fires left out; R36 `land_flag` masked on the 324
+  defective files, declared; R38 `sunlit_binary_mask` declared; **R37 each
+  repeated footprint stored once, newest algorithm then latest
+  `ProductionDateTime`** (an approved exception, `docs/cris-repeats-r37.md`).
 - **Downloads are done outside this repo** (2026-10-22): a separate
   data-access session fetches raw data; this repo only reads it.

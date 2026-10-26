@@ -170,6 +170,11 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
     confirm it from raw before leaving the rows out; other readers refuse
     one. SCIAMACHY's S9 entry is a one-time exception to keeping every
     observation;
+  - CrIS footprints delivered in two daily files (R37, user decision
+    2026-10-26) are stored once: the copy from the newest algorithm, then
+    the latest `ProductionDateTime`. A declared rule, applied from raw by
+    the build and the verifier; an approved exception for CrIS only
+    (`docs/cris-repeats-r37.md`);
   - check a gap against the upstream listing before declaring it: half of
     TROPOMI's first empty orbits were download failures.
 - **Rows that are not observations are left out, checked**, for every
