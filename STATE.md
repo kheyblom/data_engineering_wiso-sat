@@ -33,9 +33,12 @@ Read this first in a new session. Update it whenever work lands.
     (2026-10-26; CLAUDE.md, "Added for CrIS"): `config/cris_snpp_rs/`,
     `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; R37 counts measured
     and declared (620, 8,057, 136,707). **The fixture test passes 350
-    cases over 9 fixtures** (~15 min). **Next: a bench** (one month per
-    product, bench configs and `validation/stage_bench_tropess.py`), shown
-    to the user before submitting; then production. Was: the reader and
+    cases over 9 fixtures** (~15 min).
+  - **The CrIS bench passed** (2026-10-26, TESTING.md Tier 2e): one month
+    per product, 568, 883 and 884 checks, 0 failures; ~0.5 core-hours.
+    Compression as AIRS. **Next: production**, shown to the user first.
+    Bench data in `wisosat_bench/` (stores ~1.7 GB and symlinks) to delete
+    with approval once production is verified. Was: the reader and
     shared changes
   - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
     (`time_order: source`, option 1), approved per product after

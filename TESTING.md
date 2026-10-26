@@ -581,6 +581,58 @@ dtype's size):
 Over the record, blosc on the six arrays where it wins saves ~6.6 GB of
 FS's ~59 GB and ~2.7 GB of RS's ~23 GB (the kernel 4.6 and 1.9 of that).
 
+## Tier 2e: the CrIS bench (passed 2026-10-26)
+
+**What it is:** one real month per CrIS product at production settings
+(`config/cris_*/config_zarr_bench.yaml`; files symlinked by
+`validation/stage_bench_tropess.py`, which also reports the month's fills and
+its R37 count), from `028476b`:
+- **SNPP RS 2015-12:** 28 Summary days to 12-29, 12-05 missing; 34,203 obs,
+  8 left out under R37.
+- **SNPP FS 2021-04:** 30 days, R36 on every day; 774,782 obs, 1,474 left out.
+- **JPSS1 FS 2021-05:** 31 days, the R18 replacement of 05-21 beside its old
+  file, R36 on every day but 05-21; 730,947 obs, 1,744 left out.
+
+| job | what | wall | cpu | memory (job) | result |
+| --- | --- | --- | --- | --- | --- |
+| 7963358 | SNPP RS build, 12 stores, 1 commit | 27 s | 14 s | 0.97 GB | done |
+| 7963359 | SNPP RS verify | 7 s | 6 s | 0.28 GB | **568 checks, 0 failures** |
+| 7963361 | SNPP FS build, 19 stores, 1 commit | 30 s | 51 s | 6.3 GB | done |
+| 7963363 | SNPP FS verify | 63 s | 67 s | 3.7 GB | **883 checks, 0 failures** |
+| 7963364 | JPSS1 build, 19 stores, 1 commit | 24 s | 50 s | 5.9 GB | done |
+| 7963366 | JPSS1 verify | 61 s | 62 s | 3.6 GB | **884 checks, 0 failures** |
+
+All on develop, 8 cores and 32 GB, each verify chained `afterany` on its
+build: ~0.5 core-hours charged (8 cores x 3.5 min). On real data the
+verifier confirmed:
+- **R37:** its own selection equals the declared count and the listing's,
+  granule by granule;
+- **R36:** `land_flag` masked on 774,782 (SNPP FS) and 706,683 (JPSS1) obs;
+  05-21's R1p24 file is not masked, and no undeclared file is all 1;
+- **R18** (JPSS1): only the replacement read;
+- **R22:** 30 and 31 defects confirmed;
+- **R38:** the declared `sunlit_binary_mask`, which SNPP FS's source holds
+  only in its Summary files;
+- **no repeats**, looking back two granules. The verifier notes time
+  decreasing 18, 2,599 and 2,558 times along obs, as the files have it
+  (R40).
+
+Stores: SNPP RS 6.8 MB, SNPP FS 851 MB, JPSS1 810 MB.
+
+**Compression** (login node; two chunks of each 2-D array; zarr's default
+zstd against blosc zstd 5 + byte shuffle), as AIRS's within 1-2 points, so
+the configs' choice stands:
+
+| array | SNPP FS blosc saves | JPSS1 blosc saves | SNPP RS blosc saves |
+| --- | --- | --- | --- |
+| averaging kernel (17 x 17) | 10.5% | 10.1% | — |
+| `altitude` | 27.0% | 26.6% | 26.9% |
+| `water_vapor_hdo_h2o_ratio` | 21.2% | 19.5% | 19.8% |
+| `water_vapor_hdo_h2o_ratio_apriori` | 14.6% | 14.6% | — |
+| `water_vapor_h2o_mole_fraction_dry_air` | 10.9% | 10.5% | 10.6% |
+| `..._observation_standard_error_log` | 9.7% | 8.6% | — |
+| `pressure` | **-8.2%** | -8.4% | -6.2% |
+
 ## Tier 3: production
 
 Per product:
