@@ -1,0 +1,249 @@
+# Production config for the CrIS-SNPP Reanalysis Stream (RS) stores: TROPESS
+# CrIS-SNPP HDO Level 2, collection version 1, the Summary product only.
+#
+# docs/products/tropess.md holds every decision this encodes (Product scheme;
+# the CrIS handoff's Answers; the CrIS v1 production subset C1-C8; issues
+# R1-R39). In short:
+# - one product per platform, stream and collection version, named
+#   wisosat.cris_snpp.v_1.rs... (product + version + version_product);
+# - Summary only: upstream publishes no RS Standard collection for CrIS-SNPP
+#   (checked against CMR 2026-10-26), so the obs axis is the Summary rows,
+#   the Standard rows with DOF > 1.1, and there is no kernel, prior or error
+#   (user decision 2026-10-26);
+# - declared, never detected: the footprints held by two files, each stored
+#   once in the newest copy (R37), and the days upstream has no file (R35);
+# - the source row order kept: TROPESS files are not in time order.
+product: cris_snpp
+source: tropess
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/CRIS
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_snpp
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_cris_snpp_rs.log
+# the collection version every file declares (VersionID), checked on every file
+version: '1'
+# the stream, after the version in the store names; it also selects the
+# stream's collection folders under the raw root (LISTING_OPTIONS)
+version_product: rs
+# the files' Platform attribute, checked on every file; it also selects the
+# platform's folders and files (C2)
+platform: SUOMI-NPP
+# no Standard collection exists upstream; a Standard folder appearing for this
+# platform and stream fails the listing
+granule_types: [Summary]
+temporal_resolution: observation
+grid_name: native_swath
+# the style guide's exception: rows kept in source order, which is not time
+# order (R32, user decision 2026-10-23)
+time_order: source
+
+# canonical names, each a row of nomenclature-key_tropess.md: what the Summary
+# files hold (C3, approved 2026-10-26). TROPESS publishes no quality flag.
+variables:
+  - water_vapor_hdo_h2o_ratio
+  - water_vapor_h2o_mole_fraction_dry_air
+  - water_vapor_delta_d_850_250hpa
+  - water_vapor_delta_d_850_250hpa_standard_error
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error
+  - water_vapor_delta_d_004
+  - land_flag
+  - day_night_flag
+  - pressure
+  - altitude
+
+# R35: 134 days between 2015-12-01 and 2021-05-21 have no file upstream (CMR
+# lists 1,865 granules, all on disk; 2026-10-26). The build fails on any other
+# gap
+expected_missing_days:
+  - '2015-12-05'
+  - ['2015-12-30', '2016-01-01']
+  - '2017-12-24'
+  - '2019-02-17'
+  - ['2019-03-27', '2019-07-31']
+  - '2021-01-14'
+
+# R37, decided by the user 2026-10-26: a footprint (time, lat, lon) held by two
+# files is stored once, the newest algorithm's copy, then the latest produced.
+# The listing applies it and fails unless it leaves out exactly this many; the
+# verifier works it out again from raw. An approved exception to keeping every
+# observation, for CrIS only (docs/cris-repeats-r37.md)
+repeated_footprints:
+  keep: newest_algorithm_then_latest_production
+  look_back: 2
+  # measured with the rule over every file, 2026-10-26 (on 417 days)
+  expected_left_out: 620
+  reason: >-
+    A TROPESS CrIS file covers its processing day, holding observations from up
+    to two days either side of its date, so some footprints are delivered in
+    two files (R37). Each is stored once: the copy from the newest MUSES
+    algorithm, and between copies of one algorithm, the one from the file with
+    the latest ProductionDateTime. The copies left out are counted per granule
+    in granule_rows_left_out.
+
+# every row has time, latitude and longitude (audit 2026-10-26), so none is
+# left out as not an observation, and nothing may be written on one that is
+allowed_on_rows_left_out: []
+
+# fill each source holds (audit 2026-10-26, TESTING.md finding 16); NaN is
+# fill wherever it occurs. The verifier fails if a declared value never
+# occurs, so only what occurs is declared
+source_fill_values:
+  x: [-999]
+  x_h2o: [-999]
+  pressure: [-999]
+  altitude: [-999]
+  geophysical/day_night_flag: [-999]
+  dd_col_p_error: [-9999]
+  x_h2o_col_p_error: [-999]
+
+# integers whose width drifts between files (R39), stored as one dtype
+source_dtypes:
+  geophysical/land_flag: int32
+  geophysical/day_night_flag: int32
+
+# blosc zstd 5 + byte shuffle on the 2-D arrays this product has, as AIRS
+# (bench, TESTING.md Tier 2d; C7). pressure and every 1-D array keep zarr's
+# default zstd
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - altitude
+    - water_vapor_hdo_h2o_ratio
+    - water_vapor_h2o_mole_fraction_dry_air
+
+# scale settings (condition 3; C7). ~2.6 M obs: the 17-level arrays take
+# 524,288-obs chunks, the rest 4,194,304. ~1,400 obs a day, so 1,000 days make
+# a ~1.4 M-obs commit
+chunks:
+  obs: 4194304
+  granule: 8192
+granules_per_commit: 1000
+num_workers: 8
+
+filtering_guidance: >-
+  Pre-filtered upstream: these are TROPESS Summary observations, which are the
+  Standard observations with DOF > 1.1 (measured where both exist, R31; not
+  stated by TROPESS), and no Standard product exists for this stream. Nothing
+  further is applied; each footprint is kept once (R37). Sarkar et al. (2026)
+  grid CrIS from these Summary files before 2021 without further filtering.
+  No DOF, cloud, kernel, a priori or observation error is published here.
+
+attrs:
+  title: >-
+    WISO-SAT CrIS-SNPP Level 2 HDO/H2O (TROPESS reanalysis stream, collection
+    {version_label}, Summary product): {variable}
+  summary: >-
+    One variable of the NASA TROPESS CrIS-SNPP (Suomi-NPP) HDO/H2O retrievals
+    of the reanalysis stream as distributed for WISO-SAT, every observation of
+    the Summary product, each footprint once, stored as an icechunk-backed zarr
+    store. Join with the geolocation store of the same product on obs for time,
+    latitude and longitude, and with the pressure store for the 17 retrieval
+    levels.
+  Conventions: ACDD-1.3
+  source: >-
+    NASA TROPESS CrIS-SNPP L2 Deuterated Water Vapor for Reanalysis Stream,
+    Summary Product V1 (TRPSYL2HDOCRSRS, doi:10.5067/5SOLOJ3T692X), one netCDF
+    file per day, GES DISC
+  source_collection_version: >-
+    {version_label} (VersionID), every file
+  source_algorithm: >-
+    MUSES v1.17 (R1p17), format F0p8, single-instrument (J0), every file; per
+    granule in the granule index (granule_algorithm, granule_format)
+  institution: NASA Jet Propulsion Laboratory, TROPESS project (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Sarkar, M., Dee, S., Frazer, M., Bailey, A., Good, S., et al. (2026), WISO-SAT:
+    A global database of stable hydrogen isotopes in water vapor from eight
+    satellite missions, Scientific Data, doi:10.1038/s41597-026-08218-8.
+    TROPESS HDO/H2O Level 2 Summary Product User Guide and the Reanalysis
+    Stream README, GES DISC.
+  product_type: >-
+    The Summary product only. TROPESS publishes no Standard collection for the
+    CrIS-SNPP reanalysis stream (CMR, 2026-10-26), so this product holds the
+    observations with DOF > 1.1 and no averaging kernel, a priori, observation
+    error, DOF or cloud fields; the forward-stream products of CrIS have them.
+  repeated_footprints: >-
+    A TROPESS CrIS file covers its processing day, with observations from up to
+    two days either side of its date, so some footprints (the same time,
+    latitude and longitude, and the same CrIS field of view) are delivered in
+    two files: 620 observations here. Each is stored once: the copy from the
+    newest MUSES algorithm, and between copies of one algorithm, the one from
+    the file with the latest ProductionDateTime (user decision 2026-10-26; an
+    exception to keeping every observation). Here most pairs are two
+    retrievals of the footprint, differing in x by a median 0.04%.
+    granule_rows_left_out counts the copies left out per granule. WISO-SAT's
+    own gridding counted them twice.
+  stream: >-
+    Reanalysis stream (RS): the record reprocessed with one fixed algorithm.
+    It samples one target per 0.8 degree box per overpass over few boxes (~1,400
+    Summary observations a day), both overpasses.
+  related_product: >-
+    The forward stream of the same platform,
+    wisosat.cris_snpp.v_1.fs.{frequency}.{grid_name}.<variable>.zarr
+    (2021-02-01 to 2021-05-21, Standard and Summary), retrieves the same
+    targets over its record with another algorithm (MUSES v1.11, v1.12; R26).
+    CrIS on JPSS-1 continues from 2021-04-01:
+    wisosat.cris_jpss1.v_1.fs.{frequency}.{grid_name}.<variable>.zarr.
+    Suomi-NPP's CrIS mid-wave band failed on 2021-05-21, after which TROPESS
+    made no SNPP HDO.
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs, and
+    wisosat.{product}.{version}.{frequency}.{grid_name}.pressure.zarr the 17
+    retrieval levels, surface first; every store of this product shares one
+    obs axis and granule index.
+  granule: >-
+    one day; granule_id is the date, and granule_file names the day's Summary
+    file. A file holds observations from up to two days either side of its
+    date.
+    Rows keep their source order, which is not time order.
+  known_data_gaps: >-
+    134 days between 2015-12-01 and 2021-05-21 have no file upstream, among
+    them 2019-03-27 to 2019-07-31; they are listed in the build config
+    (expected_missing_days).
+
+variable_attrs:
+  water_vapor_hdo_h2o_ratio:
+    comment: >-
+      TROPESS's bias-corrected HDO/H2O profile: the source says "HDO / H2O
+      ratio (includes bias correction)". The data are bias corrected based on
+      comparison with aircraft measurements (TROPESS User Guide 5.1; Herman et
+      al. 2014, 2020). Summary observations only: DOF > 1.1.
+  water_vapor_h2o_mole_fraction_dry_air:
+    # retained from the Summary files, which carry it
+    standard_name: dry_atmosphere_volume_mixing_ratio_of_water_vapor
+    comment: >-
+      TROPESS's bias-corrected H2O dry-air mole fraction profile: the source
+      says "H2O only (includes bias correction)" (TROPESS User Guide 5.1).
+  water_vapor_delta_d_850_250hpa:
+    comment: >-
+      TROPESS's formula (the source attribute): 1000 * (mean(x) / 3.11e-4 - 1),
+      an unweighted mean of the HDO/H2O ratio over the retrieval levels with
+      250 <= p < 850 hPa (usually 8; 5-9 over high ground).
+  water_vapor_delta_d_850_250hpa_standard_error:
+    comment: >-
+      1-sigma: (1000 + delta D) sqrt(M S M^T), M the equal-weight mean over the
+      same levels and S TROPESS's observation error (not published for this
+      stream). TROPESS writes no value where a level in the range has a
+      negative variance in S (R17), on ~70% of observations.
+  water_vapor_h2o_mole_fraction_dry_air_850_250hpa:
+    comment: >-
+      The unweighted mean of the H2O profile over the retrieval levels with
+      250 <= p < 850 hPa.
+  water_vapor_delta_d_004:
+    comment: >-
+      TROPESS: "Deuterated water vapor content for water vapor volume mixing
+      ratio of 0.004". It does not reproduce by interpolating the stored
+      profiles; TROPESS computes it on its own grid.
+  day_night_flag:
+    # the source's name in every file of this product, declared as in the
+    # other TROPESS products (R33, R38)
+    standard_name: sunlit_binary_mask
+    comment: >-
+      The source standard_name, sunlit_binary_mask in every file of this
+      product. TROPESS's forward-stream Standard files before 2022-03-31 call it
+      day_binary_mask (R38).

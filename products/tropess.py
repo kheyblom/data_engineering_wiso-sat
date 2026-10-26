@@ -1,4 +1,4 @@
-"""Reader for the NASA TROPESS (MUSES) HDO Level 2 products, AIRS first.
+"""Reader for the NASA TROPESS (MUSES) HDO Level 2 products: AIRS and CrIS.
 
 The raw tree holds one folder per collection, as downloaded: the first
 downloads flat (``<ShortName>_<version>-<stamp>/``), the later ones by year
@@ -10,11 +10,15 @@ version can span both (``docs/products/tropess.md``, Collections):
 <raw>/TRPSYL2HDOAIRSORS_1-20240806_185241/TROPESS_AIRS-Aqua_L2_Summary_HDO_<YYYYMMDD>_MUSES_R1p6_RS_F0p8_J0.nc
 ```
 
-**One product per stream and collection version** (user decisions
-2026-10-22 and 10-23): the config's ``version`` is the collection version
-the files declare (``VersionID``) and ``version_product`` the stream, so the
-stores are ``wisosat.airs.v_1.rs...`` and ``wisosat.airs.v_1.fs...``. The
-listing takes only that stream's and version's folders (``LISTING_OPTIONS``).
+**One product per platform, stream and collection version** (user decisions
+2026-10-22, 10-23 and 10-26): the config's ``version`` is the collection
+version the files declare (``VersionID``), ``version_product`` the stream and
+``platform`` the satellite, so the stores are ``wisosat.airs.v_1.rs...``,
+``wisosat.cris_jpss1.v_1.fs...`` and so on. The listing takes only that
+platform's, stream's and version's folders and files (``LISTING_OPTIONS``):
+the CrIS-SNPP and CrIS-JPSS1 folders sit side by side under one raw root.
+The special collections (``SC_AUS``) are out of scope; their names match
+neither pattern below, so they are never listed.
 
 **One granule is one day: the Standard file and the Summary file, merged**
 (2026-10-23). Summary v1 is exactly the Standard rows with DOF > 1.1, in the
@@ -28,12 +32,32 @@ same order, with identical values (TESTING.md finding 15), so:
   files hold must be identical on them, except the first ``x`` (below), or
   the read fails;
 - a day with only one of the two files is read from it alone, but only if the
-  config declares it (``expected_partial_granules``; R23).
+  config declares it (``expected_partial_granules``; R23);
+- a product with no Standard collection upstream (CrIS-SNPP RS) is declared
+  Summary-only (``granule_types: [Summary]``), and its obs axis is the
+  Summary rows.
 
-**The first ``x`` of every Standard file is a defect** (R22): it is
-``x_test``, the kernel applied to the true profile. The config declares it
-(``declared_masked_values``), and the read confirms it equals ``x_test``
-before marking it; shared code stores NaN.
+**Declared, never detected** (``docs/products/tropess.md``):
+- **R22, the first ``x`` of every Standard file**, is ``x_test``, the kernel
+  applied to the true profile. The config declares it
+  (``declared_masked_values``, ``where: first_row_of_standard_file``), and the
+  read confirms it equals ``x_test`` before marking it; shared code stores
+  NaN.
+- **R36, CrIS ``land_flag``** is 1 on every row of some early files. The
+  config lists their days (``where: every_row_of_listed_days``), and the read
+  confirms every row holds the declared value before marking the whole file;
+  shared code stores the integer's declared fill.
+- **R18, a replaced file:** where upstream replaced a day's file, the config
+  names the old one (``superseded_files``); the listing confirms the other
+  is newer, in algorithm and ``ProductionDateTime``, and reads only it.
+- **R37, footprints in two files:** a CrIS file covers up to two days either
+  side of its date, so a footprint can be in two files. Where the config
+  declares the rule (``repeated_footprints``), the listing reads every file's
+  time, latitude, longitude, algorithm and ``ProductionDateTime``, keeps each
+  footprint once, in the newest algorithm's file and then the latest
+  produced, and fails unless it leaves out exactly the declared count. Each
+  granule carries its rows left out (``Granule.left_out``); the read drops
+  them and their Summary rows, and the index records how many.
 
 Format facts:
 - **Groups:** a source is named by its path, e.g. ``observation_ops/xa``;
@@ -57,6 +81,7 @@ geolocation; ``check_files`` repeats the merge rules from raw.
 
 from __future__ import annotations
 
+import collections
 import datetime
 import os
 import re
@@ -82,6 +107,19 @@ FILE_RE = re.compile(
 KINDS = {'D': 'Standard', 'Y': 'Summary'}
 # the order of a granule's files, and so of its granule_file entry
 TYPES = ('Standard', 'Summary')
+# per Platform attribute: the instrument token(s) of its collection folders
+# (AIRS RS is TRPS?L2HDOAIRSORS) and the platform token of its file names
+PLATFORMS = {
+    'Aqua': (('AIRS', 'AIRSO'), 'AIRS-Aqua'),
+    'SUOMI-NPP': (('CRS',), 'CrIS-SNPP'),
+    'JPSS-1': (('CRS1',), 'CrIS-JPSS1'),
+}
+# fill in time, latitude and longitude, which the repeat rule skips
+LOCATION_FILL = -999
+# the root attribute that orders two files of one algorithm (R18, R37)
+PRODUCTION_ATTR = 'ProductionDateTime'
+# the one rule repeated_footprints may declare (R37, user decision 2026-10-26)
+REPEAT_KEEP = 'newest_algorithm_then_latest_production'
 
 OBSERVATION_DIM = 'target'
 DIMENSION_RENAMES = {}
@@ -90,13 +128,19 @@ LEVELS = 17
 
 VERSION_ATTR = 'VersionID'
 PLATFORM_ATTR = 'Platform'
+# the config's platform picks the files listed (PLATFORMS), so a platform the
+# files do not declare fails the listing rather than the first read
+LISTS_BY_PLATFORM = True
 SHORT_NAME_ATTR = 'ShortName'
 
 # what identifies an observation across a day's two files
 MATCH_SOURCES = ('time', 'latitude', 'longitude')
 
 # config settings list_granules takes (utils/path_utils.listing_options)
-LISTING_OPTIONS = ('version', 'version_product', 'expected_partial_granules')
+LISTING_OPTIONS = (
+    'version', 'version_product', 'platform', 'expected_partial_granules', 'granule_types',
+    'superseded_files', 'repeated_footprints',
+)
 
 # this reader applies the config's declared_masked_values
 DECLARED_MASKS = True
@@ -106,9 +150,12 @@ DECLARED_MASKS = True
 SUMMARY_DOF = np.float32(1.1)
 DOF_SOURCE = 'observation_ops/signal_dof'
 
-# the one declared defect this reader can confirm (R22): row 0 of the Standard
-# file, which must equal x_test bit for bit
-MASK_WHERE = 'first_row_of_standard_file'
+# the declared defects this reader can confirm: row 0 of the Standard file,
+# which must equal x_test bit for bit (R22); and every row of the files of
+# listed days, which must all hold one declared value (R36)
+MASK_FIRST_ROW = 'first_row_of_standard_file'
+MASK_LISTED_DAYS = 'every_row_of_listed_days'
+MASK_WHERE = (MASK_FIRST_ROW, MASK_LISTED_DAYS)
 
 # a source missing from a declared one-sided day takes this layout, so the
 # day's arrays still line up: dims after the observation dimension, and dtype
@@ -138,6 +185,19 @@ INDEX_EXTRA = {
     'granule_format': {
         'long_name': 'format version and joint processing flag of each source file, separated by "; "',
         'comment': 'F<major>p<minor>, then J0 (single) or J1 (joint retrieval) where the name has one',
+    },
+}
+# added where a config declares repeated_footprints (R37), so the AIRS stores
+# built before it keep their index
+INDEX_LEFT_OUT = {
+    'granule_rows_left_out': {
+        'long_name': 'observations of the granule left out because another file holds the same footprint',
+        'comment': (
+            'Rows of the granule\'s first file (and their Summary rows) whose time, latitude and '
+            'longitude another file of the product within the declared look-back also holds, and '
+            'whose copy there is kept: the newest algorithm\'s, then the latest produced '
+            '(repeated_footprints; docs/products/tropess.md R37). A decimal count.'
+        ),
     },
 }
 
@@ -177,8 +237,9 @@ def file_facts(path):
 
 
 def list_granules(raw_root, expected_empty=(), expected_unreadable=(), version=None,
-                  version_product=None, expected_partial_granules=None):
-    """Every day of one stream and collection version, in date order.
+                  version_product=None, platform=None, expected_partial_granules=None,
+                  granule_types=None, superseded_files=None, repeated_footprints=None):
+    """Every day of one platform, stream and collection version, in date order.
 
     Args:
         raw_root (str): The instrument's raw folder, e.g. ``.../raw/AIRS``.
@@ -186,17 +247,31 @@ def list_granules(raw_root, expected_empty=(), expected_unreadable=(), version=N
         expected_unreadable (Iterable): Unused; must be empty.
         version (str): The collection version (``VersionID``).
         version_product (str): The stream, ``rs`` or ``fs``.
+        platform (str): The files' ``Platform`` attribute, a key of
+            ``PLATFORMS``, which picks the folders and files.
         expected_partial_granules (dict | None): Day id -> the one type it
             has (``Standard`` or ``Summary``), for days upstream has only one
             file of (R23). Any other one-sided day fails the listing.
+        granule_types (list | None): The types a day is made of; ``[Summary]``
+            for a product with no Standard collection (CrIS-SNPP RS). Default
+            both.
+        superseded_files (dict | None): Day id -> the name of a file upstream
+            has replaced (R18). Only the replacement is read; any other day
+            with two files of one type fails the listing.
+        repeated_footprints (dict | None): The R37 rule, ``keep``,
+            ``look_back``, ``expected_left_out`` and ``reason``; see
+            ``select_repeats``.
 
     Returns:
-        list: :class:`Granule` per day, paths in ``TYPES`` order.
+        list: :class:`Granule` per day, paths in ``TYPES`` order, each with
+            its rows left out where the config declares ``repeated_footprints``.
 
     Raises:
         FileNotFoundError: If the root does not exist.
         ValueError: If the options are missing, a day has two files of one
-            type, or one-sided days differ from the declared ones.
+            type that are not a declared replacement, one-sided days differ
+            from the declared ones, or the repeat rule leaves out other than
+            the declared count.
     """
     if not os.path.isdir(raw_root):
         raise FileNotFoundError(f'no raw data directory at {raw_root}')
@@ -207,15 +282,24 @@ def list_granules(raw_root, expected_empty=(), expected_unreadable=(), version=N
     stream = str(version_product).upper()
     if stream not in ('RS', 'FS'):
         raise ValueError(f'version_product must be rs or fs; it is {version_product!r}')
+    if platform not in PLATFORMS:
+        raise ValueError(f'the config declares platform {platform!r}; this reader lists only {sorted(PLATFORMS)}')
+    instruments, token = PLATFORMS[platform]
+    types = tuple(granule_types or TYPES)
+    if not types or set(types) - set(TYPES):
+        raise ValueError(f'granule_types must be drawn from {TYPES}; it is {granule_types!r}')
 
-    days = {}
+    found_files = {}
     for folder in sorted(os.listdir(raw_root)):
         match = FOLDER_RE.match(folder)
         if match is None or match['kind'] not in KINDS:
             continue
-        if match['stream'] != stream or match['collection'] != str(version):
+        if (match['stream'] != stream or match['collection'] != str(version)
+                or match['instrument'] not in instruments):
             continue
         kind = KINDS[match['kind']]
+        if kind not in types:
+            raise ValueError(f'{folder} is a {kind} collection, but granule_types is {list(types)}')
         base = os.path.join(raw_root, folder)
         # a later download keeps a folder per year; the first ones are flat
         places = [os.path.join(base, entry) for entry in sorted(os.listdir(base))
@@ -226,18 +310,86 @@ def list_granules(raw_root, expected_empty=(), expected_unreadable=(), version=N
                 # skips L3 files and the local *_target.nc copies (R5, R6)
                 if found is None:
                     continue
-                if found['type'] != kind or found['stream'] != stream:
-                    raise ValueError(f'{place} holds {name}, which is not {kind} {stream}')
-                files = days.setdefault(found['date'], {})
-                if kind in files:
-                    raise ValueError(f'two {kind} files for {found["date"]}: {files[kind]} and {name}')
-                files[kind] = os.path.join(place, name)
+                if found['type'] != kind or found['stream'] != stream or found['platform'] != token:
+                    raise ValueError(f'{place} holds {name}, which is not {token} {kind} {stream}')
+                found_files.setdefault(found['date'], {}).setdefault(kind, []).append(os.path.join(place, name))
 
-    if not days:
+    if not found_files:
         raise ValueError(
-            f'no {stream} collection folder under {raw_root} has version {version!r}: the '
-            f'configured processor version matches no files'
+            f'no {token} {stream} collection folder under {raw_root} has version {version!r}: '
+            f'the configured processor version matches no files'
         )
+    days = resolve_superseded(found_files, superseded_files)
+    if types == TYPES:
+        check_partial(days, expected_partial_granules)
+    elif expected_partial_granules:
+        raise ValueError('expected_partial_granules applies only to a product of both types')
+    granules = [
+        Granule(
+            id=day,
+            day=datetime.datetime.strptime(day, '%Y%m%d').date(),
+            paths=tuple(files[kind] for kind in TYPES if kind in files),
+        )
+        for day, files in sorted(days.items())
+    ]
+    if repeated_footprints:
+        left_out = select_repeats(granules, repeated_footprints)
+        granules = [granule._replace(left_out=left_out[granule.id]) for granule in granules]
+    return granules
+
+
+def resolve_superseded(found, superseded):
+    """One file per day and type, the declared replaced files set aside (R18).
+
+    Args:
+        found (dict): Day id -> type -> the paths listed.
+        superseded (dict | None): Day id -> the name of the replaced file.
+
+    Returns:
+        dict: Day id -> type -> path.
+
+    Raises:
+        ValueError: If a day has two files of one type and neither is
+            declared replaced; a replacement is not newer in algorithm and
+            ``ProductionDateTime``; or a declaration names no listed file.
+    """
+    superseded = {str(day): str(name) for day, name in (superseded or {}).items()}
+    used, days = set(), {}
+    for day, kinds in found.items():
+        for kind, paths in kinds.items():
+            if len(paths) == 1:
+                days.setdefault(day, {})[kind] = paths[0]
+                continue
+            old = [path for path in paths if os.path.basename(path) == superseded.get(day)]
+            if len(paths) != 2 or not old:
+                raise ValueError(f'{len(paths)} {kind} files for {day}: {[os.path.basename(p) for p in paths]}')
+            new = next(path for path in paths if path != old[0])
+            if file_rank(new) <= file_rank(old[0]):
+                raise ValueError(
+                    f'{day}: {os.path.basename(new)} {file_rank(new)} is not newer than the '
+                    f'superseded {os.path.basename(old[0])} {file_rank(old[0])}'
+                )
+            if file_facts(new)['algorithm'] == file_facts(old[0])['algorithm']:
+                raise ValueError(f'{day}: the replacement has the superseded file\'s algorithm')
+            used.add(day)
+            days.setdefault(day, {})[kind] = new
+    stale = sorted(set(superseded) - used)
+    if stale:
+        raise ValueError(f'superseded_files names days with no second file: {stale}')
+    return days
+
+
+def check_partial(days, expected_partial_granules):
+    """Fail unless the one-sided days are exactly the declared ones (R23).
+
+    Args:
+        days (dict): Day id -> type -> path.
+        expected_partial_granules (dict | None): Day id -> its one type.
+
+    Raises:
+        ValueError: On a one-sided day not declared, a declared one with both
+            files, or a declared one with none.
+    """
     partial = {str(day): str(kind) for day, kind in (expected_partial_granules or {}).items()}
     problems = []
     for day, files in sorted(days.items()):
@@ -251,14 +403,116 @@ def list_granules(raw_root, expected_empty=(), expected_unreadable=(), version=N
         problems.append(f'days declared partial have no file: {stale}')
     if problems:
         raise ValueError(f'{len(problems)} problems with one-sided days (expected_partial_granules): {problems[:10]}')
-    return [
-        Granule(
-            id=day,
-            day=datetime.datetime.strptime(day, '%Y%m%d').date(),
-            paths=tuple(files[kind] for kind in TYPES if kind in files),
+
+
+def file_rank(path):
+    """How a file ranks against another copy of its footprints: newer is larger.
+
+    The algorithm version first, then the root ``ProductionDateTime``, an ISO
+    UTC timestamp that sorts as text (R37, user decision 2026-10-26).
+
+    Args:
+        path (str): A TROPESS file.
+
+    Returns:
+        tuple: ``(algorithm number, ProductionDateTime)``.
+    """
+    with h5py.File(path, 'r') as handle:
+        made = str(decode_text(handle.attrs[PRODUCTION_ATTR]))
+    return int(file_facts(path)['algorithm'][3:]), made
+
+
+def footprint_keys(path):
+    """Each row's time, latitude and longitude as one key, bit for bit.
+
+    Args:
+        path (str): A TROPESS file.
+
+    Returns:
+        list: One ``(int, int, int)`` per row, or None where any of the three
+            is fill or NaN (not an observation; ``RowRule`` leaves it out).
+    """
+    with h5py.File(path, 'r') as handle:
+        columns = [np.asarray(handle[source][...]) for source in MATCH_SOURCES]
+    missing = np.zeros(columns[0].shape[0], dtype=bool)
+    for column in columns:
+        missing |= (column == LOCATION_FILL) | np.isnan(column)
+    views = [column.view(f'u{column.dtype.itemsize}') for column in columns]
+    keys = list(zip(*(view.tolist() for view in views)))
+    return [None if gone else key for key, gone in zip(keys, missing.tolist())]
+
+
+def select_repeats(granules, rule):
+    """The rows each granule leaves out under the declared R37 rule.
+
+    A footprint (time, latitude and longitude, bit for bit) held by the first
+    file of more than one granule within ``look_back`` granules is kept once:
+    in the file with the newest algorithm, then the latest
+    ``ProductionDateTime`` (``file_rank``). Within one file a footprint may not
+    repeat, and two copies may not rank equal.
+
+    Args:
+        granules (list): The listing, in order.
+        rule (dict): ``keep`` (``REPEAT_KEEP``), ``look_back`` (granules),
+            ``expected_left_out`` (the total, from a measured pass) and
+            ``reason``.
+
+    Returns:
+        dict: Granule id -> tuple of rows of its first file left out.
+
+    Raises:
+        ValueError: If the rule is malformed, a file repeats a footprint, two
+            copies rank equal, or the total differs from ``expected_left_out``.
+    """
+    if rule.get('keep') != REPEAT_KEEP or not str(rule.get('reason', '')).strip():
+        raise ValueError(f'repeated_footprints needs keep: {REPEAT_KEEP} and a reason; it is {rule}')
+    look_back = int(rule.get('look_back', 0))
+    if look_back < 1:
+        raise ValueError(f'repeated_footprints look_back must be 1 or more; it is {look_back}')
+    left_out = {granule.id: set() for granule in granules}
+    ranks = {}
+    # the kept copy of each footprint held in the last look_back granules
+    kept = {}
+    held = collections.deque()
+    for position, granule in enumerate(granules):
+        while held and held[0][0] < position - look_back:
+            gone, keys = held.popleft()
+            for key in keys:
+                if kept.get(key, (None,))[0] == gone:
+                    del kept[key]
+        path = granule.paths[0]
+        ranks[position] = file_rank(path)
+        seen = set()
+        for row, key in enumerate(footprint_keys(path)):
+            if key is None:
+                continue
+            if key in seen:
+                raise ValueError(f'{os.path.basename(path)} repeats a footprint within itself (row {row})')
+            seen.add(key)
+            if key not in kept:
+                kept[key] = (position, row)
+                continue
+            other, other_row = kept[key]
+            if ranks[position] == ranks[other]:
+                raise ValueError(
+                    f'{granule.id} row {row} and {granules[other].id} row {other_row} hold one '
+                    f'footprint, and their files rank equal {ranks[position]}'
+                )
+            if ranks[position] > ranks[other]:
+                left_out[granules[other].id].add(other_row)
+                kept[key] = (position, row)
+            else:
+                left_out[granule.id].add(row)
+        held.append((position, seen))
+    total = sum(len(rows) for rows in left_out.values())
+    expected = rule.get('expected_left_out')
+    if expected is None or int(expected) != total:
+        raise ValueError(
+            f'repeated_footprints leaves out {total} observations in '
+            f'{sum(bool(rows) for rows in left_out.values())} granules, but the config declares '
+            f'expected_left_out: {expected}'
         )
-        for day, files in sorted(days.items())
-    ]
+    return {gid: tuple(sorted(rows)) for gid, rows in left_out.items()}
 
 
 def decode_time(raw):
@@ -514,22 +768,35 @@ def read_granule(granule, sources, time_source, rule):
         kept = {kind: {source: values[keeps[kind]] for source, values in raw[kind].items()} for kind in handles}
         n_obs = int(keeps[axis].sum())
 
-        # the declared defects: row 0 of the Standard file, confirmed first
+        # the declared defects, each confirmed in raw before it is marked
         masked = {}
         for entry in rule.masked:
-            if entry.get('where') != MASK_WHERE:
+            if entry.get('where') not in MASK_WHERE:
                 raise ValueError(f'declared_masked_values: this reader confirms only where: {MASK_WHERE}')
-            source, equals = entry['source'], entry.get('equals')
-            if 'Standard' not in handles or source not in sources:
+            source = entry['source']
+            if source not in sources:
                 continue
-            first = np.asarray(handles['Standard'][source][0])
-            expected = np.asarray(handles['Standard'][equals][...])
-            if not same_bits(first, expected):
-                raise ValueError(f'day {granule.id}: the first {source} is not {equals}, as declared')
-            if keeps['Standard'][0]:
-                mask = np.zeros(n_obs, dtype=bool)
-                mask[0] = True
-                masked[source] = mask
+            if entry['where'] == MASK_FIRST_ROW:
+                # R22: row 0 of the Standard file is x_test
+                if 'Standard' not in handles:
+                    continue
+                equals = entry.get('equals')
+                first = np.asarray(handles['Standard'][source][0])
+                expected = np.asarray(handles['Standard'][equals][...])
+                if not same_bits(first, expected):
+                    raise ValueError(f'day {granule.id}: the first {source} is not {equals}, as declared')
+                if keeps['Standard'][0]:
+                    mask = np.zeros(n_obs, dtype=bool)
+                    mask[0] = True
+                    masked[source] = mask
+            elif granule.id in listed_days(entry):
+                # R36: the whole file, every row the declared value
+                holder = next(kind for kind in TYPES if kind in handles and source in raw[kind])
+                if not (raw[holder][source] == entry['value']).all():
+                    raise ValueError(
+                        f'day {granule.id}: {source} is not {entry["value"]} on every row, as declared'
+                    )
+                masked[source] = np.ones(n_obs, dtype=bool)
 
         rows = None
         if len(handles) == 2:
@@ -539,10 +806,28 @@ def read_granule(granule, sources, time_source, rule):
                 source: (kept['Standard'][source], kept['Summary'][source])
                 for source in kept['Summary'] if source in kept['Standard']
             }
-            skip = {source: 0 for source in masked}
+            # R22's row is not compared; R36 holds the same values in both
+            skip = {source: 0 for source, mask in masked.items() if not mask.all()}
             failures = merge_problems(rows, dof, shared, skip)
             if failures:
                 raise ValueError(f'day {granule.id}: {"; ".join(failures)}')
+
+        # R37: the rows the listing leaves out, and the Summary rows that
+        # match them; checked against the merge above, so dropped after it
+        if granule.left_out:
+            drop = np.zeros(keeps[axis].size, dtype=bool)
+            drop[list(granule.left_out)] = True
+            if (drop & ~keeps[axis]).any():
+                raise ValueError(f'day {granule.id}: a row the listing leaves out is not an observation')
+            stay = ~drop[keeps[axis]]
+            kept[axis] = {source: values[stay] for source, values in kept[axis].items()}
+            masked = {source: mask[stay] for source, mask in masked.items()}
+            if rows is not None:
+                other = 'Summary' if axis == 'Standard' else 'Standard'
+                summary_stay = stay[rows]
+                kept[other] = {source: values[summary_stay] for source, values in kept[other].items()}
+                rows = (np.cumsum(stay) - 1)[rows[summary_stay]]
+            n_obs = int(stay.sum())
 
         arrays = {}
         for source in sources:
@@ -593,29 +878,71 @@ def read_granule(granule, sources, time_source, rule):
             arrays=arrays,
             n_source_rows=sum(handle.dimensions[OBSERVATION_DIM].size for handle in handles.values()),
             platform=platforms.pop(),
-            index_extra=index_extra(granule.paths),
+            index_extra=index_extra(granule.paths, granule.left_out),
         )
     finally:
         for handle in handles.values():
             handle.close()
 
 
-def index_extra(paths):
-    """The reader's granule index fields for one granule, from its file names.
+def listed_days(entry):
+    """The days a whole-file declared mask names (R36).
+
+    Args:
+        entry (dict): A ``declared_masked_values`` entry with ``days``: day
+            ids, or ``[first, last]`` ranges, inclusive.
+
+    Returns:
+        set: Day ids, ``YYYYMMDD``.
+    """
+    days = set()
+    for item in entry.get('days') or []:
+        if isinstance(item, (list, tuple)):
+            first, last = (datetime.datetime.strptime(str(day), '%Y%m%d').date() for day in item)
+            days.update(
+                (first + datetime.timedelta(days=step)).strftime('%Y%m%d')
+                for step in range((last - first).days + 1)
+            )
+        else:
+            days.add(str(item))
+    return days
+
+
+def index_extra_fields(settings):
+    """The reader's own granule index fields under a config.
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        dict: ``INDEX_EXTRA``, and ``INDEX_LEFT_OUT`` where the config
+            declares ``repeated_footprints``.
+    """
+    return INDEX_EXTRA | (INDEX_LEFT_OUT if settings.get('repeated_footprints') else {})
+
+
+def index_extra(paths, left_out=None):
+    """The reader's granule index fields for one granule.
 
     Args:
         paths (tuple): The granule's files, in ``TYPES`` order.
+        left_out (tuple | None): Its rows left out under ``repeated_footprints``;
+            None where the config declares no such rule.
 
     Returns:
-        dict: ``granule_algorithm`` and ``granule_format``.
+        dict: ``granule_algorithm`` and ``granule_format``, from the file
+            names, and ``granule_rows_left_out`` where there is a rule.
     """
     facts = [file_facts(path) for path in paths]
-    return {
+    fields = {
         'granule_algorithm': '; '.join(fact['algorithm'] for fact in facts),
         'granule_format': '; '.join(
             fact['format'] + (f'_{fact["joint"]}' if fact['joint'] else '') for fact in facts
         ),
     }
+    if left_out is not None:
+        fields['granule_rows_left_out'] = str(len(left_out))
+    return fields
 
 
 def check_granule(handle):
@@ -664,6 +991,10 @@ def check_files(paths):
 def declared_masks(handle, path, masks, kept):
     """Find and confirm the config's declared defects in one file, for the verifier.
 
+    A whole-file mask (R36) is also checked the other way: a Standard file of
+    a day not declared must not hold the declared value on every row, so a
+    defective file the config misses fails (user decision 2026-10-26, Q1).
+
     Args:
         handle (h5py.File): The open file.
         path (str): Its path.
@@ -675,17 +1006,33 @@ def declared_masks(handle, path, masks, kept):
             confirmed defect; and the problems found.
     """
     found, problems = {}, []
-    if file_facts(path)['type'] != 'Standard':
-        return found, problems
+    facts = file_facts(path)
+    name = os.path.basename(path)
     for entry in masks:
-        if entry.get('where') != MASK_WHERE:
-            problems.append(f'declared mask where {entry.get("where")!r} is not {MASK_WHERE!r}')
-            continue
-        source, equals = entry['source'], entry.get('equals')
-        if not np.array_equal(handle[source][0].view(np.uint8), handle[equals][...].view(np.uint8)):
-            problems.append(f'{os.path.basename(path)}: the first {source} is not {equals}, as declared')
-            continue
-        row = np.zeros(kept.size, dtype=bool)
-        row[0] = True
-        found[source] = row[kept]
+        where, source = entry.get('where'), entry['source']
+        if where == MASK_FIRST_ROW:
+            if facts['type'] != 'Standard':
+                continue
+            equals = entry.get('equals')
+            if not np.array_equal(handle[source][0].view(np.uint8), handle[equals][...].view(np.uint8)):
+                problems.append(f'{name}: the first {source} is not {equals}, as declared')
+                continue
+            row = np.zeros(kept.size, dtype=bool)
+            row[0] = True
+            found[source] = row[kept]
+        elif where == MASK_LISTED_DAYS:
+            if source not in handle:
+                continue
+            every = bool((handle[source][...] == entry['value']).all())
+            if facts['date'] in listed_days(entry):
+                if not every:
+                    problems.append(f'{name}: {source} is not {entry["value"]} on every row, as declared')
+                    continue
+                found[source] = np.ones(int(kept.sum()), dtype=bool)
+            elif every and facts['type'] == 'Standard':
+                problems.append(
+                    f'{name}: {source} is {entry["value"]} on every row, but its day is not declared'
+                )
+        else:
+            problems.append(f'declared mask where {where!r} is not one of {MASK_WHERE}')
     return found, problems

@@ -17,8 +17,9 @@ Per product:
    killed partway would leave them, then rebuilt and re-verified;
 4. the verifier must fail on a tampered value, naming the store, on a
    store compressed other than as its config says, (where the config
-   declares one) on a platform the files do not declare, and (where it
-   declares rows left out) on a declaration that does not match raw;
+   declares one) on a platform the files do not declare, (where it
+   declares rows left out) on a declaration that does not match raw, and
+   (CrIS) on a defective file whose day is not declared;
 5. guards: an undeclared missing day (or month), a wrong processor version
    or platform, declared rows that are missing, do not match, or are given
    to a reader that cannot apply them, declared defect values that do not
@@ -27,6 +28,8 @@ Per product:
    compression of an unknown array, and (where the product has them) an
    undeclared empty granule directory or unreadable file, an undeclared
    one-sided granule, or a claim that unordered files are in time order;
+   and (CrIS) repeated footprints undeclared or miscounted, a replaced file
+   undeclared, and a whole-file defect declared on a file that is not;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
 6. finalize: ``--attrs`` refuses without verification evidence, and
@@ -39,7 +42,7 @@ Run from the repo root after staging each fixture:
     uv run python validation/stage_tropomi.py
     uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
     uv run python validation/stage_sciamachy.py
-    uv run python validation/stage_tropess.py    # AIRS RS and FS
+    uv run python validation/stage_tropess.py    # AIRS RS and FS, the three CrIS
     uv run python validation/test_pipeline.py
 
 About a minute per product on a login node; no allocation spent. Failures are
@@ -70,7 +73,8 @@ from utils.path_utils import (
     store_path,
 )
 from utils.zarr_utils import (
-    BRANCH, COMMIT_PREFIX, COMMIT_RE, row_rule, sharded_stores, stored_seam_keys, time_source,
+    BRANCH, COMMIT_PREFIX, COMMIT_RE, repeat_look_back, row_rule, sharded_stores,
+    stored_seam_keys, time_source,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -322,10 +326,15 @@ def test_product(results, config, scratch):
         status, output = run(
             'verify_wisosat_zarr.py', '--config', path, '--phases', 'values', '--stores', target
         )
+        # a reader that lists by platform (TROPESS) refuses one it does not know
+        message = (
+            'this reader lists only' if getattr(load_reader(settings), 'LISTS_BY_PLATFORM', False)
+            else "FAIL  every file declares platform 'NO_SUCH'"
+        )
         results.check(
             f'{product}: verifier fails on a platform the files do not declare',
-            status != 0 and "FAIL  every file declares platform 'NO_SUCH'" in output,
-            last_line(output, 'every file declares platform'),
+            status != 0 and message in output,
+            last_line(output, 'every file declares platform') or last_line(output, message),
         )
 
     # ... and a standard_name the config declares that no source file uses
@@ -366,6 +375,21 @@ def test_product(results, config, scratch):
             last_line(output, 'declared rows left out'),
         )
 
+    # ... and, under a whole-file declared mask (CrIS R36), a defective day the
+    # config does not declare: the verifier checks undeclared days too (Q1)
+    whole = [entry for entry in settings.get('declared_masked_values') or []
+             if entry.get('where') == 'every_row_of_listed_days']
+    if whole:
+        wrong = [dict(entry, days=[]) if entry is whole[0] else entry
+                 for entry in settings['declared_masked_values']]
+        path = write_config(settings, scratch, f'{product}_undeclared_mask.yaml', declared_masked_values=wrong)
+        status, output = run('verify_wisosat_zarr.py', '--config', path, '--phases', 'values')
+        results.check(
+            f'{product}: verifier fails on a defective file whose day is not declared',
+            status != 0 and 'but its day is not declared' in output,
+            last_line(output, 'documented layout'),
+        )
+
     # 5. guards that must stop a build before it writes
     coverage_key, _ = COVERAGE_KEYS[getattr(load_reader(settings), 'COVERAGE_FREQUENCY', 'D')]
     guards = {
@@ -394,7 +418,11 @@ def test_product(results, config, scratch):
             'quality flags',
         )
     if settings.get('platform'):
-        guards['a wrong platform'] = ({'platform': 'NO_SUCH'}, 'platform other than')
+        guards['a wrong platform'] = (
+            {'platform': 'NO_SUCH'},
+            'this reader lists only' if getattr(load_reader(settings), 'LISTS_BY_PLATFORM', False)
+            else 'platform other than',
+        )
     if settings.get('expected_partial_granules'):
         guards['an undeclared one-sided granule'] = (
             {'expected_partial_granules': {}}, 'and is not declared so'
@@ -414,6 +442,33 @@ def test_product(results, config, scratch):
             }]},
             'does not apply declared masks',
         )
+    rule = settings.get('repeated_footprints')
+    if rule:
+        # CrIS R37: footprints in two files are left out only as declared, and
+        # only exactly as many as declared
+        guards['footprints repeated in two files, undeclared'] = (
+            {'repeated_footprints': None}, 'observations of the granule'
+        )
+        guards['a count of repeated footprints other than the rule finds'] = (
+            {'repeated_footprints': dict(rule, expected_left_out=int(rule['expected_left_out']) + 1)},
+            'but the config declares expected_left_out',
+        )
+    if settings.get('superseded_files'):
+        guards['a replaced file not declared'] = ({'superseded_files': {}}, 'Standard files for')
+    if whole:
+        # a day declared defective whose files are not: one staged day the
+        # first whole-file mask leaves out, added to it
+        reader = load_reader(settings)
+        listed = reader.listed_days(whole[0])
+        options = dict(listing_options(settings, reader), repeated_footprints=None)
+        clean = [g.id for g in reader.list_granules(settings['directories']['raw'], **options)
+                 if g.id not in listed]
+        if clean:
+            wrong = [dict(entry, days=list(entry['days']) + [clean[0]]) if entry is whole[0] else entry
+                     for entry in settings['declared_masked_values']]
+            guards['a whole-file defect declared on a file that is not defective'] = (
+                {'declared_masked_values': wrong}, 'on every row, as declared'
+            )
     if settings.get('time_order') == 'source':
         # the source order is kept only because the files are not in time
         # order; claiming they are must fail the build
@@ -591,18 +646,29 @@ def test_repeats(results, settings):
     # a resumed build reads the seam from the store: granule 1 as stored must
     # give the keys granule 1 gives as read, or a repeat across a restart
     # would pass unseen
-    stored = stored_seam_keys(repository(settings, GEOLOCATION), 2)
+    stored = stored_seam_keys(repository(settings, GEOLOCATION), 2, repeat_look_back(settings))
     try:
-        check_repeats([data], time, location, stored)
+        check_repeats([data], time, location, stored, repeat_look_back(settings))
         error = ''
     except ValueError as raised:
         error = str(raised)
     results.check(
         f'{product}: a resumed build checks its seam against the stored granule',
-        stored is not None and len(stored) == data.n_obs
+        stored is not None and len(stored[-1]) == data.n_obs
         and 'observations of the granule before it' in error,
-        error or f'{len(stored or ())} stored keys',
+        error or f'{len(stored[-1]) if stored else 0} stored keys',
     )
+    if repeat_look_back(settings) > 1:
+        # a repeat two granules back passes a look-back of one, but not the
+        # declared look-back (CrIS R37)
+        other = reader.read_granule(granules[0], [time, *location], time, row_rule(settings, granules))
+        try:
+            check_repeats([data, other, data], time, location, None, 2)
+            error = ''
+        except ValueError as raised:
+            error = str(raised)
+        results.check(f'{product}: the build refuses an observation repeated two granules back',
+                      'the granule 2 before it' in error, error)
 
 
 def test_rules(results):

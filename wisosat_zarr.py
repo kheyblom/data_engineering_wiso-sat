@@ -19,7 +19,9 @@ The pass, per batch of ``granules_per_commit`` granules:
    (``time_order: source``, the style guide's exception; TROPESS), where no
    observation may repeat another's time, lat and lon instead. Rows a
    config declares as repeats of others (``declared_rows_left_out``) are
-   left out by the reader, once their declared match is confirmed;
+   left out by the reader, once their declared match is confirmed, as are
+   the footprints a listing rule finds in more than one file
+   (``repeated_footprints``, CrIS R37);
 3. append each store's slice, data and granule index together, as one commit
    per store.
 
@@ -70,6 +72,7 @@ from utils.zarr_utils import (
     global_attrs,
     log_key,
     open_repository,
+    repeat_look_back,
     resolve_chunks,
     resolve_compression,
     row_rule,
@@ -254,6 +257,12 @@ def prepare(settings):
             f'granule {declared.granule}: rows {declared.start}-{declared.stop - 1} '
             f'left out as declared: {declared.reason}'
         )
+    if settings.get('repeated_footprints'):
+        LOG.info(
+            f'{sum(len(g.left_out or ()) for g in granules)} observations repeated in another '
+            f'file left out by the listing (repeated_footprints), in '
+            f'{sum(bool(g.left_out) for g in granules)} granules, as declared'
+        )
     check_versions([reader.read_granule(granules[0], [time], time, rule)], settings)
     os.makedirs(settings['directories']['zarr'], exist_ok=True)
     return granules, revision
@@ -303,7 +312,8 @@ def run_pass(settings, granules, revision, stores, num_workers):
     # that writes the geolocation store, from the stored granule before it
     repeats = time_order(settings) == 'source' and GEOLOCATION in stores
     location = tuple(coordinates(source_name)[name].original for name in ('lat', 'lon'))
-    previous_keys = stored_seam_keys(repositories[GEOLOCATION], start) if repeats else None
+    look_back = repeat_look_back(settings)
+    previous_keys = stored_seam_keys(repositories[GEOLOCATION], start, look_back) if repeats else None
 
     batches = [
         (begin, min(begin + per_commit, len(granules)))
@@ -339,7 +349,7 @@ def run_pass(settings, granules, revision, stores, num_workers):
             if time_order(settings) == 'sorted':
                 previous_end = check_time(datas, time, previous_end)
             elif repeats:
-                previous_keys = check_repeats(datas, time, location, previous_keys)
+                previous_keys = check_repeats(datas, time, location, previous_keys, look_back)
             versions = versions or {'processor': datas[0].version}
 
             for store in needed:

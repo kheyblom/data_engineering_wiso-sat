@@ -471,11 +471,13 @@ def obs_chunk(length, itemsize, secondary=()):
 
 
 def absent_fill(settings, source):
-    """The value an integer source holds where its file lacks the observation.
+    """The value an integer source holds where it has no value of its own.
 
-    Only a merged granule has such observations (GOSAT: a sounding in the H2O
-    file but not the DED file). Floats are NaN there; an integer needs a value
-    the source never writes, declared in ``absent_fill_values``.
+    That is where its file lacks the observation, which only a merged granule
+    has (GOSAT: a sounding in the H2O file but not the DED file), or where the
+    config declares the value a defect (CrIS ``land_flag``, R36). Floats are
+    NaN there; an integer needs a value the source never writes, declared in
+    ``absent_fill_values``.
 
     Args:
         settings (dict): The loaded configuration.
@@ -540,9 +542,11 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None, decla
         factor (float | None): The conversion factor, or None.
         absent (numpy.ndarray | None): Along ``obs``, True where the
             observation is not in this source's file.
-        absent_value (int | None): What an integer source holds there.
+        absent_value (int | None): What an integer source holds there, and
+            where it has a declared defect.
         declared (numpy.ndarray | None): Along ``obs``, True where the config
-            declares the value a defect and the reader confirmed it; NaN.
+            declares the value a defect and the reader confirmed it; NaN, or
+            ``absent_value`` for an integer.
 
     Returns:
         tuple: The stored values, the integer ``_FillValue`` to declare (None
@@ -550,11 +554,10 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None, decla
 
     Raises:
         ValueError: If an integer source needs a unit conversion, which would
-            change its dtype, or has a declared defect, which only NaN can
-            mark; if an integer source has absent observations and no
-            declared value for them, or a value the source itself writes; or
-            if its source fill and absent value differ, since an integer store
-            carries only one ``_FillValue``.
+            change its dtype; if an integer source has absent observations or
+            declared defects and no declared value for them, or a value the
+            source itself writes; or if its source fill and absent value
+            differ, since an integer store carries only one ``_FillValue``.
     """
     dtype = values.dtype
     is_float = np.issubdtype(dtype, np.floating)
@@ -574,29 +577,30 @@ def mask_and_convert(values, fill, factor, absent=None, absent_value=None, decla
     if not is_float:
         if factor is not None:
             raise ValueError('an integer source cannot take a unit conversion')
-        if declared.any():
-            raise ValueError('an integer source cannot hold a declared defect; only NaN marks one')
-        declared = np.asarray(fill[0], dtype=dtype) if fill else None
-        if not absent.any():
-            return values, declared, count
+        source_fill = np.asarray(fill[0], dtype=dtype) if fill else None
+        # an integer has no NaN: an absent observation and a declared defect
+        # both hold the declared absent fill
+        replaced = absent | declared
+        if not replaced.any():
+            return values, source_fill, count
         if absent_value is None:
             raise ValueError(
-                'an integer source has absent observations but no '
+                'an integer source has absent observations or declared defects but no '
                 'absent_fill_values entry in the config'
             )
         absent_value = np.asarray(absent_value, dtype=dtype)
-        if declared is not None and declared != absent_value:
+        if source_fill is not None and source_fill != absent_value:
             raise ValueError(
-                f'source fill {declared} and absent fill {absent_value} differ; '
+                f'source fill {source_fill} and absent fill {absent_value} differ; '
                 f'an integer store has one _FillValue'
             )
-        if ((values == absent_value) & ~absent).any():
+        if ((values == absent_value) & ~replaced).any():
             raise ValueError(
                 f'absent fill {absent_value} occurs in the source itself, so it '
-                f'could not tell a missing observation from a real value'
+                f'could not tell a missing value from a real one'
             )
         out = values.copy()
-        out[absent] = absent_value
+        out[replaced] = absent_value
         return out, absent_value, count
 
     masked |= absent | declared
@@ -917,7 +921,7 @@ def assemble(store, datas, obs_start, settings):
     observations = xr.Dataset(variables)
     entries = index_entries(datas, time_source(source_name), obs_start)
     reader = load_reader(settings)
-    fields, attrs = index_fields(reader), index_attrs(reader)
+    fields, attrs = index_fields(reader, settings), index_attrs(reader, settings)
     if set(entries) != set(fields):
         raise ValueError(
             f'the reader returned index fields {sorted(entries)}, not its declared {sorted(fields)}'
@@ -1112,8 +1116,22 @@ def committed_state(repository, granules, store):
     return {'n_granules': len(ids), 'n_obs': n_obs, 'last_time': last}
 
 
-def stored_seam_keys(repository, before):
-    """The location keys of the last stored granule with observations before a point.
+def repeat_look_back(settings):
+    """How many granules back the repeat check looks (``check_repeats``).
+
+    Args:
+        settings (dict): The loaded configuration.
+
+    Returns:
+        int: ``repeated_footprints.look_back`` where a config declares the
+            rule (CrIS R37: 2), else 1.
+    """
+    rule = settings.get('repeated_footprints') or {}
+    return int(rule.get('look_back', 1))
+
+
+def stored_seam_keys(repository, before, look_back=1):
+    """The location keys of the last stored granules with observations before a point.
 
     A resumed run checks its first granule against these for repeats
     (``check_repeats``), as ``last_time`` serves ``check_time``.
@@ -1121,10 +1139,11 @@ def stored_seam_keys(repository, before):
     Args:
         repository (icechunk.Repository): The geolocation store's repository.
         before (int): The position of the first granule the run writes.
+        look_back (int): How many granules with observations to return.
 
     Returns:
-        set | None: From ``location_keys``; None if no earlier granule has
-            observations.
+        list | None: One key set (``location_keys``) per granule, oldest
+            first; None if no earlier granule has observations.
     """
     stored = open_store(repository)
     if stored is None or not before:
@@ -1133,10 +1152,12 @@ def stored_seam_keys(repository, before):
     nonzero = np.flatnonzero(counts)
     if not nonzero.size:
         return None
-    last = int(nonzero[-1])
-    lo = int(stored['granule_obs_start'].values[last])
-    rows = slice(lo, lo + int(counts[last]))
-    return set(location_keys(*(stored[name][rows].values for name in LOCATION_COORDINATES)))
+    seams = []
+    for last in nonzero[-look_back:]:
+        lo = int(stored['granule_obs_start'].values[last])
+        rows = slice(lo, lo + int(counts[last]))
+        seams.append(set(location_keys(*(stored[name][rows].values for name in LOCATION_COORDINATES))))
+    return seams
 
 
 def write_append(repository, observations, index, encoding, message):

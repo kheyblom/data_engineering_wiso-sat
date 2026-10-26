@@ -45,7 +45,7 @@ stores.
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | production finalized 2026-10-22, tag `v8.1-verified-20261022` (22 stores; `docs/products/sciamachy.md`; TESTING.md findings 13-14) |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT: production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (12 stores; geolocation rebuilt without `pressure`, which has its own store). GOSAT-2: production finalized 2026-10-22, tag `v3.0.1-verified-20261022` (12 stores; `source: gosat`) |
 | AIRS (TROPESS v1; one product per stream, RS and FS, Summary merged into Standard per day) | `AIRS/TRPS?L2HDOAIRS*` (`config/airs_rs/`, `config/airs_fs/`; `source: tropess`) | day (2 files) | production finalized 2026-10-23, tag `v1-verified-20261023` (19 stores per stream; `docs/products/tropess.md`; TESTING.md AIRS v1 run log) |
-| CrIS (TROPESS; SNPP and JPSS1, as AIRS) | `CRIS/TRPS?L2HDOCRS*` | daily file | next |
+| CrIS (TROPESS; SNPP RS Summary-only, SNPP FS, JPSS1 FS) | `CRIS/TRPS?L2HDOCRS*` (`config/cris_snpp_rs/`, `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; `source: tropess`) | day (1-2 files) | reader and fixtures done 2026-10-26; bench next (`tropess.md` C1-C8) |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
 | TES (L2 HDO Nadir Lite v006) | `TES/TL2HDOLN_6-*/` | monthly file | later |
 
@@ -158,6 +158,21 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
   - `expected_partial_granules` declares days that have only one of a
     granule's files; a reader's `LISTING_OPTIONS` passes config keys to
     `list_granules`, and its `INDEX_EXTRA` adds fields to the granule index.
+- **Added for CrIS (2026-10-26):**
+  - the TROPESS listing selects by `platform` (folders and file names), so
+    SNPP and JPSS1 share a raw root; `granule_types: [Summary]` makes a
+    Summary-only product; `superseded_files` names a replaced file (R18);
+  - `repeated_footprints` (R37): the listing leaves out each footprint's
+    older copies (`Granule.left_out`), fails unless the count equals
+    `expected_left_out`, and the index gains `granule_rows_left_out`
+    (`index_extra_fields(settings)`, so AIRS's index is unchanged). The
+    verifier works the rule out again from raw. `check_repeats`,
+    `stored_seam_keys` and the verifier look back `look_back` granules;
+  - `declared_masked_values` with `where: every_row_of_listed_days` masks
+    whole files (R36); an integer source stores its `absent_fill_values`
+    entry there. The verifier also fails on an undeclared file that holds
+    the value on every row (Q1);
+  - `expected_missing_days` takes `[first, last]` ranges.
 - **Declared, never detected:**
   - empty granule directories (`expected_empty_granules`) and corrupt files
     (`expected_unreadable_granules`) are skipped only if listed, as missing

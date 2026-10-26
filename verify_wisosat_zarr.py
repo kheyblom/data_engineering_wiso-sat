@@ -17,10 +17,14 @@ are compared only when it is named.
 **The raw side is read independently of the build.** The build reads with
 netCDF4 through the product's reader; this reads with h5py, straight from the
 source paths in the nomenclature key, with no masking and no CF decoding, and
-applies the declared fill and the key's conversion itself. Only three
+applies the declared fill and the key's conversion itself. Only four
 format facts are shared with the build, through the reader: how the product
-encodes time (``decode_time``), its swath layout (``check_granule``), and the
-vertical order its profiles are stored in (``VERTICAL_ORDER``).
+encodes time (``decode_time``), its swath layout (``check_granule``), the
+vertical order its profiles are stored in (``VERTICAL_ORDER``), and, where a
+config declares the CrIS repeat rule (``repeated_footprints``, R37), how two
+files rank (``file_rank``). The rule itself is applied here on its own: the
+footprints it leaves out are worked out from raw (``repeated_footprints``)
+and dropped from every file of their granule by their time, lat and lon.
 Comparisons are bit-exact, reading the stored values undecoded through zarr:
 the build does the same arithmetic in the same order, so anything short of
 identical is a defect.
@@ -57,6 +61,7 @@ evidence: the phases, the stores, the geospatial bounds seen, and the verdict.
 from __future__ import annotations
 
 import argparse
+import collections
 import concurrent.futures
 import logging
 import multiprocessing
@@ -77,6 +82,7 @@ from utils.granules import (
     declared_mask,
     declared_rows,
     decode_text,
+    extra_index,
     index_fields,
 )
 from utils.log_utils import log_peak_memory, setup_logging
@@ -110,6 +116,7 @@ from utils.zarr_utils import (
     declared_fill,
     obs_chunk,
     open_existing_repository,
+    repeat_look_back,
     resolve_chunks,
     resolve_compression,
     store_sources,
@@ -239,7 +246,8 @@ def to_epoch(values, unit):
     return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
-def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None, masks=()):
+def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None, masks=(),
+                  left_out_keys=None):
     """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
@@ -264,13 +272,18 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
             for itself that they match as declared.
         masks (tuple): The config's ``declared_masked_values``; the reader's
             ``declared_masks`` finds and confirms them in each file.
+        left_out_keys (set | None): ``observation_keys`` of time, lat and lon
+            of the observations the repeat rule leaves out of this granule
+            (``repeated_footprints``), as worked out here; dropped from every
+            file.
 
     Returns:
         list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
             ``masked`` (source -> bool over the file's observations, the
             values declared defects) and ``mask_problems``,
             ``declared`` (rows left out as declared), ``declared_problems``
-            (where they do not match their declaration),
+            (where they do not match their declaration), ``repeats`` (rows
+            left out under the repeat rule),
             ``timed`` (rows left out although their time is written),
             ``leaked`` (values on rows left out that may not be lost),
             ``version``, ``platform`` (None unless the reader names a
@@ -309,10 +322,19 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
             # rows the config declares as repeats of others: observations,
             # but left out once their declared match is seen here in raw
             dropped = declared_mask(processed.size, declared)
-            kept = processed & ~dropped
+            # observations another file holds and keeps (R37), found by their
+            # time, lat and lon
+            repeats = np.zeros(processed.size, dtype=bool)
+            if left_out_keys:
+                keys = observation_keys([raw_location[source] for source in location])
+                repeats = processed & np.fromiter(
+                    (key in left_out_keys for key in keys), dtype=bool, count=len(keys)
+                )
+            kept = processed & ~dropped & ~repeats
             out['n_rows'] = int(processed.size)
             out['n_obs'] = int(kept.sum())
             out['declared'] = int(dropped.sum())
+            out['repeats'] = int(repeats.sum())
             out['declared_problems'] = (
                 declared_problems(handle, declared, location, items) if declared else []
             )
@@ -480,7 +502,7 @@ def check_structure(report, settings, store, group, chunks, codecs):
     source_name = source_product(settings)
     names = set(group.array_keys())
     expected_vars = set(store_sources(source_name, store))
-    fields = set(index_fields(load_reader(settings)))
+    fields = set(index_fields(load_reader(settings), settings))
     report.check(
         f'{store}: holds exactly its variables and the granule index',
         names == expected_vars | fields,
@@ -632,7 +654,7 @@ def check_index(report, settings, groups, granules):
     except ValueError as error:
         report.check('raw listing: unique granules, missing days as declared', False, str(error))
 
-    fields = index_fields(load_reader(settings))
+    fields = index_fields(load_reader(settings), settings)
     reference = read_index(groups[GEOLOCATION], fields)
     for store, group in groups.items():
         index = read_index(group, fields)
@@ -719,6 +741,8 @@ class Pass:
         declared (int): Rows left out as the config declares.
         declared_problems (list): ``(granule id, problem)`` where declared
             rows do not match their declaration.
+        repeats_left_out (int): Rows of the granules' first files left out
+            under the repeat rule (``repeated_footprints``).
         index (dict): Index field -> mismatching granules.
         placement (dict): Merge failures in multi-file granules, by kind.
         versions (set): Processor versions seen.
@@ -752,6 +776,7 @@ class Pass:
         self.unprocessed = 0
         self.declared = 0
         self.declared_problems = []
+        self.repeats_left_out = 0
         self.timed = 0
         self.placement = {'unmatched': 0, 'reordered': 0, 'unaccounted': 0}
         self.versions = set()
@@ -894,7 +919,7 @@ def value_groups(settings, stores):
     return ([shared] if shared else []) + [[store] for store in own]
 
 
-def scan_values(settings, stores, begin, granules, primary, counted, declared):
+def scan_values(settings, stores, begin, granules, primary, counted, declared, left_out_keys):
     """Compare a group of stores with raw over one range of granules.
 
     A top-level function of picklable arguments, so it runs in a process
@@ -913,6 +938,8 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
         counted (set): The sources whose fill, dtype and attributes this scan
             tallies, so each source is tallied by one group only.
         declared (dict): Granule id -> DeclaredRows, from the config.
+        left_out_keys (dict): Granule id -> the observation keys the repeat
+            rule leaves out of it, from ``repeated_footprints``.
 
     Returns:
         Pass: What the scan saw; ``first_time`` and ``last_time`` are the
@@ -933,12 +960,13 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     # a granule the config declares to lack one of its files lacks that
     # file's sources too (TROPESS's one-sided days)
     partial = {str(granule) for granule in settings.get('expected_partial_granules') or {}}
-    extra_fields = tuple(getattr(reader, 'INDEX_EXTRA', {}))
+    extra_fields = tuple(extra_index(reader, settings))
+    rule = settings.get('repeated_footprints')
     groups = {}
     for store in dict.fromkeys([GEOLOCATION, *stores]):
         session = open_existing_repository(store_path(settings, store)).readonly_session(branch=BRANCH)
         groups[store] = zarr.open_group(session.store, mode='r')
-    index = read_index(groups[GEOLOCATION], index_fields(reader))
+    index = read_index(groups[GEOLOCATION], index_fields(reader, settings))
     starts = index['granule_obs_start']
     counts = index['granule_obs_count']
     stored_start = index['granule_time_start']
@@ -955,22 +983,23 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
     seen = Pass()
     spans = ChunkSpans()
     previous = None
-    previous_keys = None
+    # the key sets of the last granules with observations, oldest first: a
+    # repeat may reach back look_back of them (CrIS: 2, R37)
+    window = collections.deque(maxlen=repeat_look_back(settings))
     if repeats:
-        # the seam with the range before: the last stored granule with
-        # observations before this range's first
-        earlier = np.flatnonzero(counts[:begin])
-        if earlier.size:
-            lo = int(starts[earlier[-1]])
-            rows = slice(lo, lo + int(counts[earlier[-1]]))
-            previous_keys = set(observation_keys(
+        # the seams with the range before: its last stored granules with
+        # observations
+        for last in np.flatnonzero(counts[:begin])[-window.maxlen:]:
+            lo = int(starts[last])
+            rows = slice(lo, lo + int(counts[last]))
+            window.append(set(observation_keys(
                 [np.asarray(groups[GEOLOCATION][name][rows]) for name in LOCATION_COORDINATES]
-            ))
+            )))
     for offset, granule in enumerate(granules):
         position = begin + offset
         files = read_expected(
             granule, source_name, items, time, unit, location, allowed, declared.get(granule.id),
-            masks,
+            masks, left_out_keys.get(granule.id),
         )
         lo = int(starts[position])
         hi = lo + int(counts[position])
@@ -990,18 +1019,24 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                 seen.versions.add(entry['version'])
                 seen.platforms.add(entry['platform'])
                 seen.problems += [(granule.id, problem) for problem in entry['problems']]
-                seen.unprocessed += entry['n_rows'] - entry['n_obs'] - entry['declared']
+                seen.unprocessed += entry['n_rows'] - entry['n_obs'] - entry['declared'] - entry['repeats']
                 seen.timed += entry['timed']
                 seen.declared += entry['declared']
                 seen.declared_problems += [(granule.id, p) for p in entry['declared_problems']]
                 seen.problems += [(granule.id, problem) for problem in entry['mask_problems']]
         if primary and sum(entry['n_rows'] for entry in files) != int(source_rows[position]):
             seen.index['granule_source_rows'] += 1
+        if primary:
+            # the rule's rows are counted in the file the obs axis comes from
+            seen.repeats_left_out += files[0]['repeats']
         if primary and hasattr(reader, 'check_files'):
             # what must hold across a granule's files, read here from raw
             seen.problems += [(granule.id, problem) for problem in reader.check_files(granule.paths)]
         if primary and extra_fields:
-            expected_extra = reader.index_extra(granule.paths)
+            expected_extra = (
+                reader.index_extra(granule.paths, tuple(left_out_keys.get(granule.id, ())))
+                if rule else reader.index_extra(granule.paths)
+            )
             for field in extra_fields:
                 if str(index[field][position]) != expected_extra[field]:
                     seen.index[field] = seen.index.get(field, 0) + 1
@@ -1045,9 +1080,9 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                     )
                     unique = set(keys)
                     seen.repeated += len(keys) - len(unique)
-                    if previous_keys is not None:
-                        seen.repeated += len(unique & previous_keys)
-                    previous_keys = unique
+                    for earlier in window:
+                        seen.repeated += len(unique & earlier)
+                    window.append(unique)
                 if seen.first_time is None:
                     seen.first_time = stored_time[0]
                 seen.last_time = stored_time[-1]
@@ -1092,9 +1127,11 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared):
                 seen.mismatches[key] = seen.mismatches.get(key, 0) + same_values(here, expected)
                 covered[positions] = True
             if mask is not None and mask.any():
+                # a declared defect is NaN, or an integer's declared absent fill
                 defects = values[mask]
                 seen.mismatches[key] = seen.mismatches.get(key, 0) + int(
-                    (~np.isnan(defects)).sum() if defects.dtype.kind == 'f' else defects.size
+                    (~np.isnan(defects)).sum() if defects.dtype.kind == 'f'
+                    else (defects != absent_fill(settings, source)).sum()
                 )
                 if source in counted:
                     seen.masked[source] = seen.masked.get(source, 0) + int(mask.sum())
@@ -1150,6 +1187,7 @@ def merge_pass(total, part):
     total.problems += part.problems
     total.declared += part.declared
     total.declared_problems += part.declared_problems
+    total.repeats_left_out += part.repeats_left_out
     total.leaked += part.leaked
     total.unprocessed += part.unprocessed
     total.timed += part.timed
@@ -1171,6 +1209,66 @@ def merge_pass(total, part):
             total.decreasing += 1
         total.first_time = total.first_time if total.first_time is not None else part.first_time
         total.last_time = part.last_time
+
+
+def repeated_footprints(settings, granules):
+    """The observations the declared repeat rule leaves out, worked out from raw.
+
+    Written apart from the build's listing (the reader's ``select_repeats``),
+    reading each granule's first file with h5py. A footprint (time, lat and
+    lon, bit for bit) the first files of more than one granule hold, within
+    ``look_back`` granules of the copy kept so far, is kept only in the file
+    that ranks higher (the reader's ``file_rank``: algorithm, then
+    ``ProductionDateTime``); every other copy is left out (CrIS R37).
+
+    Args:
+        settings (dict): The loaded configuration.
+        granules (list): The raw listing.
+
+    Returns:
+        dict: Granule id -> set of ``observation_keys`` left out of it; empty
+            where the config declares no rule.
+
+    Raises:
+        ValueError: If two copies rank equal, which the rule cannot decide.
+    """
+    rule = settings.get('repeated_footprints')
+    if not rule:
+        return {}
+    reader = load_reader(settings)
+    source_name = source_product(settings)
+    location = tuple(coordinates(source_name)[name].original for name in LOCATION_COORDINATES)
+    look_back = repeat_look_back(settings)
+    left_out = {granule.id: set() for granule in granules}
+    holder = {}      # key -> (position, rank) of the copy kept so far
+    recent = collections.deque()
+    for position, granule in enumerate(granules):
+        # copies kept by granules now out of reach can no longer be compared
+        while recent and recent[0][0] < position - look_back:
+            old, keys = recent.popleft()
+            for key in keys:
+                if holder.get(key, (None,))[0] == old:
+                    holder.pop(key)
+        path = granule.paths[0]
+        rank = reader.file_rank(path)
+        with h5py.File(path, 'r') as handle:
+            columns = [handle[source][...] for source in location]
+        present = np.ones(columns[0].shape[0], dtype=bool)
+        for source, column in zip(location, columns):
+            present &= ~missing_rows(column, declared_fill(settings, source))
+        keys = [key for key, ok in zip(observation_keys(columns), present.tolist()) if ok]
+        for key in keys:
+            if key in holder:
+                other, other_rank = holder[key]
+                if rank == other_rank:
+                    raise ValueError(f'{granule.id} and {granules[other].id} rank equal on a footprint')
+                if rank < other_rank:
+                    left_out[granule.id].add(key)
+                    continue
+                left_out[granules[other].id].add(key)
+            holder[key] = (position, rank)
+        recent.append((position, keys))
+    return left_out
 
 
 def check_values(report, settings, groups, compared, granules, index, num_workers, task_granules):
@@ -1211,6 +1309,8 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
             f'declared_masked_values is set, but the {source_product(settings)} reader '
             f'does not apply declared masks'
         )
+    # the observations the repeat rule leaves out, worked out here from raw
+    left_out_keys = repeated_footprints(settings, granules)
     # each source is tallied by the group that compares it; the coordinates
     # every scan reads, by the first group
     owner = {source: 0 for source, _, _, _ in items}
@@ -1236,7 +1336,7 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     def arguments(task):
         number, begin, end = task
         return (settings, scan_groups[number], begin, granules[begin:end], number == 0,
-                counted[number], declared)
+                counted[number], declared, left_out_keys)
 
     parts = {}
     pool = (
@@ -1300,10 +1400,14 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
             'no observation repeats another in time, lat and lon, within a granule '
             'or across a seam', seen.repeated == 0, f'{seen.repeated} repeats',
         )
+    compared_sources = {source for _, _, source, _ in targets}
     for entry in settings.get('declared_masked_values') or []:
         source = entry['source']
+        if source not in compared_sources:
+            # its store is not compared in this run (--stores)
+            continue
         report.check(
-            f'{source}: values declared defects confirmed in raw and stored as NaN',
+            f'{source}: values declared defects confirmed in raw and stored as NaN (an integer as its fill)',
             seen.masked.get(source, 0) > 0 and not seen.problems,
             f'{seen.masked.get(source, 0)} values ({entry.get("reason", "")[:60]})',
         )
@@ -1320,6 +1424,21 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
             not seen.declared_problems and seen.declared == expected,
             f'{seen.declared} of {expected} declared rows left out, '
             f'{len(seen.declared_problems)} problems {seen.declared_problems[:3]}',
+        )
+    rule = settings.get('repeated_footprints')
+    if rule:
+        found = sum(len(keys) for keys in left_out_keys.values())
+        report.check(
+            'repeated footprints: worked out from raw, the rule leaves out the declared '
+            'count, and they are left out of the store',
+            found == int(rule.get('expected_left_out', -1)) and seen.repeats_left_out == found,
+            f'{found} found here, {seen.repeats_left_out} left out of the files, '
+            f'{rule.get("expected_left_out")} declared',
+        )
+        differ = [g.id for g in granules if len(g.left_out or ()) != len(left_out_keys.get(g.id, ()))]
+        report.check(
+            'repeated footprints: the listing leaves out as many rows of every granule',
+            not differ, f'{len(differ)} granules differ, first {differ[:5]}',
         )
     report.check(
         'every file has the documented layout', not seen.problems,

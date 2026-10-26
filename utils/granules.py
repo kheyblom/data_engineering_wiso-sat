@@ -29,10 +29,17 @@ shared, so this module is the interface between the two halves:
 - ``DeclaredRows`` are observations a config leaves out by name, because they
   repeat others (SCIAMACHY, 2026-10-22). Each declaration states what the
   rows must match, and the build and the verifier each check it from raw.
-- ``declared_masked_values`` are single values a config masks as defects
-  (TROPESS's first ``x`` of each Standard file, R22, 2026-10-23). The reader
-  confirms each against its stated condition and marks it on the
-  ``SourceArray``; shared code stores NaN there.
+- ``declared_masked_values`` are values a config masks as defects
+  (TROPESS's first ``x`` of each Standard file, R22, 2026-10-23; CrIS's
+  ``land_flag`` on whole files, R36, 2026-10-26). The reader confirms each
+  against its stated condition and marks it on the ``SourceArray``; shared
+  code stores NaN there, or an integer source's declared fill.
+- ``Granule.left_out`` are observations a reader's listing leaves out under a
+  rule the config declares, because another file holds the same footprint
+  (CrIS R37, 2026-10-26: each repeat stored once, the newest copy). The
+  listing applies the rule over the whole product and fails unless it leaves
+  out exactly the declared count; the verifier works the rows out again on
+  its own.
 
 The granule index every store carries is derived from these: one entry per
 granule with its identifier, first observation, observation count, earliest
@@ -95,11 +102,16 @@ class Granule(NamedTuple):
         day (datetime.date): The UTC day the source tree files it under, which
             is what coverage is checked against.
         paths (tuple): Absolute paths of its files, in the reader's order.
+        left_out (tuple | None): Rows of its first file, the one its obs axis
+            comes from, that the listing leaves out under a declared rule
+            (CrIS R37); empty where the rule leaves none out, None where the
+            config declares no such rule (every other product).
     """
 
     id: str
     day: datetime.date
     paths: tuple
+    left_out: tuple | None = None
 
 
 class SourceArray(NamedTuple):
@@ -430,6 +442,29 @@ def check_order(granules):
 COVERAGE_KEYS = {'D': ('expected_missing_days', 'days'), 'MS': ('expected_missing_months', 'months')}
 
 
+def declared_periods(entries, frequency='D'):
+    """The periods a config declares missing, ranges expanded.
+
+    An entry is one period, or ``[first, last]``, both included, for a long
+    run (CrIS-SNPP RS lacks 2019-03-27 .. 2019-07-31 upstream, R35).
+
+    Args:
+        entries (list): Dates, or two-element lists of dates.
+        frequency (str): A key of ``COVERAGE_KEYS``.
+
+    Returns:
+        list: datetime.date per period, in the order given.
+    """
+    periods = []
+    for entry in entries:
+        if isinstance(entry, (list, tuple)):
+            first, last = entry
+            periods += list(pd.date_range(pd.Timestamp(first), pd.Timestamp(last), freq=frequency).date)
+        else:
+            periods.append(pd.Timestamp(entry).date())
+    return periods
+
+
 def check_coverage(granules, settings, frequency='D'):
     """Fail unless the periods without a granule are exactly the declared ones.
 
@@ -437,8 +472,9 @@ def check_coverage(granules, settings, frequency='D'):
     download is incomplete is how a store silently ends up short. The two look
     identical in the tree, so they are told apart by the config, as in MSWEP:
     the run proceeds only if what is missing is precisely
-    ``expected_missing_days``. A reader whose tree is filed by month checks
-    months instead, against ``expected_missing_months``.
+    ``expected_missing_days`` (single days or ``[first, last]`` ranges). A
+    reader whose tree is filed by month checks months instead, against
+    ``expected_missing_months``.
 
     Args:
         granules (list): From the reader, in source order.
@@ -459,7 +495,7 @@ def check_coverage(granules, settings, frequency='D'):
     present = sorted({granule.day for granule in granules})
     span = pd.date_range(present[0], present[-1], freq=frequency).date
     missing = sorted(set(span) - set(present))
-    declared = sorted(pd.Timestamp(day).date() for day in settings.get(key) or [])
+    declared = sorted(declared_periods(settings.get(key) or [], frequency))
     if missing != declared:
         unexpected = sorted(set(missing) - set(declared))
         recovered = sorted(set(declared) - set(missing))
@@ -501,28 +537,50 @@ def time_bounds(time):
     return time.min(), time.max()
 
 
-def index_fields(reader):
+def extra_index(reader, settings=None):
+    """A product's own granule index fields and their attributes.
+
+    A reader names them in ``INDEX_EXTRA``, or, where they depend on the
+    config, returns them from ``index_extra_fields(settings)``: TROPESS adds
+    the rows left out per granule only where a config declares a rule that
+    leaves rows out, so stores built before it keep their index.
+
+    Args:
+        reader (module): The product's reader.
+        settings (dict | None): The loaded configuration.
+
+    Returns:
+        dict: Field -> attributes, in index order.
+    """
+    if hasattr(reader, 'index_extra_fields'):
+        return dict(reader.index_extra_fields(settings or {}))
+    return dict(getattr(reader, 'INDEX_EXTRA', {}))
+
+
+def index_fields(reader, settings=None):
     """Every granule index field a product's stores carry.
 
     Args:
         reader (module): The product's reader.
+        settings (dict | None): The loaded configuration.
 
     Returns:
-        tuple: ``INDEX_FIELDS``, then the reader's ``INDEX_EXTRA`` fields.
+        tuple: ``INDEX_FIELDS``, then the reader's own fields.
     """
-    return INDEX_FIELDS + tuple(getattr(reader, 'INDEX_EXTRA', {}))
+    return INDEX_FIELDS + tuple(extra_index(reader, settings))
 
 
-def index_attrs(reader):
+def index_attrs(reader, settings=None):
     """Attributes of every granule index field a product's stores carry.
 
     Args:
         reader (module): The product's reader.
+        settings (dict | None): The loaded configuration.
 
     Returns:
         dict: Field -> attributes.
     """
-    return INDEX_ATTRS | dict(getattr(reader, 'INDEX_EXTRA', {}))
+    return INDEX_ATTRS | extra_index(reader, settings)
 
 
 def index_entries(datas, time_source, obs_start):
@@ -601,8 +659,8 @@ def check_time(datas, time_source, previous_end=None):
             )
         if last is not None and not np.isnat(last) and time[0] < last:
             raise ValueError(
-                f'granule {data.granule.id} starts at {time[0]}, before the '
-                f'previous granule ends at {last}'
+                f'time decreases across a seam: granule {data.granule.id} starts at '
+                f'{time[0]}, before the previous granule ends at {last}'
             )
         last = time[-1]
     return last
@@ -631,30 +689,36 @@ def location_keys(time, lat, lon):
     return list(zip(*(column.tolist() for column in columns)))
 
 
-def check_repeats(datas, time_source, location_sources, previous=None):
+def check_repeats(datas, time_source, location_sources, previous=None, look_back=1):
     """Fail if an observation repeats another, within a granule or across a seam.
 
     Where a config keeps the order of files that are not in time order
     (``time_order: source``), ``check_time`` cannot run, and it is the check
     that caught repeated and overlapping retrievals (SCIAMACHY S8 and S9). This
     takes its place there: no two observations may share time, lat and lon,
-    within a granule or between a granule and the one before it, where an
-    overlap of consecutive files lands.
+    within a granule or with one of the ``look_back`` granules with
+    observations before it, where an overlap of nearby files lands. CrIS files
+    overlap their neighbours by up to two days (R37), so its configs look back
+    two (``repeated_footprints``); everything else one.
 
     Args:
         datas (list): :class:`GranuleData` in source order.
         time_source (str): The source path of the time coordinate.
         location_sources (tuple): The source paths of lat and lon.
-        previous (set, optional): The keys of the last granule with
-            observations already in the store, to check the seam with it.
+        previous (list, optional): The key sets of the last granules with
+            observations already in the store, oldest first, to check the
+            seams with them.
+        look_back (int): How many granules with observations back to check.
 
     Returns:
-        set | None: The keys of the last of these granules with observations,
-            to pass as ``previous`` next time; the incoming value if none has.
+        list | None: The key sets of the last ``look_back`` of these granules
+            with observations, oldest first, to pass as ``previous`` next time;
+            the incoming value if none has.
 
     Raises:
         ValueError: If any observation repeats.
     """
+    window = collections.deque(previous or (), maxlen=look_back)
     for data in datas:
         if not data.n_obs:
             continue
@@ -668,13 +732,15 @@ def check_repeats(datas, time_source, location_sources, previous=None):
                 f'{len(keys) - len(unique)} observations of granule {data.granule.id} '
                 f'repeat another of the granule in time, lat and lon'
             )
-        if previous is not None and not unique.isdisjoint(previous):
-            raise ValueError(
-                f'granule {data.granule.id} repeats {len(unique & previous)} '
-                f'observations of the granule before it in time, lat and lon'
-            )
-        previous = unique
-    return previous
+        for back, earlier in enumerate(reversed(window), 1):
+            if not unique.isdisjoint(earlier):
+                where = 'the granule before it' if back == 1 else f'the granule {back} before it'
+                raise ValueError(
+                    f'granule {data.granule.id} repeats {len(unique & earlier)} '
+                    f'observations of {where} in time, lat and lon'
+                )
+        window.append(unique)
+    return list(window) if window else previous
 
 
 def squeeze_dims(values, source_dims, observation_dim, renames):

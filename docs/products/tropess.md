@@ -347,15 +347,15 @@ R38. Open questions are marked **Q**.
 
   | product | `product` | stores named | days (span) | obs |
   | --- | --- | --- | --- | --- |
-  | SNPP RS | `cris_snpp` | `wisosat.cris_snpp.v_1.rs.inst.native_swath.<variable>.zarr` | 1,865 (2015-12-01 .. 2021-05-21; 134 missing, R35) | ~2,597,674 (Summary only) |
-  | SNPP FS | `cris_snpp` | `wisosat.cris_snpp.v_1.fs.inst.native_swath.<variable>.zarr` | 110 (2021-02-01 .. 2021-05-21; none missing) | ~2,858,343 |
-  | JPSS1 FS | `cris_jpss1` | `wisosat.cris_jpss1.v_1.fs.inst.native_swath.<variable>.zarr` | 1,887 (2021-04-01 .. 2026-05-31; none missing) | ~47,391,873 |
+  | SNPP RS | `cris_snpp` | `wisosat.cris_snpp.v_1.rs.inst.native_swath.<variable>.zarr` | 1,865 (2015-12-01 .. 2021-05-21; 134 missing, R35) | 2,597,674 (Summary only) |
+  | SNPP FS | `cris_snpp` | `wisosat.cris_snpp.v_1.fs.inst.native_swath.<variable>.zarr` | 110 (2021-02-01 .. 2021-05-21; none missing) | 2,858,343 |
+  | JPSS1 FS | `cris_jpss1` | `wisosat.cris_jpss1.v_1.fs.inst.native_swath.<variable>.zarr` | 1,887 (2021-04-01 .. 2026-05-31; none missing) | 47,391,889 |
 
-  The obs are the audit's rows less the R37 repeats (SNPP RS 620, SNPP FS
-  8,057, JPSS1 136,723 pairs). A footprint in three files is two of those
-  pairs plus one more, so the rows left out may be slightly fewer; the exact
-  counts come from the R37 implementation's first full pass and are then
-  declared.
+  The obs are the audit's rows less the rows R37 leaves out, measured with
+  the reader's rule over every file (2026-10-26) and declared in each config
+  (`expected_left_out`): SNPP RS 620 (on 417 days), SNPP FS 8,057 (106),
+  JPSS1 136,707 (1,765). JPSS1's is 16 below its 136,723 repeat pairs: a
+  footprint in three files is three pairs but two rows left out.
 - **The checked version** is `v_1.rs` or `v_1.fs`, from `ShortName` and
   `VersionID` as for AIRS (P1). `ShortName`s: SNPP RS `TRPSYL2HDOCRSRS`;
   SNPP FS `TRPS{D,Y}L2HDOCRSFS`; JPSS1 `TRPS{D,Y}L2HDOCRS1FS`.
@@ -510,7 +510,10 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
 ### C8. Next, after review
 
 1. **No nomenclature rows** (Q2 adds none).
-2. **The reader and shared changes**, each tested:
+2. **The reader and shared changes**, each tested (**done 2026-10-26**: the
+   fixture test passes 350 cases over 9 fixtures, the three CrIS ones
+   included; SNPP RS needs `time_order: source` too, as 1,347 of its seams
+   step back in time):
    - the instrument filter and Summary-only products (C2);
    - superseded files (R18);
    - whole-file declared masks (R36), with Q1's check;
@@ -520,9 +523,11 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
      files never use it, only its Summary files, so the verifier's check
      (a declared `standard_name` must be one the source uses) must see the
      Summary file's attribute; the SNPP FS fixture tests that.
-3. **The exact R37 counts**, from a dry pass of the selection over every
+3. **Done 2026-10-26: the exact R37 counts** (C1), from a dry pass of the selection over every
    file (light: time, lat, lon and attributes only), then declared.
-4. **Fixtures**, cut small (~400 rows) and chosen to span: SNPP RS with a
+4. **Done 2026-10-26: fixtures** (`validation/stage_tropess.py`), cut small
+   (~100-300 rows a file, the last 20 rows kept so seams step back) and
+   chosen to span: SNPP RS with a
    repeat and a leap second; SNPP FS with the R36 defect and a repeat;
    JPSS1 with an R18 date, the R36 boundary (2021-10-31 / 11-01), an
    algorithm-change repeat and a lag-2 repeat (2023-09-28 .. 30).

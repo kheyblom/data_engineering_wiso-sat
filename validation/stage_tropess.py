@@ -1,4 +1,4 @@
-"""Stage the miniature AIRS RS and FS raw trees the pipeline test runs against.
+"""Stage the miniature AIRS and CrIS raw trees the pipeline test runs against.
 
 Each fixture is real TROPESS files in the real folder layout, chosen to
 exercise what the AIRS reader does beyond the shared code
@@ -23,6 +23,25 @@ exercise what the AIRS reader does beyond the shared code
 - **Strays** the reader must skip: an L3 file name and a local ``_target``
   copy name, as the real FS folder holds (R5, R6), written empty.
 
+The three CrIS fixtures (2026-10-26; ``tropess.md`` C8) are real days cut to
+the first ``CRIS_ROWS`` and last ``CRIS_TAIL`` rows of each day's first file,
+plus every footprint the staged files share within two days (R37), kept in
+each file that holds it, and the Summary rows of the Standard rows kept:
+
+- **SNPP RS**, Summary only: 2015-12-01 .. 12-06; 12-05 is missing upstream
+  (declared, R35), and 12-03 repeats a footprint of 12-02.
+- **SNPP FS:** 2021-02-01, -02 and -04, every day with ``land_flag`` 1
+  throughout (R36) and footprints repeated across days; 02-03 is left out, so
+  the missing-day check sees a gap (a fixture gap, not an upstream one).
+- **JPSS1 FS**, three short runs, the gaps between them declared as ranges:
+  2021-05-20 and -21, where 05-21's old file sits in the flat folder beside
+  its R1p24 replacement (R18) and 05-20 is an R36 day but 05-21 is not;
+  2021-10-31, 11-01 and 11-10, the R36 boundary and its stray day; and
+  2023-09-28 .. 30, where R1p21 files meet an R1p24 replacement, with repeats
+  one and two days back across the algorithm change.
+- A day not declared under R36 keeps a row with ``land_flag`` 0, so the
+  verifier's check of undeclared days (Q1) sees a real file.
+
 Run from the repo root (reads ~0.3 GB, light enough for a login node):
 
     uv run python validation/stage_tropess.py
@@ -33,6 +52,7 @@ Idempotent: a file that is already staged is left alone unless --restage.
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import shutil
 
@@ -49,7 +69,20 @@ FIXTURES = {
                 ('20020830', '20020831', '20020901', '20020903'), False),
     'airs_fs': ('config/airs_fs/config_zarr.yaml', 'config/airs_fs/config_zarr_fixture.yaml',
                 ('20220617', '20220618', '20220619', '20220621'), True),
+    'cris_snpp_rs': ('config/cris_snpp_rs/config_zarr.yaml', 'config/cris_snpp_rs/config_zarr_fixture.yaml',
+                     ('20151201', '20151202', '20151203', '20151204', '20151206'), 'cris'),
+    'cris_snpp_fs': ('config/cris_snpp_fs/config_zarr.yaml', 'config/cris_snpp_fs/config_zarr_fixture.yaml',
+                     ('20210201', '20210202', '20210204'), 'cris'),
+    'cris_jpss1_fs': ('config/cris_jpss1_fs/config_zarr.yaml', 'config/cris_jpss1_fs/config_zarr_fixture.yaml',
+                      ('20210520', '20210521', '20211031', '20211101', '20211110',
+                       '20230928', '20230929', '20230930'), 'cris'),
 }
+# CrIS: rows of each day's first file kept from its start and from its end
+# besides its repeats (the end, so a seam steps back in time, as the files'
+# do), and how many shared footprints each pair of nearby staged files keeps
+CRIS_ROWS = 200
+CRIS_TAIL = 20
+CRIS_SHARED = 40
 FS_ROWS = 400
 # an FS day whose Standard file is staged in the later download's year layout
 RELOCATED = ('20220621', 'TRPSDL2HDOAIRSFS.1', '2022')
@@ -114,6 +147,55 @@ def cut_rows(paths):
     return [standard, summary]
 
 
+def cris_cut_rows(granules, days, settings):
+    """The rows each staged CrIS file keeps: its first rows and its shared footprints.
+
+    Args:
+        granules (dict): Day id -> Granule, from the production listing.
+        days (tuple): The staged days, in order.
+        settings (dict): The production config, for the R36 days.
+
+    Returns:
+        dict: Path -> int array of rows, for every file of every staged day.
+    """
+    keys = {day: reader.footprint_keys(granules[day].paths[0]) for day in days}
+    chosen = set()
+    for i, day in enumerate(days):
+        for other in days[i + 1:i + 3]:
+            shared = (set(keys[day]) & set(keys[other])) - {None}
+            chosen |= set(sorted(shared)[:CRIS_SHARED])
+    masked_days = set()
+    for entry in settings.get('declared_masked_values') or []:
+        if entry.get('where') == reader.MASK_LISTED_DAYS:
+            masked_days |= reader.listed_days(entry)
+    rows = {}
+    for day in days:
+        paths = granules[day].paths
+        first = np.union1d(
+            np.r_[np.arange(min(CRIS_ROWS, len(keys[day]))),
+                  np.arange(max(0, len(keys[day]) - CRIS_TAIL), len(keys[day]))],
+            [row for row, key in enumerate(keys[day]) if key in chosen],
+        ).astype(int)
+        if len(paths) == 2:
+            columns = []
+            for path in paths:
+                with netCDF4.Dataset(path) as handle:
+                    columns.append({s: np.asarray(handle[s][...]) for s in ('time', 'latitude', 'longitude')})
+            matched = match_rows(columns[0], columns[1])
+            # the Standard rows of the first Summary rows, so Summary keeps some
+            first = np.union1d(first, matched[:CRIS_ROWS // 2]).astype(int)
+            with netCDF4.Dataset(paths[0]) as handle:
+                land = np.asarray(handle['geophysical/land_flag'][...])
+            if day not in masked_days and (land[first] == 1).all():
+                # a day not declared under R36 keeps an ocean row (Q1)
+                first = np.union1d(first, [int(np.flatnonzero(land == 0)[0])]).astype(int)
+            rows[paths[0]] = first
+            rows[paths[1]] = np.where(np.isin(matched, first))[0]
+        else:
+            rows[paths[0]] = first
+    return rows
+
+
 def stage(production, fixture, days, cut, restage):
     """Write one fixture's days from the production raw tree.
 
@@ -127,13 +209,25 @@ def stage(production, fixture, days, cut, restage):
     settings = load_config(production)
     raw = settings['directories']['raw']
     target = load_config(fixture)['directories']['raw']
-    granules = {granule.id: granule for granule in list_granules(raw, **listing_options(settings, reader))}
+    # the R37 rule reads every production file; the staging needs only the days
+    options = dict(listing_options(settings, reader), repeated_footprints=None)
+    granules = {granule.id: granule for granule in list_granules(raw, **options)}
+    cris = cris_cut_rows(granules, days, settings) if cut == 'cris' else {}
     for day in days:
         paths = granules[day].paths
-        rows = cut_rows(paths) if cut else [None] * len(paths)
+        superseded = (settings.get('superseded_files') or {}).get(day)
+        if superseded:
+            # R18: the replaced file, staged where it sits, cut to its first rows
+            old = glob.glob(os.path.join(raw, '*', superseded))
+            paths = paths + tuple(old)
+            cris[old[0]] = np.arange(CRIS_ROWS)
+        if cut == 'cris':
+            rows = [cris[path] for path in paths]
+        else:
+            rows = cut_rows(paths) if cut else [None] * len(paths)
         for path, keep in zip(paths, rows):
             relative = os.path.relpath(path, raw)
-            if RELOCATED[0] == day and '_Standard_' in path:
+            if cut != 'cris' and RELOCATED[0] == day and '_Standard_' in path:
                 relative = os.path.join(RELOCATED[1], RELOCATED[2], os.path.basename(path))
             destination = os.path.join(target, relative)
             if os.path.exists(destination) and not restage:
@@ -148,7 +242,7 @@ def stage(production, fixture, days, cut, restage):
                     if RENAMED[0] == day and '_Standard_' in path:
                         dst[RENAMED[1]].setncattr('standard_name', RENAMED[2])
             print(f'staged  {destination}  {"whole" if keep is None else f"{len(keep)} rows"}')
-    if cut:
+    if cut is True:
         folder = os.path.dirname(os.path.join(target, os.path.relpath(granules[days[0]].paths[0], raw)))
         for name in STRAYS:
             stray = os.path.join(folder, name)
@@ -157,10 +251,10 @@ def stage(production, fixture, days, cut, restage):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='stage the airs rs and fs pipeline test fixtures.')
+    parser = argparse.ArgumentParser(description='stage the airs and cris pipeline test fixtures.')
     parser.add_argument('--restage', action='store_true', help='Overwrite staged files.')
     parser.add_argument('--products', type=str, default=','.join(FIXTURES),
-                        help=f'Comma separated subset of {sorted(FIXTURES)}. Default: both.')
+                        help=f'Comma separated subset of {sorted(FIXTURES)}. Default: all.')
     args = parser.parse_args()
     for product in args.products.split(','):
         production, fixture, days, cut = FIXTURES[product]

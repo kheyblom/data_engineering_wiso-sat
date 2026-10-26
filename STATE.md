@@ -28,7 +28,15 @@ Read this first in a new session. Update it whenever work lands.
     (`docs/cris-repeats-r37.md`, Decision).
   - **The CrIS production subset is approved** (2026-10-26; Q1 yes, Q2 as
     proposed): `tropess.md`, "CrIS v1 production subset" (C1-C8; 50
-    stores). Now: the reader and shared changes (instrument filter,
+    stores).
+  - **The reader, shared changes, configs and fixtures are done**
+    (2026-10-26; CLAUDE.md, "Added for CrIS"): `config/cris_snpp_rs/`,
+    `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; R37 counts measured
+    and declared (620, 8,057, 136,707). **The fixture test passes 350
+    cases over 9 fixtures** (~15 min). **Next: a bench** (one month per
+    product, bench configs and `validation/stage_bench_tropess.py`), shown
+    to the user before submitting; then production. Was: the reader and
+    shared changes (instrument filter,
     Summary-only granules, R18 declared file, whole-file declared mask,
     the R37 rule with look-ahead), fixtures, the full test, a bench.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
@@ -61,8 +69,8 @@ Read this first in a new session. Update it whenever work lands.
 - **The AIRS bench data is deleted** (user approved 2026-10-23): its stores
   and symlink trees in `wisosat_bench/`. The configs and stager stay, to
   rebuild it.
-- **The fixture test passes 218 cases** over all six products (~12 min,
-  login node; the two AIRS fixtures are ~5 of it).
+- **The fixture test passes 350 cases** over 9 fixtures (~15 min, login
+  node), 2026-10-26.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place.
