@@ -2,11 +2,14 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-23)
+## Where we are (2026-10-26)
 
 **Nothing is running.** No batch jobs are queued.
-- **Current task: CrIS (task 6), next; to be started in a new session.**
-  **Read `docs/products/tropess.md`, section "CrIS: handoff", first.** It
+- **CrIS v1 is finished (task 6): 50 stores finalized 2026-10-26**, tag
+  `v1-verified-20261026`, in
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_{snpp,jpss1}/`.
+  Next: ask the user which candidate (below). The history of the CrIS work
+  follows. **`docs/products/tropess.md`, section "CrIS: handoff"**
   holds what is settled, the five decisions the user must make before any
   code (SNPP RS is Summary-only upstream; SNPP FS overlaps; R18 duplicate
   files; the SC Australian-fire collection; v2 with AIRS v2), the reader
@@ -44,9 +47,10 @@ Read this first in a new session. Update it whenever work lands.
     stores, 2,597,674 obs, 568 checks; SNPP FS 19 stores, 2,858,343 obs,
     883 checks; JPSS1 FS 19 stores, 47,391,889 obs, 885 checks; **0
     failures**, R37, R36, R22, R18 and R38 confirmed on the full record.
-    Finalize: `--attrs` applied on all 50 stores (user approved
-    2026-10-26). **Next: `--tag v1-verified-20261026`** (dry run shown; no
-    `--expire` or `--gc` needed), signed off by the user.
+    **Finalized 2026-10-26**, tag `v1-verified-20261026` on all 50 stores
+    (`--attrs` and `--tag`, each signed off by the user; no `--expire` or
+    `--gc` needed). **CrIS v1 is finished.** Decision 5 (v2 for AIRS and
+    CrIS-JPSS1) still waits.
     Was: the reader and shared changes
   - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
     (`time_order: source`, option 1), approved per product after

@@ -1132,5 +1132,7 @@ Every observation matched raw bit for bit. The obs counts are the subset's
   build started (14:30); every commit is stamped `537d3ca`.
 - **Size:** SNPP RS 0.5 GB, SNPP FS 3.4 GB, JPSS1 57 GB (the kernel 42 GB),
   in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_{snpp,jpss1}/`.
-- **Finalize:** every store needs `--attrs` then `--tag`; none is sharded
-  and none holds anything unreachable, so no `--expire` or `--gc`.
+- **Finalized 2026-10-26** (each `--apply` signed off by the user):
+  `--attrs`, then `--tag v1-verified-20261026`, on all 50 stores. None is
+  sharded and none held anything unreachable, so no `--expire` or `--gc`.
+  `--status`: every store "remaining nothing, finalized".

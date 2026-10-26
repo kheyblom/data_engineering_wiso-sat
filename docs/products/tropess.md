@@ -536,7 +536,7 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
 5. The full fixture test (done), a bench (**done 2026-10-26**, TESTING.md
    Tier 2e: 0 failures on all three), production (**built and verified
    2026-10-26**, 0 failures on all three; TESTING.md, CrIS v1 run log),
-   finalize.
+   finalize (**done 2026-10-26**, tag `v1-verified-20261026`).
 
 ## AIRS v1 production subset (reviewed 2026-10-23)
 
