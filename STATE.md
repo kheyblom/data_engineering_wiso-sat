@@ -36,7 +36,11 @@ Read this first in a new session. Update it whenever work lands.
     cases over 9 fixtures** (~15 min). **Next: a bench** (one month per
     product, bench configs and `validation/stage_bench_tropess.py`), shown
     to the user before submitting; then production. Was: the reader and
-    shared changes (instrument filter,
+    shared changes
+  - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
+    (`time_order: source`, option 1), approved per product after
+    measuring every file; it had been carried over from AIRS without asking
+    and was held until then. (instrument filter,
     Summary-only granules, R18 declared file, whole-file declared mask,
     the R37 rule with look-ahead), fixtures, the full test, a bench.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
@@ -303,7 +307,8 @@ when it is time (2026-10-22).
   - per-granule algorithm, format and joint flag go in the granule index, a
     shared change approved for every product that needs it;
   - CrIS products carry the platform: `cris_snpp`, `cris_jpss1`.
-- **CrIS (2026-10-26; `tropess.md` CrIS handoff, Answers):** SNPP RS built
+- **CrIS (2026-10-26; `tropess.md` CrIS handoff, Answers):** rows in source
+  order (R40, approved per product after measurement); SNPP RS built
   Summary-only; SNPP FS its own product; R18 keeps the R1p24 replacement;
   the SC Australian fires left out; R36 `land_flag` masked on the 324
   defective files, declared; R38 `sunlit_binary_mask` declared; **R37 each

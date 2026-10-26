@@ -35,8 +35,9 @@ platform: SUOMI-NPP
 granule_types: [Summary]
 temporal_resolution: observation
 grid_name: native_swath
-# the style guide's exception: rows kept in source order, which is not time
-# order (R32, user decision 2026-10-23)
+# the style guide's exception, approved for CrIS by the user 2026-10-26
+# (R40): rows kept in source order, which is not time order (day edges, a
+# 64 s jitter, and in JPSS1 some blocks), with the repeat check in its place
 time_order: source
 
 # canonical names, each a row of nomenclature-key_tropess.md: what the Summary
