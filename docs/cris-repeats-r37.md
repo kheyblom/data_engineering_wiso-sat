@@ -62,6 +62,43 @@ repeat; SNPP FS every 10th-20th day; JPSS1 every 80th-160th):
 - Neither copy's error row appears at any other row of either file: these
   are not misaligned rows.
 
+## What WISO-SAT and TROPESS say (checked 2026-10-26)
+
+- **Sarkar et al. (2026):** nothing on repeats, duplicates, overlapping files
+  or algorithm versions. Gridding is the unweighted mean of valid retrievals
+  per cell and month, with a count (Eq. 1); no de-duplication step is
+  described.
+- **The WISO-SAT code** (Zenodo 10.5281/zenodo.20385835, `Codes/`; only the
+  scripts and README read, by range requests):
+  - `AIRS_CrIS_2021to2024.m` grids each JPSS1 Standard daily file on its
+    own (DOF >= 1, COD <= 0.5), named by the file's date, from our old flat
+    folder `TRPSDL2HDOCRS1FS_1-20240912_023602/` (the old R18 files, not the
+    R1p24 replacements). No file is compared with another. Its monthly step
+    is not in the record;
+  - `CRIS_RS_monthly.py` bins every row of pre-joined monthly Summary files
+    (`CRIS_RS_YYYYMM.nc`); the joining script is not in the record;
+  - so WISO-SAT very likely counted each repeat twice (inferred: the
+    unpublished steps could have de-duplicated, but nothing says so);
+  - the README says nothing on it.
+- **TROPESS documents** (both stream READMEs, the Summary and Standard user
+  guides, the ATBD v1.1):
+  - section 2.0 of both READMEs: "Each file contains all observations of a
+    given species made during a period of exactly 1 day, identified by the
+    date in the filename", the date being "the observation date". The CrIS
+    files do not match this (each holds up to 48 h either side);
+  - `target_id`: "Unique id that identifies observations across all product
+    files". **Both copies of every repeat carry the same `target_id`**
+    (sampled: SNPP RS all 620; JPSS1 3,544 where both files have an int64
+    one), so by TROPESS's own identifier they are one observation. But
+    `target_id` also recurs on rows with a different time and place (SNPP RS
+    748, JPSS1 8,770 in the same samples), so it is not unique in practice
+    and cannot serve as the key;
+  - the release notes (1.5 to 1.20) mention no duplicates; 1.10 "Fixed to
+    use correct observation time in CrIS products", 1.12 "Fixed HDO error
+    calculation", 1.15 the Python pipeline with "statistically
+    insignificant differences".
+- **The web:** no known-issue notice, forum thread or other mention found.
+
 ## What the build does today
 
 `check_repeats` (the stand-in for the time-order check under
