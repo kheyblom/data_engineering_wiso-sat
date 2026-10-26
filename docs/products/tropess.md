@@ -331,11 +331,11 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 - `qstat` may not list a job id for some seconds after `qsub`; a wait loop
   must not treat "not listed" as "finished" on its first check.
 
-## CrIS v1 production subset (draft 2026-10-26, for review)
+## CrIS v1 production subset (approved 2026-10-26)
 
-Drafted for the user's in-place review (`#@CLAUDE` comments), on the AIRS v1
-subset below: where a point is the same as AIRS's, it says so and points
-there. Facts are from the full CrIS audit (TESTING.md finding 16) and the
+Drafted for the user's in-place review, on the AIRS v1 subset below: where a
+point is the same as AIRS's, it says so and points there. **Approved
+2026-10-26**, with Q1 yes and Q2 as proposed. Facts are from the full CrIS audit (TESTING.md finding 16) and the
 R37 probes. Decisions already made: the CrIS handoff's Answers, R36, R37,
 R38. Open questions are marked **Q**.
 
@@ -438,9 +438,9 @@ there is no `x_test` to confirm against).
 - **`land_flag`, R36 (decided):** masked to fill on the 324 declared files
   (SNPP FS all 110; JPSS1 2021-04-01 .. 10-31 and 2021-11-10). The config
   lists them; the reader and the verifier each confirm every row of each is
-  1 before masking. **Q1:** should the verifier also fail on an *undeclared*
-  file whose `land_flag` is 1 on every row? It is a check, not an action, so
-  it keeps "declared, never detected". Proposed: yes.
+  1 before masking. **Q1, decided (user, 2026-10-26): yes**, the verifier
+  also fails on an *undeclared* file whose `land_flag` is 1 on every row (a
+  check, not an action, so "declared, never detected" holds).
 - **`day_night_flag`, R38 (decided):** the store carries
   `sunlit_binary_mask`, declared in config, the old name in its `comment`.
   It covers more than JPSS1's early files: **SNPP FS Standard says
@@ -449,12 +449,12 @@ there is no `x_test` to confirm against).
   three products declare `sunlit_binary_mask`, which every product's files
   use somewhere.
 
-**Q2: the CrIS instrument indices** (`cris_atrack`, `cris_xtrack`,
+**Q2, decided (user, 2026-10-26): left out, as proposed. The CrIS instrument indices** (`cris_atrack`, `cris_xtrack`,
 `cris_fov`, `cris_granule`, `cris_view_ang`; present in every file). AIRS
 left its four out because no row was left out, so an obs's position and the
 granule index give its source row (P3, Q4). Under R37 rows are left out, so
 that no longer holds. Options:
-- **leave them out** (proposed): the R37 rule is deterministic from raw and
+- **leave them out** (chosen): the R37 rule is deterministic from raw and
   declared, and the index records the rows left out per granule, so a source
   row can still be found; no new nomenclature rows;
 - store a source-row store (the row's index in its file), as TROPOMI's
@@ -509,7 +509,7 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
 
 ### C8. Next, after review
 
-1. **No nomenclature rows** (unless Q2 adds some).
+1. **No nomenclature rows** (Q2 adds none).
 2. **The reader and shared changes**, each tested:
    - the instrument filter and Summary-only products (C2);
    - superseded files (R18);
