@@ -17,9 +17,10 @@ Read this first in a new session. Update it whenever work lands.
     AIRS v2 is designed with CrIS-JPSS1 v2.
   - **Answered 2026-10-26** (handoff, "Answers"): SNPP FS is its own
     product; R18 keeps the R1p24 replacement; the SC Australian fires are
-    out. Decision 1 (SNPP RS is Summary-only) is re-checked from raw and
-    live CMR. It holds, and the user's choice is pending. Decision 5 (v2)
-    waits.
+    out; SNPP RS is built Summary-only (re-checked from raw and live CMR
+    first). Decision 5 (v2) waits.
+  - The audit script is generalised to CrIS; next is its develop job over
+    every CrIS v1 file.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
     2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
   - Start by laying the collections and decisions out for the user (as for

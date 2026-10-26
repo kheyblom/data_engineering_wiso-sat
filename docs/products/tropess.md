@@ -264,8 +264,11 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 - **3. R18: the R1p24 replacement is kept** on each of the 5 dates; the old
   file is declared and checked.
 - **4. The SC Australian-fires collection is left out.**
-- **1. Re-checked against the raw files and CMR** (2026-10-26), at the
-  user's request; the decision itself is still open:
+- **1. SNPP RS is built as a Summary-only product**, `cris_snpp` v1 RS:
+  its obs axis is the Summary's rows (DOF > 1.1 only), with no kernel,
+  prior or error stores, and its metadata says so. Decided after a
+  re-check against the raw files and CMR (2026-10-26), at the user's
+  request:
   - all 1,865 files in `TRPSYL2HDOCRSRS_1-20240923_230130/` are Summary:
     `ShortName` `TRPSYL2HDOCRSRS`, `VersionID` 1, `Platform` `SUOMI-NPP`,
     R1p17 F0p8_J0, one per date, 2015-12-01 .. 2021-05-21;
@@ -292,16 +295,20 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
   match, and every overlapping day would fail as "two Standard files". Match
   the folder's `instrument` group (`CRS` vs `CRS1`) to the config, e.g. from
   `platform` or a new listing option.
-- **Summary-only granules,** if decision 1 is yes; today a missing Standard
-  file is allowed only on declared one-sided days.
+- **Summary-only granules** (decision 1): a product with no Standard
+  folders reads Summary files alone; today a missing Standard file is
+  allowed only on declared one-sided days.
 - **Declared duplicate files** (R18): keep the R1p24 replacement, declare
   the old file and check it.
 - **`FILE_RE`** accepts only `RS|FS`; the `SC_AUS` files are skipped
   silently, which is right now that decision 4 is out. The skip should
   still be stated in config rather than left silent.
-- **The audit script** `tools/survey/tropess_file_audit.py` hard-codes the
-  AIRS folders, file pattern and `Instrument`; generalise it, then run it on
-  every CrIS file (develop job, ~1 core-hour for AIRS).
+- **The audit script** `tools/survey/tropess_file_audit.py` is generalised
+  (2026-10-26): `--products` names entries of `PRODUCTS`, files are matched
+  on the platform token, every file of an R18 day is audited, and every
+  dataset's `standard_name`, `long_name`, `units` and `_FillValue` is
+  scanned for change. A 4-day probe ran clean. Next: run it on every CrIS
+  v1 file (develop job, ~1 core-hour for AIRS).
 
 **Lessons from AIRS to apply up front:**
 - **Scan every file's variable attributes for changes over the record**

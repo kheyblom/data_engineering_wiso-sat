@@ -1,17 +1,24 @@
-"""Audit every AIRS v1 TROPESS day: the Standard and Summary files, read whole.
+"""Audit every TROPESS v1 day: the Standard and Summary files, read whole.
 
-Written 2026-10-23 before the TROPESS reader (``docs/products/tropess.md``,
-production subset P8). A granule is one day: the Standard file and the
-Summary file, merged (Product scheme). The files are ~142 GB in all, so it
-runs as a batch job over a process pool.
+Written 2026-10-23 for AIRS before the TROPESS reader
+(``docs/products/tropess.md``, production subset P8), and generalised
+2026-10-26 to the CrIS v1 products (CrIS handoff). A granule is one day: the
+Standard file and the Summary file, merged (Product scheme). CrIS-SNPP RS has
+only Summary files upstream, so its days are Summary only. AIRS is ~142 GB
+and CrIS v1 ~113 GB, so it runs as a batch job over a process pool.
 
-Only the known collection folders are listed; ``*_target.nc`` copies (R5) and
-L3 ``AIRS_TROPESS_gridded_*`` files (R6) are skipped. Per day it records, for
-each file present:
+Only the known collection folders are listed; ``*_target.nc`` copies (R5),
+L3 ``AIRS_TROPESS_gridded_*`` files (R6) and the out-of-scope ``SC_AUS``
+files are skipped. A day with two files of one type (CrIS-JPSS1, R18) has
+every file audited; the newest algorithm's is the one merged. Per day it
+records, for each file present:
 
 - ``ShortName``, ``VersionID``, ``Platform``, ``Instrument`` and ``source``
   against the file name's ``R1pNN``, and a layout signature (every dataset's
   name, trailing shape, dtype and units), so format drift shows up;
+- every dataset's ``standard_name``, ``long_name``, ``units`` and
+  ``_FillValue``, so a change over the record shows up before a build does
+  (R33 reached AIRS production because no audit scanned them);
 - ``nobs``, rows whose time, lat or lon is fill or NaN, and lat/lon out of
   range;
 - time: TAI93 less the leap seconds, against ``datetime_utc`` on every row
@@ -37,9 +44,9 @@ order; the matched rows are exactly those with DOF >= 1.1; every shared
 variable is identical on them (except ``x`` row 0, R22); ``target_id``
 agrees; and ``dd_col_p_error`` against (1000 + dD) sqrt(M S M^T).
 
-Run from the repo root:
+Run from the repo root, naming the products (keys of ``PRODUCTS``):
 
-    .venv/bin/python -I tools/survey/tropess_file_audit.py <output.jsonl> [--limit N]
+    .venv/bin/python -I tools/survey/tropess_file_audit.py <output.jsonl> --products airs_rs,airs_fs [--limit N]
 
 It writes one JSON line per day and prints a summary; ``--summarize``
 re-reads an existing output.
@@ -58,16 +65,42 @@ import h5py
 import numpy as np
 import pandas as pd
 
-AIRS = '/glade/derecho/scratch/kheyblom/data/wisosat/raw/AIRS'
-# per stream: the Standard folders and the Summary folders; a folder ending
-# in '.1' holds one subfolder per year
-FOLDERS = {
-    'RS': (['TRPSDL2HDOAIRSORS.1'], ['TRPSYL2HDOAIRSORS_1-20240806_185241']),
-    'FS': (['TRPSDL2HDOAIRSFS_1-20240912_174250', 'TRPSDL2HDOAIRSFS.1'], ['TRPSYL2HDOAIRSFS.1']),
+RAW = '/glade/derecho/scratch/kheyblom/data/wisosat/raw'
+# per product: its folders under RAW for each type (a folder ending in '.1'
+# holds one subfolder per year), the file name's platform token, the
+# expected root attributes, and the instrument's geolocation datasets
+PRODUCTS = {
+    'airs_rs': {
+        'stream': 'RS', 'token': 'AIRS-Aqua', 'platform': 'Aqua', 'instrument': 'AIRS',
+        'Standard': ['AIRS/TRPSDL2HDOAIRSORS.1'], 'Summary': ['AIRS/TRPSYL2HDOAIRSORS_1-20240806_185241'],
+        'short_names': {'Standard': 'TRPSDL2HDOAIRSORS', 'Summary': 'TRPSYL2HDOAIRSORS'}},
+    'airs_fs': {
+        'stream': 'FS', 'token': 'AIRS-Aqua', 'platform': 'Aqua', 'instrument': 'AIRS',
+        'Standard': ['AIRS/TRPSDL2HDOAIRSFS_1-20240912_174250', 'AIRS/TRPSDL2HDOAIRSFS.1'],
+        'Summary': ['AIRS/TRPSYL2HDOAIRSFS.1'],
+        'short_names': {'Standard': 'TRPSDL2HDOAIRSFS', 'Summary': 'TRPSYL2HDOAIRSFS'}},
+    'cris_snpp_rs': {
+        'stream': 'RS', 'token': 'CrIS-SNPP', 'platform': 'SUOMI-NPP', 'instrument': 'CrIS',
+        'Standard': [], 'Summary': ['CRIS/TRPSYL2HDOCRSRS_1-20240923_230130'],
+        'short_names': {'Summary': 'TRPSYL2HDOCRSRS'}},
+    'cris_snpp_fs': {
+        'stream': 'FS', 'token': 'CrIS-SNPP', 'platform': 'SUOMI-NPP', 'instrument': 'CrIS',
+        'Standard': ['CRIS/TRPSDL2HDOCRSFS.1'], 'Summary': ['CRIS/TRPSYL2HDOCRSFS.1'],
+        'short_names': {'Standard': 'TRPSDL2HDOCRSFS', 'Summary': 'TRPSYL2HDOCRSFS'}},
+    'cris_jpss1_fs': {
+        'stream': 'FS', 'token': 'CrIS-JPSS1', 'platform': 'JPSS-1', 'instrument': 'CrIS',
+        'Standard': ['CRIS/TRPSDL2HDOCRS1FS_1-20240912_023602', 'CRIS/TRPSDL2HDOCRS1FS.1'],
+        'Summary': ['CRIS/TRPSYL2HDOCRS1FS.1'],
+        'short_names': {'Standard': 'TRPSDL2HDOCRS1FS', 'Summary': 'TRPSYL2HDOCRS1FS'}},
 }
-FILE_RE = re.compile(r'^TROPESS_AIRS-Aqua_L2_(Standard|Summary)_HDO_(\d{8})_MUSES_(R1p\d+)_(RS|FS)_(F\dp\d+)(_J\d)?\.nc$')
-SHORT_NAMES = {('RS', 'Standard'): 'TRPSDL2HDOAIRSORS', ('RS', 'Summary'): 'TRPSYL2HDOAIRSORS',
-               ('FS', 'Standard'): 'TRPSDL2HDOAIRSFS', ('FS', 'Summary'): 'TRPSYL2HDOAIRSFS'}
+FILE_RE = re.compile(r'^TROPESS_(?P<token>AIRS-Aqua|CrIS-SNPP|CrIS-JPSS1)_L2_(?P<kind>Standard|Summary)_HDO_'
+                     r'(?P<day>\d{8})_MUSES_(?P<algorithm>R1p\d+)_(?P<stream>RS|FS)_(?P<format>F\dp\d+)(?P<joint>_J\d)?\.nc$')
+GEOLOCATION = {
+    'AIRS': ('airs_atrack', 'airs_xtrack', 'airs_granule', 'airs_view_ang'),
+    'CrIS': ('cris_atrack', 'cris_xtrack', 'cris_fov', 'cris_granule', 'cris_view_ang'),
+}
+# the dataset attributes scanned for change over the record
+VARIABLE_ATTRS = ('standard_name', 'long_name', 'units', '_FillValue')
 FILLS = (-999, -9999)
 SMOW = 3.11e-4  # TROPESS's, from dd_col_p's source attribute
 # UTC dates of the leap seconds after the TAI93 epoch (1993-01-01)
@@ -77,10 +110,10 @@ EPOCH = pd.Timestamp('1993-01-01')
 # each leap second's TAI93 instant: its UTC seconds since the epoch plus the
 # leap seconds already inserted, including itself
 LEAP_TAI = np.array([(pd.Timestamp(d) - EPOCH).total_seconds() + i + 1 for i, d in enumerate(LEAP_DATES)])
-# the shared per-target variables compared between Standard and Summary
+# the shared per-target variables compared between Standard and Summary,
+# with the instrument's geolocation added per product
 SHARED = ('time', 'latitude', 'longitude', 'datetime_utc', 'year_fraction', 'x', 'x_h2o', 'pressure', 'altitude',
-          'geolocation/airs_atrack', 'geolocation/airs_xtrack', 'geolocation/airs_granule',
-          'geolocation/airs_view_ang', 'geophysical/land_flag', 'geophysical/day_night_flag')
+          'geophysical/land_flag', 'geophysical/day_night_flag')
 PROFILE_FILL_LIKE_PRESSURE = ('x', 'x_h2o', 'observation_ops/xa', 'altitude')
 
 
@@ -96,23 +129,35 @@ def masked(values):
     return values
 
 
-def listing():
-    """Every day of each stream, with its Standard and Summary paths."""
+def algorithm_number(path):
+    return int(FILE_RE.match(os.path.basename(path))['algorithm'][3:])
+
+
+def listing(products):
+    """Every day of each product, with its Standard and Summary paths.
+
+    Files are matched on the product's platform token and stream as well as
+    the type, so two platforms' folders under one instrument never mix. Where
+    a day has two files of one type, the newest algorithm's comes first.
+    """
     days = []
-    for stream, (standard, summary) in FOLDERS.items():
+    for product in products:
+        spec = PRODUCTS[product]
         found = collections.defaultdict(lambda: collections.defaultdict(list))
-        for kind, folders in (('Standard', standard), ('Summary', summary)):
-            for folder in folders:
-                base = f'{AIRS}/{folder}'
+        for kind in ('Standard', 'Summary'):
+            for folder in spec[kind]:
+                base = f'{RAW}/{folder}'
                 subdirs = sorted(d for d in os.listdir(base) if d.isdigit()) if folder.endswith('.1') else ['']
                 for sub in subdirs:
                     where = f'{base}/{sub}'.rstrip('/')
                     for name in os.listdir(where):
                         match = FILE_RE.match(name)
-                        if match and match.group(1) == kind:
-                            found[match.group(2)][kind].append(f'{where}/{name}')
+                        if (match and match['kind'] == kind and match['token'] == spec['token']
+                                and match['stream'] == spec['stream']):
+                            found[match['day']][kind].append(f'{where}/{name}')
         for day in sorted(found):
-            days.append({'stream': stream, 'day': day, **{k: sorted(v) for k, v in found[day].items()}})
+            days.append({'product': product, 'day': day,
+                         **{k: sorted(v, key=algorithm_number, reverse=True) for k, v in found[day].items()}})
     return days
 
 
@@ -122,26 +167,31 @@ def utc_seconds(datetime_utc):
     return (pd.to_datetime(frame) - EPOCH).dt.total_seconds().to_numpy()
 
 
-def header(handle, path, stream, kind):
-    """Global attributes and layout of one file, checked against its name."""
+def header(handle, path, spec, kind):
+    """Global attributes, layout and dataset attributes of one file, checked against its name."""
     match = FILE_RE.match(os.path.basename(path))
-    out = {'file': path[len(AIRS) + 1:], 'size': os.stat(path).st_size,
-           'algorithm': match.group(3), 'format': match.group(5) + (match.group(6) or '')}
+    out = {'file': path[len(RAW) + 1:], 'size': os.stat(path).st_size,
+           'algorithm': match['algorithm'], 'format': match['format'] + (match['joint'] or '')}
     attrs = {k: text(handle.attrs[k]) for k in ('ShortName', 'VersionID', 'Platform', 'Instrument', 'source')
              if k in handle.attrs}
     out['attr_problems'] = [
         problem for problem, bad in (
-            ('ShortName', attrs.get('ShortName') != SHORT_NAMES[(stream, kind)]),
+            ('ShortName', attrs.get('ShortName') != spec['short_names'][kind]),
             ('VersionID', attrs.get('VersionID') != '1'),
-            ('Platform', attrs.get('Platform') != 'Aqua'),
-            ('Instrument', attrs.get('Instrument') != 'AIRS'),
-            ('source', attrs.get('source') != f'MUSES v1.{match.group(3)[3:]}'),
+            ('Platform', attrs.get('Platform') != spec['platform']),
+            ('Instrument', attrs.get('Instrument') != spec['instrument']),
+            ('source', attrs.get('source') != f'MUSES v1.{match["algorithm"][3:]}'),
         ) if bad]
-    layout = []
-    handle.visititems(lambda name, item: layout.append(
-        f'{name}|{item.shape[1:]}|{item.dtype}|{text(item.attrs.get("units", ""))}')
-        if isinstance(item, h5py.Dataset) else None)
+    layout, variable_attrs = [], {}
+
+    def visit(name, item):
+        if isinstance(item, h5py.Dataset):
+            layout.append(f'{name}|{item.shape[1:]}|{item.dtype}|{text(item.attrs.get("units", ""))}')
+            variable_attrs[name] = '|'.join(text(item.attrs[k]) if k in item.attrs else '-' for k in VARIABLE_ATTRS)
+
+    handle.visititems(visit)
     out['layout'] = hashlib.sha1('\n'.join(sorted(layout)).encode()).hexdigest()[:12]
+    out['variable_attrs'] = variable_attrs
     return out
 
 
@@ -239,7 +289,7 @@ def summary_checks(data):
     return out
 
 
-def merge_checks(standard, summary, std_handle):
+def merge_checks(standard, summary, std_handle, shared):
     """Summary against Standard: same rows (DOF >= 1.1), in order, same values."""
     out = {}
     key = lambda d: np.stack([d['time'], d['latitude'].astype('f8'), d['longitude'].astype('f8')], axis=1)
@@ -260,7 +310,7 @@ def merge_checks(standard, summary, std_handle):
     member[matched] = True
     out['rule_mismatch'] = int((member != (dof >= 1.1)).sum())
     differs = []
-    for name in SHARED:
+    for name in shared:
         if name in standard and name in summary:
             a, b = standard[name][matched], summary[name][found]
             if name == 'x' and len(matched) and matched[0] == 0:
@@ -288,51 +338,89 @@ def merge_checks(standard, summary, std_handle):
     return out
 
 
+def audit_file(path, spec, kind, day):
+    """One file read whole: its record, and its handle and data for the merge."""
+    handle = h5py.File(path, 'r')
+    nobs = int(handle['time'].shape[0])
+    info = header(handle, path, spec, kind)
+    info['nobs'] = nobs
+    data = per_target(handle, nobs)
+    info.update(common_checks(data, day))
+    info.update(standard_checks(handle, data) if kind == 'Standard' else summary_checks(data))
+    return info, handle, data
+
+
 def audit(entry):
-    """One day: both files read whole; never raises."""
-    record = {'stream': entry['stream'], 'day': entry['day'],
+    """One day: every file read whole, the first of each type merged; never raises."""
+    spec = PRODUCTS[entry['product']]
+    record = {'product': entry['product'], 'stream': spec['stream'], 'day': entry['day'],
               'n_standard': len(entry.get('Standard', [])), 'n_summary': len(entry.get('Summary', []))}
-    loaded = {}
+    loaded, handles = {}, []
     try:
         for kind in ('Standard', 'Summary'):
-            if not entry.get(kind):
-                continue
-            path = entry[kind][0]
-            handle = h5py.File(path, 'r')
-            nobs = int(handle['time'].shape[0])
-            info = header(handle, path, entry['stream'], kind)
-            info['nobs'] = nobs
-            data = per_target(handle, nobs)
-            info.update(common_checks(data, entry['day']))
-            info.update(standard_checks(handle, data) if kind == 'Standard' else summary_checks(data))
-            record[kind] = info
-            loaded[kind] = (handle, data)
+            for rank, path in enumerate(entry.get(kind, [])):
+                info, handle, data = audit_file(path, spec, kind, entry['day'])
+                handles.append(handle)
+                if rank == 0:
+                    record[kind] = info
+                    loaded[kind] = (handle, data)
+                else:
+                    # the files not merged (R18): audited, and kept apart
+                    record.setdefault(f'{kind}_others', []).append(info)
         if len(loaded) == 2:
-            record['merge'] = merge_checks(loaded['Standard'][1], loaded['Summary'][1], loaded['Standard'][0])
+            shared = SHARED + tuple(f'geolocation/{n}' for n in GEOLOCATION[spec['instrument']])
+            record['merge'] = merge_checks(loaded['Standard'][1], loaded['Summary'][1], loaded['Standard'][0], shared)
     except Exception as error:
         record['error'] = f'{type(error).__name__}: {str(error)[:200]}'
     finally:
-        for handle, _ in loaded.values():
+        for handle in handles:
             handle.close()
     return record
 
 
+def attribute_changes(records, kind):
+    """Each dataset attribute that takes more than one value over the record, with the days of each."""
+    seen = collections.defaultdict(lambda: collections.defaultdict(list))
+    for r in records:
+        for info in [r[kind]] * (kind in r) + r.get(f'{kind}_others', []):
+            for name, value in info['variable_attrs'].items():
+                seen[name][value].append(r['day'])
+    changes = {}
+    for name, values in sorted(seen.items()):
+        if len(values) > 1:
+            changes[name] = {value: (min(days), max(days), len(days)) for value, days in values.items()}
+    return changes
+
+
 def summarize(path):
     records = [json.loads(line) for line in open(path)]
-    for stream in ('RS', 'FS'):
-        rs = [r for r in records if r['stream'] == stream]
-        if not rs:
-            continue
-        print(f'=== {stream}: {len(rs)} days; errors {sum("error" in r for r in rs)}; '
-              f'two files of one type {[r["day"] for r in rs if r["n_standard"] > 1 or r["n_summary"] > 1]}')
+    # the AIRS output of 2026-10-23 predates the product key
+    group = lambda r: r.get('product', r['stream'])
+    for product in dict.fromkeys(group(r) for r in records):
+        rs = sorted((r for r in records if group(r) == product), key=lambda r: r['day'])
+        print(f'=== {product}: {len(rs)} days, {rs[0]["day"]} .. {rs[-1]["day"]}; '
+              f'errors {sum("error" in r for r in rs)}')
         for r in rs:
             if 'error' in r:
                 print(f'  ERROR {r["day"]}: {r["error"]}')
+        for kind in ('Standard', 'Summary'):
+            for r in rs:
+                for other in r.get(f'{kind}_others', []):
+                    print(f'  two {kind} files {r["day"]}: merged {r[kind]["algorithm"]} {r[kind]["nobs"]} obs; '
+                          f'other {other["algorithm"]} {other["format"]} {other["nobs"]} obs ({other["file"]})')
         for kind in ('Standard', 'Summary'):
             ks = [r[kind] for r in rs if kind in r]
             print(f'  {kind}: {len(ks)} files, {sum(k["nobs"] for k in ks):,} obs')
             if not ks:
                 continue
+            print(f'    algorithms {dict(collections.Counter(k["algorithm"] + " " + k["format"] for k in ks))}')
+            if 'variable_attrs' in ks[0]:
+                changes = attribute_changes(rs, kind)
+                print(f'    dataset attributes changing over the record ({"|".join(VARIABLE_ATTRS)}): '
+                      f'{len(changes)}')
+                for name, values in changes.items():
+                    for value, (first, last, count) in values.items():
+                        print(f'      {name}: {value!r} {first} .. {last} ({count} files)')
             print(f'    layouts {len(set(k["layout"] for k in ks))}; attr problems '
                   f'{collections.Counter(p for k in ks for p in k["attr_problems"])}')
             for field in ('rows_not_observed', 'lat_out', 'lon_out', 'time_not_whole_seconds',
@@ -382,7 +470,7 @@ def summarize(path):
             'summary_rows_unmatched': 0, 'standard_keys_duplicated': 0, 'order_kept': True, 'rule_mismatch': 0,
             'shared_differ': [], 'dd_col_p_error_max_rel': None, 'dd_col_p_error_fill_negative_variance': 0,
             'dd_col_p_error_fill_nonnegative_variance': 0}]
-        print(f'  merge: {len(ms)} days; unmatched Summary rows {sum(m["summary_rows_unmatched"] for m in ms)}; '
+        print(f'  merge: {sum("merge" in r for r in rs)} days; unmatched Summary rows {sum(m["summary_rows_unmatched"] for m in ms)}; '
               f'duplicate Standard keys {sum(m["standard_keys_duplicated"] for m in ms)}; '
               f'order broken {sum(not m["order_kept"] for m in ms)}; DOF rule mismatches {sum(m["rule_mismatch"] for m in ms)}')
         print(f'    shared variables differing: {collections.Counter(n for m in ms for n in m["shared_differ"])}; '
@@ -399,13 +487,17 @@ def main():
         summarize(sys.argv[2])
         return
     output = sys.argv[1]
+    products = sys.argv[sys.argv.index('--products') + 1].split(',')
+    unknown = set(products) - set(PRODUCTS)
+    if unknown:
+        raise SystemExit(f'unknown products {sorted(unknown)}; known: {sorted(PRODUCTS)}')
     started = time.time()
-    days = listing()
+    days = listing(products)
     if '--limit' in sys.argv:
-        # an even spread over each stream, for a timing probe
+        # an even spread over each product, for a timing probe
         limit = int(sys.argv[sys.argv.index('--limit') + 1])
-        days = [d for stream in FOLDERS for d in (lambda s: s[::max(1, len(s) // limit)][:limit])(
-            [d for d in days if d['stream'] == stream])]
+        days = [d for product in products for d in (lambda s: s[::max(1, len(s) // limit)][:limit])(
+            [d for d in days if d['product'] == product])]
     workers = len(os.sched_getaffinity(0))
     print(f'{len(days)} days, {workers} workers', flush=True)
     with open(output, 'w') as handle, multiprocessing.Pool(workers) as pool:
