@@ -271,6 +271,46 @@ and `.log`. Follow-up probes on the login node explained every anomaly
     a negative `observation_error` variance** (RS 100%, FS 99.6%; R17). Every
     row has a negative variance somewhere in its profile (R11).
 
+### 16. Every CrIS v1 day audited (2026-10-26, develop job 7960036, 4.5 min)
+
+`tools/survey/tropess_file_audit.py`, generalised to CrIS, read every file of
+the three CrIS v1 products in full: SNPP RS (1,865 Summary-only days), SNPP
+FS (110 days) and JPSS1 FS (1,887 days, both files of the 5 R18 dates). It
+ran on 8 cores in 269 s (~0.6 core-hours), with no read errors. Output:
+`/glade/derecho/scratch/$USER/data/wisosat/audit/tropess_cris_file_audit.jsonl`
+and `.log`. Follow-up probes ran on the login node (scripts kept out of the
+repo; their results are below and in `tropess.md`, R36-R39).
+
+- **As for AIRS, the pipeline's assumptions hold on every file:** every row
+  has time, lat and lon; lat and lon are in range; time is whole seconds and
+  TAI93 less the leap seconds (9-10) equals `datetime_utc` on every row; one
+  17-level grid with no gaps; the profiles share `pressure`'s fill; every
+  file's `ShortName`, `VersionID`, `Platform`, `Instrument` and `source`
+  match its name.
+- **R22 holds on all 1,997 Standard files; the Summary merge holds on all
+  1,997 days with both files.** No unmatched Summary rows, no order breaks,
+  no differing shared variables. The 3 DOF-rule mismatches are rows with DOF
+  exactly float32(1.1) (R31).
+- **Known AIRS issues recur:** layout drift (R4) that is only integer dtypes
+  (int16/int32/int64, R16) and unstored variables coming and going;
+  `target_id` overflow in the 60 R1p15 F0p3 files (R16); `x_h2o` up to
+  0.97 (R7); NaN fill in `observation_error_h2o` (R15); rows past midnight
+  (R27).
+- **New (`tropess.md`):**
+  - **R36, `land_flag` is 1 on every row** of 324 files: all of SNPP FS and
+    JPSS1 2021-04-01 .. 10-31 plus 2021-11-10 (F0p1, F0p2), open ocean
+    included;
+  - **R37, rows repeated across days:** 0 within any file, but SNPP RS 620,
+    SNPP FS 8,057, JPSS1 FS 136,702 Standard rows repeat a row of the day
+    before in time, lat and lon, and 21 JPSS1 rows one of two days before.
+    `check_repeats` would stop the build at the first;
+  - **R38, JPSS1 `day_night_flag` changes `standard_name`** as AIRS FS's did
+    (R33), and nine `long_name`s change case or wording;
+  - **R39, SNPP RS Summary layouts:** 4, from integer dtypes only.
+- **A probe lost with a session:** the first seam probe was cut off at
+  2025-06-18 when the session ended; its counts were partial. The repeat
+  counts above are from a complete second pass (time, lat and lon only).
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445

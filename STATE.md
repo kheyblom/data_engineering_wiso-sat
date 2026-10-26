@@ -19,8 +19,14 @@ Read this first in a new session. Update it whenever work lands.
     product; R18 keeps the R1p24 replacement; the SC Australian fires are
     out; SNPP RS is built Summary-only (re-checked from raw and live CMR
     first). Decision 5 (v2) waits.
-  - The audit script is generalised to CrIS; next is its develop job over
-    every CrIS v1 file.
+  - **The CrIS v1 audit ran** 2026-10-26 (develop job 7960036, ~0.6
+    core-hours; TESTING.md finding 16). The AIRS assumptions hold; new
+    issues R36-R39 in `tropess.md`. **Two decisions for the user before the
+    reader:** R36 (`land_flag` 1 on every row of 324 early files: mask,
+    keep, or drop) and R37 (rows repeated across days, ~0.3% of JPSS1, most
+    bit-identical: keep, or leave out the copies; `check_repeats` fails on
+    them today and looks back only one day). R38 (`sunlit_binary_mask`)
+    follows the AIRS decision.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
     2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
   - Start by laying the collections and decisions out for the user (as for
