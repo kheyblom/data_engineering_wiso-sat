@@ -258,6 +258,34 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 5. **v2**, for AIRS and CrIS-JPSS1 together: Standard on 34 levels cut at
    DOF >= 1.1 vs Full with every row (R25); which, and with what subset.
 
+**Answers (user, 2026-10-26):**
+- **2. SNPP FS is its own product**, `cris_snpp` v1 FS, as AIRS's streams
+  are.
+- **3. R18: the R1p24 replacement is kept** on each of the 5 dates; the old
+  file is declared and checked.
+- **4. The SC Australian-fires collection is left out.**
+- **1. Re-checked against the raw files and CMR** (2026-10-26), at the
+  user's request; the decision itself is still open:
+  - all 1,865 files in `TRPSYL2HDOCRSRS_1-20240923_230130/` are Summary:
+    `ShortName` `TRPSYL2HDOCRSRS`, `VersionID` 1, `Platform` `SUOMI-NPP`,
+    R1p17 F0p8_J0, one per date, 2015-12-01 .. 2021-05-21;
+  - **134 dates in that span have no file.** CMR lists 1,865 granules, so
+    they are upstream gaps, not download gaps (R35);
+  - CMR lists 16 TROPESS HDO collections (live query 2026-10-26), the same
+    16 as the download's 2026-10-22 query, and **no `TRPSDL2HDOCRSRS`**.
+    The granule counts are unchanged too (SNPP RS 1,865, SNPP FS 110 + 110,
+    JPSS1 FS v1 1,887 + 1,887);
+  - the Summary holds no kernel (`averaging_kernel`), prior (`xa`),
+    `observation_error*`, `signal_dof`, `x_test`, `surface_temperature`,
+    `cloud_top_pressure` or `average_cloud_eod`; it adds `dd_004`,
+    `dd_col_p(_error)`, `x_h2o_col_p(_error)`, `target_id` and the
+    microwindows;
+  - **the DOF > 1.1 cut holds for CrIS:** on SNPP FS 2021-03-01 and
+    2021-05-15, the Summary rows are exactly the Standard rows with
+    `signal_dof` > 1.1 (6,498 of 18,788; 12,513 of 26,303), matched on time,
+    lat and lon. SNPP RS Summary has no Standard to compare with, so the cut
+    is inferred there.
+
 **Reader changes known to be needed** (`products/tropess.py`):
 - **Filter by instrument:** `list_granules` selects folders by stream and
   collection only; under `raw/CRIS` the SNPP and JPSS1 FS v1 folders both
@@ -266,9 +294,11 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
   `platform` or a new listing option.
 - **Summary-only granules,** if decision 1 is yes; today a missing Standard
   file is allowed only on declared one-sided days.
-- **Declared duplicate files** (R18), if decision 3 keeps one.
+- **Declared duplicate files** (R18): keep the R1p24 replacement, declare
+  the old file and check it.
 - **`FILE_RE`** accepts only `RS|FS`; the `SC_AUS` files are skipped
-  silently, which is right only if decision 4 is out.
+  silently, which is right now that decision 4 is out. The skip should
+  still be stated in config rather than left silent.
 - **The audit script** `tools/survey/tropess_file_audit.py` hard-codes the
   AIRS folders, file pattern and `Instrument`; generalise it, then run it on
   every CrIS file (develop job, ~1 core-hour for AIRS).
@@ -966,3 +996,4 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R32 | **TROPESS rows are not in time order** (2026-10-23). <br>- **RS** lists each AIRS granule's rows south to north (latitude increases on 96% of steps), so time runs forward on daytime ascending passes and backward on night-time descending ones. The backward jumps are short (p50 64 s, max 6.4 min; on RS 2010-06-15 sorting would move rows a median of 11 places). <br>- **FS** interleaves AIRS granules from different times of day, apparently in processing order. 36% of steps go back, up to 23 h; sorting would move rows a median of 8,212 places (FS 2022-06-01). <br>- Across days, RS never overlaps, but 175 FS files hold observations later than the next file's first, with no row in both (12 seams checked, 6,929 rows). <br>- **Repeats:** the audit found 0 repeated time, lat and lon within the Standard file of all 8,169 days with both files (`duplicate Standard keys 0`, audit log); the seams were sampled only. In place of the time check, the build and the verifier check every granule and every seam for a repeated observation (user decision 2026-10-23), so production completes the full-record check and stops on any repeat. | decided (user, 2026-10-23): source order kept, with the repeat check; style-guide exception reworded to require it (awaiting review) |
 | R33 | **`day_night_flag` changes `standard_name` within FS** (production verify 7924572, 2026-10-23; header scan of every FS file). Standard files 2021-02-01 .. 2022-03-27 (R1p11, R1p12, R1p13, R1p14 and R1p15 to 03-27; 360 files) say `day_binary_mask`; Standard from 2022-03-28 (mid-R1p15) and every Summary file say `sunlit_binary_mask`, as RS does throughout. The first production FS store took the first file's name, and the verifier failed it. | decided (user, 2026-10-23, option A): the FS store carries `sunlit_binary_mask`, declared in config `variable_attrs`, with the old name and the date of the change in its `comment`. The verifier checks a declared `standard_name` is one the source uses; the FS fixture's 2022-06-17 Standard file carries the early name |
 | R34 | **RS covers 50°S to 70°N only** (production `--attrs` dry run and stored geolocation, 2026-10-23): latitude -50.0 to 70.0 exactly, 1 observation at -50 and 5 at 70. FS reaches ~67°S to 85°N. | record only |
+| R35 | **CrIS-SNPP RS Summary has 134 dates without a file** in 2015-12-01 .. 2021-05-21 (1,865 of 1,999 days; scan of every file, 2026-10-26). CMR lists 1,865 granules, so the gaps are upstream. | open, for CrIS: list them in `expected_missing_days` from the audit |

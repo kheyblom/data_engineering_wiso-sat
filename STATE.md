@@ -15,6 +15,11 @@ Read this first in a new session. Update it whenever work lands.
   file's attributes in the audit: R33 reached production).
   - Settled: tokens `cris_snpp` and `cris_jpss1` with `source: tropess`;
     AIRS v2 is designed with CrIS-JPSS1 v2.
+  - **Answered 2026-10-26** (handoff, "Answers"): SNPP FS is its own
+    product; R18 keeps the R1p24 replacement; the SC Australian fires are
+    out. Decision 1 (SNPP RS is Summary-only) is re-checked from raw and
+    live CMR. It holds, and the user's choice is pending. Decision 5 (v2)
+    waits.
   - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
     2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
   - Start by laying the collections and decisions out for the user (as for
