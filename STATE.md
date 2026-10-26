@@ -36,15 +36,17 @@ Read this first in a new session. Update it whenever work lands.
     cases over 9 fixtures** (~15 min).
   - **The CrIS bench passed** (2026-10-26, TESTING.md Tier 2e): one month
     per product, 568, 883 and 884 checks, 0 failures; ~0.5 core-hours.
-    Compression as AIRS. Bench data in `wisosat_bench/` (stores ~1.7 GB and
-    symlinks) to delete with approval now that production is verified.
+    Compression as AIRS. **The CrIS bench data is deleted** (user approved
+    2026-10-26): its stores and symlink trees in `wisosat_bench/`. The
+    configs and stager stay, to rebuild it.
   - **CrIS v1 production is built and verified** (2026-10-26, from
     `537d3ca`; TESTING.md, CrIS v1 run log; ~4.2 core-hours): SNPP RS 12
     stores, 2,597,674 obs, 568 checks; SNPP FS 19 stores, 2,858,343 obs,
     883 checks; JPSS1 FS 19 stores, 47,391,889 obs, 885 checks; **0
     failures**, R37, R36, R22, R18 and R38 confirmed on the full record.
-    **Next: finalize** (`--attrs`, then `--tag v1-verified-YYYYMMDD`; no
-    `--expire` or `--gc` needed), each `--apply` signed off by the user.
+    Finalize: `--attrs` applied on all 50 stores (user approved
+    2026-10-26). **Next: `--tag v1-verified-20261026`** (dry run shown; no
+    `--expire` or `--gc` needed), signed off by the user.
     Was: the reader and shared changes
   - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
     (`time_order: source`, option 1), approved per product after
