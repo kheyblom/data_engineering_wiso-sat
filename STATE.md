@@ -14,9 +14,9 @@ Read this first in a new session. Update it whenever work lands.
   values**, so building both stores the same values twice. Since decided
   (2026-10-28, after a scan of every 10th day, TESTING.md finding 17): 17
   levels (R42), `altitude` from Full (R43), v1's 19 stores plus `quality`,
-  `averaging_kernel_h2o`, `air_density` and the three cross kernels. **Open:
-  Full only, or Standard as well** (the user leans to Full only). Next: the
-  full v2 audit tool, then the production subset for review in place.
+  `averaging_kernel_h2o`, `air_density` and the three cross kernels. **Full only
+  (user, 2026-10-28).** Next: the full v2 audit tool over every Full file
+  (show its job first), then the production subset for review in place.
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:

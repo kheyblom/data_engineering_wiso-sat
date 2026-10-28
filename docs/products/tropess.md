@@ -323,7 +323,7 @@ products' metadata state the version change and the change in sample at
 - the cross kernels (`hdo_hdo`, `hdo_h2o`, `h2o_hdo`) are in, with three new nomenclature rows;
 - the 67-level `species` and `constraint_vector` (R44) and the int8-packed 67x67 blocks are left out (addable later as stores of their own).
 
-Full only, or Standard as well, is still the user's to decide.
+**Full only (user, 2026-10-28).** v2 is one product per platform, built from the Full files: `wisosat.airs.v_2.fs.*` and `wisosat.cris_jpss1.v_2.fs.*`. Standard and Summary are not read; Standard's selection is `quality == 1` (R41), stored as its own variable.
 
 **Probes, 2026-10-28** (login node, one file per type: 2026-06-01 for AIRS
 and CrIS-JPSS1, plus 06-02 and 06-03 for repeats; v1 05-30 and 05-31 for
