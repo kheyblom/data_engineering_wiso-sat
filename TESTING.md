@@ -722,6 +722,34 @@ the configs' choice stands:
 | `..._observation_standard_error_log` | 9.7% | 8.6% | — |
 | `pressure` | **-8.2%** | -8.4% | -6.2% |
 
+## Tier 2f: the TROPESS v2 bench (passed 2026-10-28)
+
+The two v2 products (`tropess.md` V1-V9) at production settings on nine
+real days, 2026-06-01 .. 09 of Full files, symlinked by
+`validation/stage_bench_tropess.py` (`config/*_v2/config_zarr_bench.yaml`).
+They are the first runs of the shared changes on real data: slices with
+checked remainders, the `altitude` lookup, the joint kernel matrix store and
+the withheld `standard_name`. CrIS declares the span's own R37 count (843).
+All jobs ran on develop with 8 cores and 64 GB, each verify chained
+`afterany` on its build: ~0.6 core-hours charged (8 cores x ~4.5 min).
+
+| job | what | wall | cpu | memory (PBS) | result |
+| --- | --- | --- | --- | --- | --- |
+| 7991140 | AIRS v2 build, 22 stores, 2 commits | 1 min 8 s | 2 min 19 s | 20.9 GB; peak 8.53 GiB main, 3.04 GiB worker | 9 days, 321,504 obs |
+| 7991143 | AIRS v2 verify | 1 min 8 s | 2 min 18 s | 5.4 GB | **1,018 checks, 0 failures** |
+| 7991142 | CrIS-JPSS1 v2 build, 22 stores, 2 commits | 1 min 4 s | 2 min 4 s | 18.6 GB; peak 9.08 GiB main, 2.91 GiB worker | 9 days, 310,592 obs; 843 repeats left out, as declared |
+| 7991144 | CrIS-JPSS1 v2 verify | 1 min 12 s | 2 min 0 s | 9.5 GB | **1,065 checks, 0 failures** |
+
+- **Memory, as estimated:** 5 days a commit holds ~9 GiB in the main
+  process (the padded 34x34 kernels, read whole), ~19-21 GB for the job.
+  Production keeps 5 days a commit, so it needs no more.
+- **Size:** 1.3 GB (AIRS) and 1.2 GB (CrIS) for ~0.3 M obs, ~4.1 KB an
+  obs. The joint kernel store is 789 MB (53% of its 1.49 GB uncompressed),
+  the ratio kernel 297 MB (80%). Production estimates: AIRS ~4.2 GB (1.03 M
+  obs), CrIS ~18 GB (4.68 M obs).
+- **Speed:** ~7 s per day of build and of verify on 8 cores. Production
+  estimates: AIRS ~4 min each, CrIS ~16 min each.
+
 ## Tier 3: production
 
 Per product:

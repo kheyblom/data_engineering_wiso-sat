@@ -24,9 +24,11 @@ Read this first in a new session. Update it whenever work lands.
   source slices shaped for TES, D3 matrix stores, D4 the key; `tropess.md`
   V8 "Done"): configs `config/airs_fs_v2/`, `config/cris_jpss1_fs_v2/`
   (22 stores each), fixtures staged. **The full fixture test passes 445 cases over
-  11 fixtures** (2026-10-28, the two v2 included). Bench trees staged
-  (2026-06-01 .. 09, both instruments; `config_zarr_bench.yaml`). **Next: the
-  bench jobs (show them first).**
+  11 fixtures** (2026-10-28, the two v2 included). **The v2 bench passed**
+  (2026-10-28, TESTING.md Tier 2f): 9 days each, 1,018 and 1,065 checks, 0
+  failures, ~0.6 core-hours. **Next: production (show the jobs first).** The
+  bench stores and symlink trees in `wisosat_bench/*_v2` are throwaway
+  (delete only with approval).
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
@@ -178,7 +180,8 @@ Read this first in a new session. Update it whenever work lands.
   ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2;
   SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8); AIRS v1
   ~6.6 (audit ~1, benches ~0.1, production ~5.5); CrIS v1 ~5.3 (audit
-  ~0.6, bench ~0.5, production ~4.2).
+  ~0.6, bench ~0.5, production ~4.2); TROPESS v2 so far ~1 (audit and level
+  scan ~0.4, bench ~0.6).
 
 ## Next: candidates (ask the user which)
 
