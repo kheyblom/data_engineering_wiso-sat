@@ -30,8 +30,9 @@ Read this first in a new session. Update it whenever work lands.
   (2026-10-28, from `5148f6c`; TESTING.md, TROPESS v2 run log; ~2.3
   core-hours): AIRS 22 stores, 1,028,658 obs, 1,018 checks; CrIS-JPSS1 22
   stores, 4,676,513 obs, 1,065 checks; **0 failures**. The v2 bench data is
-  deleted (user approved). **Next: finalize, `--attrs` then `--tag
-  v2-verified-20261028`, each `--apply` signed off by the user.**
+  deleted (user approved). `finalize --attrs` applied on all 44 stores
+  (user sign-off 2026-10-28). **Next: `--tag v2-verified-20261028`, its
+  `--apply` signed off by the user.**
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
