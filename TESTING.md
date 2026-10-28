@@ -311,6 +311,31 @@ repo; their results are below and in `tropess.md`, R36-R39).
   2025-06-18 when the session ended; its counts were partial. The repeat
   counts above are from a complete second pass (time, lat and lon only).
 
+### 17. TROPESS v2 levels, every 10th day (2026-10-28, develop job 7989303, 52 s)
+
+`tools/survey/tropess_v2_levels.py --every 10` (the user's sample for R42)
+read every 10th v2 day of each instrument whole: AIRS 06-01, 06-11 and 06-21;
+CrIS-JPSS1 06-01 .. 10-09 (14 days). That is 51 files, Summary, Standard and
+Full each day, on 8 cores, at well under 1 core-hour. There were no read
+errors. Output: `/glade/derecho/scratch/$USER/data/wisosat/audit/tropess_v2_levels.jsonl`
+and `.log`. Every one-day probe finding held (`tropess.md`, R41-R43):
+
+- **R42:** every 34-wide axis has no value in 17-33 (64 array-axes over
+  the three types and two instruments), except:
+  - Full `pressure_ret` and both `air_density`s, whose 17-33 equals 0-16
+    on every row;
+  - Standard `altitude`.
+  
+  Full `air_density` slots 34-66 are never written, and its 0-33 equals
+  Standard's x N_A (max rel 1.05e-7, the same fill).
+- **R41:** Standard's rows are exactly Full's `quality == 1` rows, in order,
+  on every day (CrIS 310,487 of 478,709; AIRS 48,312 of 107,085). Summary's
+  rows are Standard's, and Summary equals Standard 0-16 in `x`, `x_h2o` and
+  `pressure`.
+- **R43:** Standard `altitude` flattened to (2n, 17) gives Summary's
+  altitudes on every row (CrIS 310,487, AIRS 48,312). Only row 0 of each
+  file holds its own; the remaining flat rows are zeros, one fill each.
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445
