@@ -394,7 +394,9 @@ the seam). Scripts and output were kept in the session scratchpad only.
     R32.
 - **The v1/v2 seam is clean.** No row or footprint is shared between v1's
   05-30 and 05-31 Standard and v2's 06-01 and 06-02 Standard or Full, for
-  either instrument. v2 06-01 holds no row before its date.
+  either instrument. (Corrected 2026-10-28: CrIS v2 06-01 holds one row
+  dated 2026-05-31T23:59:59 UTC, the start of the store's time coverage;
+  it is not in v1. AIRS v2 06-01 holds none.)
 - **The sample changes at the seam anyway.** Rows per day: CrIS v1 05-31
   23,868 (every row), v2 06-01 Full 35,300 and Standard 21,939. AIRS v1
   05-31 28,289; v2 Full 37,251 and Standard 15,679. v2 retrieves more

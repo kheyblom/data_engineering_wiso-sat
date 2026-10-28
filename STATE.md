@@ -26,9 +26,12 @@ Read this first in a new session. Update it whenever work lands.
   (22 stores each), fixtures staged. **The full fixture test passes 445 cases over
   11 fixtures** (2026-10-28, the two v2 included). **The v2 bench passed**
   (2026-10-28, TESTING.md Tier 2f): 9 days each, 1,018 and 1,065 checks, 0
-  failures, ~0.6 core-hours. **Next: production (show the jobs first).** The
-  bench stores and symlink trees in `wisosat_bench/*_v2` are throwaway
-  (delete only with approval).
+  failures, ~0.6 core-hours. **v2 production is built and verified**
+  (2026-10-28, from `5148f6c`; TESTING.md, TROPESS v2 run log; ~2.3
+  core-hours): AIRS 22 stores, 1,028,658 obs, 1,018 checks; CrIS-JPSS1 22
+  stores, 4,676,513 obs, 1,065 checks; **0 failures**. The v2 bench data is
+  deleted (user approved). **Next: finalize, `--attrs` then `--tag
+  v2-verified-20261028`, each `--apply` signed off by the user.**
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:

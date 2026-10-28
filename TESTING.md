@@ -1253,3 +1253,24 @@ Every observation matched raw bit for bit. The obs counts are the subset's
   `--attrs`, then `--tag v1-verified-20261026`, on all 50 stores. None is
   sharded and none held anything unreachable, so no `--expire` or `--gc`.
   `--status`: every store "remaining nothing, finalized".
+
+### TROPESS v2 run log (2026-10-28)
+
+Both v2 products (`tropess.md` V1-V9), built from clean commit `5148f6c` on
+develop with 8 cores and 48 GB, each verify chained `afterany` on its
+build: ~2.3 core-hours charged (8 cores x 17.6 min).
+
+| job | what | wall | cpu | memory (PBS) | result |
+| --- | --- | --- | --- | --- | --- |
+| 7991198 | AIRS v2 build, 22 stores, 6 commits | 2 min 0 s | 7 min 43 s | 22.5 GB; peak 9.95 GiB main | 30 days, 2026-06-01 .. 30; 1,028,658 obs |
+| 7991202 | AIRS v2 verify | 1 min 32 s | 8 min 29 s | 12.3 GB | **1,018 checks, 0 failures** |
+| 7991200 | CrIS-JPSS1 v2 build, 22 stores, 28 commits | 8 min 12 s | 33 min | 28.9 GB; peak 10.30 GiB main | 137 days, 2026-06-01 .. 10-15; 4,676,513 obs; 11,382 R37 repeats left out in 123 granules, as declared |
+| 7991203 | CrIS-JPSS1 v2 verify | 5 min 54 s | 42 min | 22.8 GB | **1,065 checks, 0 failures** |
+
+- **Every count is the planned one:** obs as the audit less R37 (V1).
+- **On disk:** AIRS 4.1 GB, CrIS 22 GB (the bench's estimate was 18).
+- **Coverage (finalize dry run):** AIRS 2026-06-01T00:28:29 ..
+  06-30T23:59:55, lat -56.2 .. 85.0; CrIS 2026-05-31T23:59:59 ..
+  10-16T08:59:55, lat -66.8 .. 85.0.
+- **The v2 bench data is deleted** (user approval 2026-10-28): its stores
+  and symlink trees in `wisosat_bench/`; the configs and stager stay.
