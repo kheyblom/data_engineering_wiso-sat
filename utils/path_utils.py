@@ -51,11 +51,11 @@ QUALITY_FLAG_PREFIX = 'quality_flags'
 VERSION_PART_RE = re.compile(r'[A-Za-z]+|\d+')
 
 
-def load_config(file_path: str) -> dict:
+def load_config(file_path: str | os.PathLike[str]) -> dict:
     """Load YAML configuration from a file.
 
     Args:
-        file_path (str): Path to the YAML configuration file.
+        file_path (str | os.PathLike[str]): Path to the YAML configuration file.
 
     Returns:
         dict: The loaded configuration.
