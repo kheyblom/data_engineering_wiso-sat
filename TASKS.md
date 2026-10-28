@@ -69,8 +69,10 @@ AIRS v1 production built, verified and finalized 2026-10-23: two products
 (RS, FS), 38 stores, 0 failures, tag `v1-verified-20261023`. CrIS v1
 2026-10-26: three products (SNPP RS, SNPP FS, JPSS1 FS), 50 stores, 0
 failures, tag `v1-verified-20261026` (`docs/products/tropess.md`; TESTING.md
-run logs). Next for TROPESS: v2, AIRS and CrIS-JPSS1 together
-(`tropess.md`, "v2: handoff").
+run logs). TROPESS v2 (AIRS and CrIS-JPSS1, Full files) 2026-10-28: two
+products, 44 stores, 0 failures, tag `v2-verified-20261028` (`tropess.md`
+V1-V9; TESTING.md, TROPESS v2 run log); later days are appended as they are
+downloaded. Remaining for task 6: IASI and TES.
 
 GOSAT production built, verified and finalized 2026-10-19: 12 stores,
 8,856,028 observations, 0 failures, tag `v3.0.1-verified-20261019`
@@ -112,8 +114,9 @@ needed eventually; all were deferred from the first production subset.
     done; bench passed 2026-10-19 (TESTING.md Tier 2b); **production built,
     verified and finalized 2026-10-22** (tag `v8.1-verified-20261022`, 19.6
     TiB, ~815 core-hours).
-  - TES and IASI first need multi-array variable stores in the shared
-    code (N18).
+  - Multi-array (matrix) stores (N18) and source slices are built
+    (2026-10-28, for TROPESS v2's joint kernel, shaped for TES). IASI still
+    needs its rank padding (N10).
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).

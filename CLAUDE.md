@@ -44,11 +44,11 @@ stores.
 | TROPOMI (SRON HDO L2, processor 8.1) | `TROPOMI/tropomi.grid.surfsara.nl/hdo/YYYY/MM/DD/<orbit>/` | orbit | production finalized: 19 stores 2026-10-18, tag `v8.1-verified-20261018` (findings 9-10); the 6 model-comparison stores 2026-10-22, tag `v8.1-verified-20261022` (finding 12) |
 | SCIAMACHY (SRON SICOR L2) | `SCIAMACHY/HDO_SICORv10/YYYYMM/` | orbit file | production finalized 2026-10-22, tag `v8.1-verified-20261022` (22 stores; `docs/products/sciamachy.md`; TESTING.md findings 13-14) |
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT: production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (12 stores; geolocation rebuilt without `pressure`, which has its own store). GOSAT-2: production finalized 2026-10-22, tag `v3.0.1-verified-20261022` (12 stores; `source: gosat`) |
-| AIRS (TROPESS v1; one product per stream, RS and FS, Summary merged into Standard per day) | `AIRS/TRPS?L2HDOAIRS*` (`config/airs_rs/`, `config/airs_fs/`; `source: tropess`) | day (2 files) | v1 production finalized 2026-10-23, tag `v1-verified-20261023` (19 stores per stream; `docs/products/tropess.md`; TESTING.md AIRS v1 run log); v2 next, with CrIS-JPSS1 v2 (`tropess.md`, "v2: handoff") |
+| AIRS (TROPESS v1; one product per stream, RS and FS, Summary merged into Standard per day) | `AIRS/TRPS?L2HDOAIRS*` (`config/airs_rs/`, `config/airs_fs/`; `source: tropess`) | day (2 files) | v1 production finalized 2026-10-23, tag `v1-verified-20261023` (19 stores per stream; `docs/products/tropess.md`; TESTING.md AIRS v1 run log); v2 finalized 2026-10-28 (row below) |
 | CrIS (TROPESS; SNPP RS Summary-only, SNPP FS, JPSS1 FS) | `CRIS/TRPS?L2HDOCRS*` (`config/cris_snpp_rs/`, `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; `source: tropess`) | day (1-2 files) | production finalized 2026-10-26, tag `v1-verified-20261026` (12, 19 and 19 stores; `tropess.md` C1-C8; TESTING.md CrIS v1 run log) |
 | AIRS and CrIS-JPSS1 v2 (TROPESS collection 2, Full only) | `AIRS/TRPSFL2HDOAIRSFS.2/`, `CRIS/TRPSFL2HDOCRS1FS.2/` (`config/airs_fs_v2/`, `config/cris_jpss1_fs_v2/`; `source: tropess_v2`) | day (1 file) | production finalized 2026-10-28, tag `v2-verified-20261028` (22 stores each; `tropess.md` V1-V9; TESTING.md Tier 2f and TROPESS v2 run log); later days appended as downloaded |
-| IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
-| TES (L2 HDO Nadir Lite v006) | `TES/TL2HDOLN_6-*/` | monthly file | later |
+| IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | next candidate (store version I7 to decide first) |
+| TES (L2 HDO Nadir Lite v006) | `TES/TL2HDOLN_6-*/` | monthly file | next candidate (slices and matrix stores now exist for its stacked state) |
 
 - **Out of scope:**
   - L3 / gridded files: `AIRS_TROPESS_gridded_*`, the IASI data bag

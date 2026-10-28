@@ -207,6 +207,10 @@ kept.
 
 ## v2: handoff (written 2026-10-26, for a new session)
 
+*Historical: v2 was decided, built and finalized 2026-10-28. What follows
+was the starting point; the answers and the probes below supersede it (R25's
+"cut at DOF >= 1.1" is R41's `quality == 1`).*
+
 AIRS v1 and CrIS v1 are finished (tags `v1-verified-20261023` and
 `v1-verified-20261026`). What remains of TROPESS is **v2, for AIRS and
 CrIS-JPSS1 together** (user decision 2026-10-23): decision 5 of the CrIS

@@ -2,205 +2,72 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-10-26)
+## Where we are (2026-10-28)
 
-**Nothing is running.** No batch jobs are queued.
-- **TROPESS v2 (AIRS and CrIS-JPSS1) is finished (2026-10-28): 44 stores,
-  tag `v2-verified-20261028`.** No task is current; see Next: candidates. **Decision 5
-  answered 2026-10-28; first probes done** (`tropess.md`, "v2: answers
-  (user, 2026-10-28) and first probes"; R41-R44). The user chose both
-  Standard and Full, v1's variables plus v2's new ones, to build now, and
-  v1 exceptions only where the situation is the same. **The probes found
-  v2 Standard to be exactly Full's `quality == 1` rows with identical
-  values**, so building both stores the same values twice. Since decided
-  (2026-10-28, after a scan of every 10th day, TESTING.md finding 17): 17
-  levels (R42), `altitude` from Full (R43), v1's 19 stores plus `quality`,
-  `averaging_kernel_h2o`, `air_density` and the three cross kernels. **Full only
-  (user, 2026-10-28).** The v2 Full audit ran (job 7989391, TESTING.md
-  finding 18; R45, R46). **The v2 production subset is approved
-  (2026-10-28, Q1-Q3 as proposed)** (`tropess.md`, "v2 production subset", V1-V8;
-  Q1 `averaging_kernel_h2o` as the joint store's H2O block, Q2 the
-  `air_density` row, Q3 non-CF retained `standard_name`s). **Code done
-  2026-10-28** (V9 design, user-approved: D1 a v2 reader and key, D2 general
-  source slices shaped for TES, D3 matrix stores, D4 the key; `tropess.md`
-  V8 "Done"): configs `config/airs_fs_v2/`, `config/cris_jpss1_fs_v2/`
-  (22 stores each), fixtures staged. **The full fixture test passes 445 cases over
-  11 fixtures** (2026-10-28, the two v2 included). **The v2 bench passed**
-  (2026-10-28, TESTING.md Tier 2f): 9 days each, 1,018 and 1,065 checks, 0
-  failures, ~0.6 core-hours. **v2 production is built and verified**
-  (2026-10-28, from `5148f6c`; TESTING.md, TROPESS v2 run log; ~2.3
-  core-hours): AIRS 22 stores, 1,028,658 obs, 1,018 checks; CrIS-JPSS1 22
-  stores, 4,676,513 obs, 1,065 checks; **0 failures**. The v2 bench data is
-  deleted (user approved). **Finalized 2026-10-28**: `--attrs` and
-  `--tag v2-verified-20261028` on all 44 stores, each `--apply` signed off
-  by the user; no `--expire` or `--gc` needed. **TROPESS v2 is finished.**
-  Later CrIS (and AIRS) v2 days are appended when downloaded: re-declare
-  the R37 count, build (resumes), verify, new tag (`tropess.md` V8, 6).
-  Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
-  not occur in v2. The v1/v2 seam shares no rows.
-- **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
-  handoff", first. It holds what
-  is settled (a separate `v_2` store set), what is on disk (AIRS 30 days,
-  CrIS-JPSS1 139 days, each in Summary, Standard and Full), the layout
-  known from R25, the decision to lay out for the user (which type: Standard
-  is already cut at DOF >= 1.1, Full keeps every row at 9-13x the size; the
-  variables; when; the v1/v2 seam), and the code that assumes v1. **No v1
-  exception carries over without the user's approval** (R40 time order,
-  R37 repeats): measure, then ask.
-- **CrIS v1 is finished (task 6): 50 stores finalized 2026-10-26**, tag
-  `v1-verified-20261026`, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_{snpp,jpss1}/`.
-  The history of the CrIS work follows. **`docs/products/tropess.md`,
-  section "CrIS: handoff"**
-  holds what is settled, the five decisions the user must make before any
-  code (SNPP RS is Summary-only upstream; SNPP FS overlaps; R18 duplicate
-  files; the SC Australian-fire collection; v2 with AIRS v2), the reader
-  changes known to be needed (filter by instrument first: SNPP and JPSS1 FS
-  folders would otherwise collide), and the lessons from AIRS (scan every
-  file's attributes in the audit: R33 reached production).
-  - Settled: tokens `cris_snpp` and `cris_jpss1` with `source: tropess`;
-    AIRS v2 is designed with CrIS-JPSS1 v2.
-  - **Answered 2026-10-26** (handoff, "Answers"): SNPP FS is its own
-    product; R18 keeps the R1p24 replacement; the SC Australian fires are
-    out; SNPP RS is built Summary-only (re-checked from raw and live CMR
-    first). Decision 5 (v2) waits.
-  - **The CrIS v1 audit ran** 2026-10-26 (develop job 7960036, ~0.6
-    core-hours; TESTING.md finding 16). The AIRS assumptions hold; new
-    issues R36-R39 in `tropess.md`. Decided 2026-10-26: R36 `land_flag`
-    masked as a declared defect on the 324 files; R38 `sunlit_binary_mask`
-    declared as for AIRS FS; R37 each repeated footprint stored once, the
-    newest algorithm's copy, then the latest `ProductionDateTime`
-    (`docs/cris-repeats-r37.md`, Decision).
-  - **The CrIS production subset is approved** (2026-10-26; Q1 yes, Q2 as
-    proposed): `tropess.md`, "CrIS v1 production subset" (C1-C8; 50
-    stores).
-  - **The reader, shared changes, configs and fixtures are done**
-    (2026-10-26; CLAUDE.md, "Added for CrIS"): `config/cris_snpp_rs/`,
-    `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; R37 counts measured
-    and declared (620, 8,057, 136,707). **The fixture test passes 350
-    cases over 9 fixtures** (~15 min).
-  - **The CrIS bench passed** (2026-10-26, TESTING.md Tier 2e): one month
-    per product, 568, 883 and 884 checks, 0 failures; ~0.5 core-hours.
-    Compression as AIRS. **The CrIS bench data is deleted** (user approved
-    2026-10-26): its stores and symlink trees in `wisosat_bench/`. The
-    configs and stager stay, to rebuild it.
-  - **CrIS v1 production is built and verified** (2026-10-26, from
-    `537d3ca`; TESTING.md, CrIS v1 run log; ~4.2 core-hours): SNPP RS 12
-    stores, 2,597,674 obs, 568 checks; SNPP FS 19 stores, 2,858,343 obs,
-    883 checks; JPSS1 FS 19 stores, 47,391,889 obs, 885 checks; **0
-    failures**, R37, R36, R22, R18 and R38 confirmed on the full record.
-    **Finalized 2026-10-26**, tag `v1-verified-20261026` on all 50 stores
-    (`--attrs` and `--tag`, each signed off by the user; no `--expire` or
-    `--gc` needed). **CrIS v1 is finished.** Decision 5 (v2 for AIRS and
-    CrIS-JPSS1) still waits.
-    Was: the reader and shared changes
-  - **R40 decided (user, 2026-10-26): CrIS keeps the source row order**
-    (`time_order: source`, option 1), approved per product after
-    measuring every file; it had been carried over from AIRS without asking
-    and was held until then. (instrument filter,
-    Summary-only granules, R18 declared file, whole-file declared mask,
-    the R37 rule with look-ahead), fixtures, the full test, a bench.
-  - Every CrIS collection is on disk under `raw/CRIS/` (downloaded
-    2026-10-22; `~/work/data_access/access_tropess/HANDBACK.md`).
-  - Start by laying the collections and decisions out for the user (as for
-    AIRS), then generalise and run the audit.
-- **AIRS v1 is finished: 38 stores, all finalized** 2026-10-23, tag
-  `v1-verified-20261023`, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`: two products of
-  19 stores each (geolocation, `pressure`, 17 variable stores), on their own
-  obs axes.
-  - **RS** `wisosat.airs.v_1.rs.*`: 6,363 days, 2002-08-30 .. 2020-03-31,
-    17,109,546 obs, 50°S to 70°N (R34), 20.1 GiB; 842 checks, 0 failures.
-  - **FS** `wisosat.airs.v_1.fs.*`: 1,820 days, 2021-02-01 .. 2026-05-31,
-    47,882,856 obs, 55.6 GiB; 843 checks, 0 failures.
-  - Decisions, evidence and issues R1-R34: `docs/products/tropess.md`
-    (Product scheme; production subset P1-P8). Audit, bench and run:
-    TESTING.md finding 15, Tier 2d and the AIRS v1 run log.
-  - Summary merged into Standard per day; the row-0 `x` defect (R22) masked
-    as declared; rows in source order with the repeat check in place of the
-    time order (R32; style_guides `43b6b51`); blosc on the six 2-D arrays;
-    FS `day_night_flag` carries `sunlit_binary_mask`, TROPESS renamed it
-    mid-record (R33).
-  - Shared code added for it (CLAUDE.md, Layout): `version_product`,
-    `time_order`, `check_repeats`, `declared_masked_values`, `source_dtypes`,
-    `expected_partial_granules`, a reader's `LISTING_OPTIONS` and
-    `INDEX_EXTRA`, and declared `standard_name`s checked against the source.
-  - ~6.6 core-hours in all: audit ~1, benches ~0.1, production ~5.5 (with
-    the R33 rebuild and two FS re-verifies).
-- **The AIRS bench data is deleted** (user approved 2026-10-23): its stores
-  and symlink trees in `wisosat_bench/`. The configs and stager stay, to
-  rebuild it.
-- **The fixture test passes 445 cases** over 11 fixtures (~15 min, login
-  node), 2026-10-28.
+**Nothing is running; no batch job is queued; no task is current.** Start a
+new session by asking the user which of "Next: candidates" to take on.
 
-- **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
-  testing tiers (`TESTING.md`) are in place.
-- **TROPOMI is finished: 25 stores, all finalized**, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`, on one obs
-  axis (32,657,526,234 obs, 38,645 orbits) and one granule index.
-  - 19 stores, tag `v8.1-verified-20261018` (~1.8 TiB): geolocation (time,
-    lat, lon, pixel corners), 16 variable stores, `scanline_index`,
-    `ground_pixel_index`.
-  - **6 model-comparison stores, tag `v8.1-verified-20261022`** (19.6 TiB):
-    both column kernels, both a priori partial columns,
-    `dry_air_partial_column`, `pressure` (its own store). Blosc zstd 5 +
-    shuffle, sharded at 4,194,304 obs, build snapshots expired and
-    garbage-collected (~7,800 chunk files per store).
-  - Run logs, every job and its cost: `TESTING.md` Tier 2, 2b and 3; findings
-    9-12. Product facts, issues T1-T22 and the variable inventory:
-    `docs/products/tropomi.md`.
-- **GOSAT is finished: 12 stores, all finalized**, tag
-  `v3.0.1-verified-20261019`, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/`: geolocation
-  (time, lat, lon), `pressure`, and 10 variable stores including the kernel,
-  the a priori and the pressure weight. 8,856,028 obs. The geolocation store
-  was rebuilt without `pressure` on 2026-10-19; its backup is deleted.
-  Re-checked complete 2026-10-22 (every store: all 4,498 raw days, one obs
-  axis, tag at the tip).
-- **GOSAT-2 is finished: 12 stores, all finalized** 2026-10-22, tag
-  `v3.0.1-verified-20261022`, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat2/` (163 MB): the
-  same 12 stores as GOSAT, 1,010 days, 1,620,006 obs, 478 checks and 0
-  failures. Read with the GOSAT reader and key through the config's `source`;
-  `platform: GOSAT2` checked on every file (both user-approved 2026-10-22; the
-  51 missing days declared as found). Run log: TESTING.md, GOSAT-2 run log.
-- **SCIAMACHY is finished: 22 stores, all finalized** 2026-10-22, tag
-  `v8.1-verified-20261022`, in
-  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/` (87.5 GiB):
-  geolocation (with corners), the 5 core stores (no δD is published), 10
-  filter and TROPOMI-aligned stores, 5 model-comparison stores and
-  `pressure`. 41,616 orbits, 78,666,297 obs, 879 checks and 0 failures.
-  - Decisions and evidence: `docs/products/sciamachy.md` (Production subset,
-    P1-P6; issues S1-S11). Audit, bench and run: TESTING.md finding 13, Tier
-    2c (finding 14) and the SCIAMACHY run log.
-  - Two defects left out by `declared_rows_left_out`: S8, orbit 15838's
-    repeats; S9, 45262's 32 overlap rows, **a one-time exception** to
-    keeping every observation.
-  - Shared code added for it: declared rows, a reader `COVERAGE_FREQUENCY`
-    (monthly for SCIAMACHY), and `ChunkSpans` in the verifier, which cut
-    its CPU ~10x on small granules (finding 14).
-- **The cross-product naming pass is done** (task 7, steps 1-2):
-  `docs/model-comparison-naming.md` (N1-N18); rows in style_guides
-  `a585066`, `fee64ec`, `65ac688` (the `pressure` row and rule).
-- **Compute used so far:** TROPOMI ~380 core-hours for the 19 stores, ~835
-  for the 6 model-comparison stores (benches and diagnostic ~19, production
-  ~815, the overrun approved by the user); GOSAT ~0.5; GOSAT-2 ~0.2;
-  SCIAMACHY ~8 (audit ~0.8, two benches ~1.2, production ~5.8); AIRS v1
-  ~6.6 (audit ~1, benches ~0.1, production ~5.5); CrIS v1 ~5.3 (audit
-  ~0.6, bench ~0.5, production ~4.2); TROPESS v2 so far ~1 (audit and level
-  scan ~0.4, bench ~0.6).
+**Finished products** (every store finalized: `--attrs` and a tag, each
+`--apply` signed off by the user). Facts, decisions and issues are in each
+`docs/products/<product>.md`; audits, benches and run logs in TESTING.md.
+
+| product | stores | tag | zarr folder under `.../data/wisosat/zarr/` | obs |
+| --- | --- | --- | --- | --- |
+| TROPOMI | 19 + 6 model-comparison | `v8.1-verified-20261018`, `v8.1-verified-20261022` | `tropomi/` (~21 TiB) | 32,657,526,234 |
+| GOSAT | 12 | `v3.0.1-verified-20261019` | `gosat/` | 8,856,028 |
+| GOSAT-2 | 12 | `v3.0.1-verified-20261022` | `gosat2/` | 1,620,006 |
+| SCIAMACHY | 22 | `v8.1-verified-20261022` | `sciamachy/` (87.5 GiB) | 78,666,297 |
+| AIRS v1 RS, FS | 19 + 19 | `v1-verified-20261023` | `airs/` | 17,109,546; 47,882,856 |
+| CrIS v1 SNPP RS, SNPP FS, JPSS1 FS | 12 + 19 + 19 | `v1-verified-20261026` | `cris_snpp/`, `cris_jpss1/` | 2,597,674; 2,858,343; 47,391,889 |
+| AIRS v2, CrIS-JPSS1 v2 (Full) | 22 + 22 | `v2-verified-20261028` | `airs/`, `cris_jpss1/` (4.1 GB, 22 GB) | 1,028,658; 4,676,513 |
+
+- **TROPESS v2, finished 2026-10-28** (`tropess.md`: "v2: answers" and the
+  "v2 production subset" V1-V9; issues R41-R46; TESTING.md findings 17-18,
+  Tier 2f and the TROPESS v2 run log; ~3.3 core-hours in all):
+  - built from the **Full** files only (the v2 Standard product is exactly
+    Full's `quality == 1` rows, R41), on v1's **17 levels** (the 34-wide
+    retrieval dimension is 17 padded, R42), `altitude` read from Full's
+    67-level grid at the retrieval pressures (Standard's is misplaced, R43);
+  - 22 stores each: v1's 19, `quality_flags_retrieval`, `air_molar_density`
+    (new style_guides row `4711fe4`; source `standard_name` withheld, an
+    approved exception) and the joint HDO/H2O kernel as one matrix store;
+  - v1 exceptions carried only where the situation is the same (user rule
+    2026-10-28): R11 (left out), R32 and R40 (source order), R37 (CrIS
+    repeats, 11,382 left out). R22, R36 and R38 do not occur in v2. The
+    v1/v2 seam shares no observation;
+  - **later days are appended** as the data-access session downloads them
+    (CrIS v2 grows daily upstream): stage nothing, but re-declare CrIS's R37
+    count first (measure with the reader's rule), then build (resumes),
+    verify, finalize with a new tag (`tropess.md` V8, step 6). Show each job.
+- **Shared code added for TROPESS v2** (CLAUDE.md, "Added for TROPESS v2"):
+  source slices in the key with checked remainders, `level_lookups`, matrix
+  stores (N18), `withheld_standard_names`. Slices and matrix stores were
+  shaped for **TES**'s stacked HDO/H2O state (`tes.md` E1), which now needs
+  no new mechanism for its blocks.
+- **The fixture test passes 445 cases over 11 fixtures** (~15 min, login
+  node, 2026-10-28).
+- **Tasks 1-5 and the cross-product naming pass (task 7) are done**
+  (`docs/model-comparison-naming.md`, N1-N18).
+- **Compute used:** TROPOMI ~380 core-hours for the 19 stores and ~835 for
+  the 6 model-comparison stores (the overrun approved by the user); GOSAT
+  ~0.5; GOSAT-2 ~0.2; SCIAMACHY ~8; AIRS v1 ~6.6; CrIS v1 ~5.3; TROPESS v2
+  ~3.3.
 
 ## Next: candidates (ask the user which)
 
 The data-lake home for finished stores is not a candidate: the user will say
 when it is time (2026-10-22).
 
-1. **The other products** (task 6): IASI, TES (TROPESS v2 done
-   2026-10-28; its source slices and matrix stores serve TES's stacked
-   state). Each gets a reader at fixture level first, then bench, then
-   production. Their open issues are under Open items. TES and IASI need
-   multi-array variable stores in the shared code (N18) for their kernels.
-   AIRS v1 and CrIS v1 are finished.
+1. **The other products** (task 6): IASI and TES, the last two. Each gets
+   the same path as TROPESS v2: lay the decisions out for the user, an audit
+   of every file, the production subset reviewed in place, the reader at
+   fixture level, the full fixture test, a bench, production, finalize.
+   Their open issues are under Open items.
+   - **TES:** matrix stores and source slices now exist (its 34-level
+     stacked state splits by slice; its 4 blocks per matrix are one store
+     each). Raw `TES/TL2HDOLN_6-*/`, monthly files; 2011-2015 absent.
+   - **IASI:** the store version (I7) must be decided first; the rank
+     padding to the record maximum (N10, I6) is still to build.
 2. **GOSAT `dry_column`** (held, N11; `gosat.md` G7): ~1/4 of the
    hydrostatic dry column, with no area in its unit. Resolve from the
    GHG-CCI PSD v3 or by asking IUP, then add as `dry_air_partial_column`
@@ -215,9 +82,13 @@ when it is time (2026-10-22).
 ## Open items
 
 - **Throwaway data on scratch** (delete only with approval):
-  `/glade/derecho/scratch/kheyblom/data/wisosat_bench/` (25 bench stores of
-  2020-07, roughly 280 GiB with the 2-D stores' superseded shards) and
-  `wisosat_fixture/` (rebuilt by the test).
+  `/glade/derecho/scratch/kheyblom/data/wisosat_bench/tropomi` (25 bench
+  stores of 2020-07, roughly 280 GiB with the 2-D stores' superseded
+  shards; every other bench is deleted) and `wisosat_fixture/` (staged raw
+  and stores rebuilt by the test, ~100 MB of raw).
+- **Audit outputs** under `/glade/derecho/scratch/kheyblom/data/wisosat/audit/`
+  (`tropess_v2_audit.*`, `tropess_v2_levels.*` and the v1 ones): the
+  evidence behind TESTING.md findings 15-18; small, keep.
 - **Deleted 2026-10-22 with the user's approval:** the SCIAMACHY bench (22
   stores, 2.2 GiB, and its 3 raw symlinks) and the raw tree's 22 hidden
   `.ArchiveServiceTemp.sb-*` folders (S5; 3,350 duplicate orbit files, 13
@@ -242,7 +113,14 @@ when it is time (2026-10-22).
     it to the TROPESS team is optional.
   - **TROPESS R12:** confirm that `observation_error_h2o` is 1-sigma.
   - **TES:** `ObservationErrorCovariance` has no `Units`; declare
-    `ln(vmr)^2`. Confirm the TROPESS kernel's row/column convention.
+    `ln(vmr)^2`. Confirm its kernel's row/column convention (TROPESS v2's
+    joint blocks are rows retrieved, columns true: the ratio kernel equals
+    `hdo_hdo` - `h2o_hdo` to 1e-6, finding 18; a TES test of the same kind
+    may settle it).
+  - **TROPESS v2, for later:** the int8-packed 67x67 blocks and the
+    67-level `species` / prior (R44) are left out; addable as stores of
+    their own (the packed ones need TROPESS's `tropess_compression` and an
+    independent decoder in the verifier).
 - **Elsewhere:** GLEAM and MSWEP carry a deferred task 2 (add `cdm_data_type:
   Grid`; `standard_name` from the source only).
 
@@ -296,6 +174,9 @@ when it is time (2026-10-22).
     cpus granted.
 - **Sizes that worked (develop, 6 h maximum; develop allows up to 256
   cores):**
+  - TROPESS v2 build or verify: 8 cores, 48 GB, 5 days per commit (the
+    padded 34x34 kernels are read whole, ~1 GB a day); CrIS 137 days ~8 min
+    build, ~6 min verify. Every other TROPESS product: 8 cores, 32 GB.
   - TROPOMI 1-D build or verify: 8 cores, 32 GB, ~4 h each.
   - TROPOMI 2-D build: 8 cores, 128 GB, 10 granules per commit, ~46 h in
     6 h jobs chained `afterany` (builds resume). Verify: 64 cores, 200 GB,
@@ -380,5 +261,15 @@ when it is time (2026-10-22).
   defective files, declared; R38 `sunlit_binary_mask` declared; **R37 each
   repeated footprint stored once, newest algorithm then latest
   `ProductionDateTime`** (an approved exception, `docs/cris-repeats-r37.md`).
+- **TROPESS v2 (2026-10-28; `tropess.md` v2 answers and V1-V9):** Full
+  only, a separate `v_2.fs` product per platform; 17 levels kept, the rest
+  checked; `altitude` from Full; v1's 19 stores plus the quality flag, air
+  molar density (no `standard_name`, Q2) and the joint kernel as one matrix
+  store (`averaging_kernel_h2o` is its H2O block, Q1); non-CF source
+  `standard_name`s retained (Q3); the int8-packed blocks and the 67-level
+  fields left out; built now, appended later.
+- **A v1 exception carries over to a new collection only if the situation is
+  the same** (user, 2026-10-28); where the setup or the need differs, the
+  user approves it again. Measure, then say which.
 - **Downloads are done outside this repo** (2026-10-22): a separate
   data-access session fetches raw data; this repo only reads it.
