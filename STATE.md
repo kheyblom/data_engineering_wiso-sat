@@ -5,7 +5,8 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-26)
 
 **Nothing is running.** No batch jobs are queued.
-- **Current task: TROPESS v2 (AIRS and CrIS-JPSS1 together).** **Decision 5
+- **TROPESS v2 (AIRS and CrIS-JPSS1) is finished (2026-10-28): 44 stores,
+  tag `v2-verified-20261028`.** No task is current; see Next: candidates. **Decision 5
   answered 2026-10-28; first probes done** (`tropess.md`, "v2: answers
   (user, 2026-10-28) and first probes"; R41-R44). The user chose both
   Standard and Full, v1's variables plus v2's new ones, to build now, and
@@ -30,9 +31,11 @@ Read this first in a new session. Update it whenever work lands.
   (2026-10-28, from `5148f6c`; TESTING.md, TROPESS v2 run log; ~2.3
   core-hours): AIRS 22 stores, 1,028,658 obs, 1,018 checks; CrIS-JPSS1 22
   stores, 4,676,513 obs, 1,065 checks; **0 failures**. The v2 bench data is
-  deleted (user approved). `finalize --attrs` applied on all 44 stores
-  (user sign-off 2026-10-28). **Next: `--tag v2-verified-20261028`, its
-  `--apply` signed off by the user.**
+  deleted (user approved). **Finalized 2026-10-28**: `--attrs` and
+  `--tag v2-verified-20261028` on all 44 stores, each `--apply` signed off
+  by the user; no `--expire` or `--gc` needed. **TROPESS v2 is finished.**
+  Later CrIS (and AIRS) v2 days are appended when downloaded: re-declare
+  the R37 count, build (resumes), verify, new tag (`tropess.md` V8, 6).
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
@@ -192,8 +195,9 @@ Read this first in a new session. Update it whenever work lands.
 The data-lake home for finished stores is not a candidate: the user will say
 when it is time (2026-10-22).
 
-1. **The other products** (task 6): TROPESS v2 (next, see above), IASI,
-   TES. Each gets a reader at fixture level first, then bench, then
+1. **The other products** (task 6): IASI, TES (TROPESS v2 done
+   2026-10-28; its source slices and matrix stores serve TES's stacked
+   state). Each gets a reader at fixture level first, then bench, then
    production. Their open issues are under Open items. TES and IASI need
    multi-array variable stores in the shared code (N18) for their kernels.
    AIRS v1 and CrIS v1 are finished.

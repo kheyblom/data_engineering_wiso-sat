@@ -406,6 +406,9 @@ the seam). Scripts and output were kept in the session scratchpad only.
 
 ## v2 production subset (approved 2026-10-28)
 
+**Built, verified and finalized 2026-10-28** (tag `v2-verified-20261028`,
+44 stores; TESTING.md Tier 2f and the TROPESS v2 run log).
+
 **Approved 2026-10-28, with Q1, Q2 and Q3 as proposed.** Drafted for the user's in-place review (`#@CLAUDE` comments), on the CrIS v1
 subset below: where a point is the same as v1's, it says so and points
 there. Facts are from the v2 Full audit (TESTING.md finding 18), the level
