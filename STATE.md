@@ -16,8 +16,8 @@ Read this first in a new session. Update it whenever work lands.
   levels (R42), `altitude` from Full (R43), v1's 19 stores plus `quality`,
   `averaging_kernel_h2o`, `air_density` and the three cross kernels. **Full only
   (user, 2026-10-28).** The v2 Full audit ran (job 7989391, TESTING.md
-  finding 18; R45, R46). **The v2 production subset is drafted for the
-  user's in-place review** (`tropess.md`, "v2 production subset", V1-V8;
+  finding 18; R45, R46). **The v2 production subset is approved
+  (2026-10-28, Q1-Q3 as proposed)** (`tropess.md`, "v2 production subset", V1-V8;
   Q1 `averaging_kernel_h2o` as the joint store's H2O block, Q2 the
   `air_density` row, Q3 non-CF retained `standard_name`s). Next, after
   review: the row, the N18 multi-array store change, the reader's v2 mode.

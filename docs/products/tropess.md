@@ -402,9 +402,9 @@ the seam). Scripts and output were kept in the session scratchpad only.
 - **AIRS and CrIS share the v2 layout** of each type; only the instrument
   indices differ (CrIS adds `cris_fov` and, in Full, `cris_l1b_type`).
 
-## v2 production subset (draft for review, 2026-10-28)
+## v2 production subset (approved 2026-10-28)
 
-Drafted for the user's in-place review (`#@CLAUDE` comments), on the CrIS v1
+**Approved 2026-10-28, with Q1, Q2 and Q3 as proposed.** Drafted for the user's in-place review (`#@CLAUDE` comments), on the CrIS v1
 subset below: where a point is the same as v1's, it says so and points
 there. Facts are from the v2 Full audit (TESTING.md finding 18), the level
 scan (finding 17) and the probes above. Decisions already made: "v2:
@@ -484,14 +484,14 @@ is v1's 17 levels. Dims and conversions are as v1 (P3) unless stated.
 | `pressure` | `pressure_ret[:, 0:17]` | 17-33 must equal 0-16 |
 | `altitude` | `altitude` at the level of `pressure_fm` equal to each `pressure_ret` | R43; found exactly once on every written level (audit) |
 | `quality_flags_retrieval` *(new store; row exists)* | `quality` | int32; 1 good, 0 bad. Standard's selection (R41); DOF > 1.1 on every 1 |
-| `air_density` (**Q2**) *(new row)* | `retrieval/air_density[:, 0:17]` / N_A | mol m-3. 17-33 must equal 0-16, and 34-66 must be fill. Equals Standard's mol m-3 values (finding 17) |
+| `air_molar_density` (Q2) *(new row)* | `retrieval/air_density[:, 0:17]` / N_A | mol m-3. 17-33 must equal 0-16, and 34-66 must be fill. Equals Standard's mol m-3 values (finding 17) |
 | `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log` *(new store; rows exist, TES)* | four arrays, each `[:, 0:17, 0:17]`: `hdo_hdo_averaging_kernel` → `water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log`; `hdo_h2o_averaging_kernel` → `..._hdo_..._log_cross_h2o`; `h2o_hdo_averaging_kernel` → `..._h2o_..._log_cross_hdo`; `h2o_h2o_averaging_kernel` → `water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log` | one store per matrix (N18). Rows retrieved, columns true: the ratio kernel equals `hdo_hdo` - `h2o_hdo` to 1e-6 (finding 18). (obs, level, level_2) |
 
-- **Q1, `averaging_kernel_h2o`:** approved as a store of its own, but it
+- **Q1, decided (user, 2026-10-28): stored once, as the joint store's H2O block. `averaging_kernel_h2o`:** approved as a store of its own, but it
   equals the `h2o_h2o` block on every row. Under N18 it is the H2O block of
   the joint kernel store, not a separate store. **Proposed:** store it once,
   as that block.
-- **Q2, `air_density`:** it needs a nomenclature row. The files say "Density
+- **Q2, decided (user, 2026-10-28): `air_molar_density`, mol m-3, no `standard_name` (option b). `air_density`:** it needs a nomenclature row. The files say "Density
   of air" (Standard) and "number density of air" (Full). They do not say
   dry or total air, and the values cannot settle it (the difference is
   under ~2%).
@@ -502,7 +502,7 @@ is v1's 17 levels. Dims and conversions are as v1 (P3) unless stated.
     does not fit mol m-3, so retaining it would mislabel the store. Options:
     (a) retain it anyway (the rule); (b) leave it off (an exception);
     (c) store molecules m-3 under it. **Proposed: (b).**
-- **Q3, retained `standard_name`s that are not CF:** Full gives `quality`
+- **Q3, decided (user, 2026-10-28): retained as published, noted in each `comment`. Retained `standard_name`s that are not CF:** Full gives `quality`
   the `standard_name` `quality`, and `cloud_top_pressure` the
   `standard_name` `cloud_top_pressure`. v1's cloud-top store retained
   Standard's `air_pressure_at_cloud_top`. The rule retains a source
