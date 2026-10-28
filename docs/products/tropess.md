@@ -619,21 +619,29 @@ the code does today, and what v2 needs:
 - *Alternative:* a `nomenclature_key` override in config. That is a shared
   change at ~15 call sites, for one product.
 
-**D2. Declared level selections, a shared change.** A config block,
-`level_selections`, applied by shared build code after the read, and by
-the verifier on its own from raw (its own code, not the build's helper).
-The reader does no level work. For each source it can declare:
-- `keep: 17` on the level axes: anything written beyond them fails the
-  build and the verifier, unless the config also declares
-  - `copies`: ranges that must equal the kept one (`pressure_ret` and
-    `air_density`, 17-33), or
-  - `fill_beyond` (`air_density` 34-66);
-- `at_levels_of` (for `altitude`): `{grid: pressure_fm, at: pressure_ret}`.
-  Each written retrieval pressure must be found exactly once in the row's
-  grid, and the value is taken there. The axis becomes `level`.
-
-The kernels are cut on both axes. Dims: `level_ret` becomes `level`, and a
-matrix's second axis becomes `level_2`, as v1.
+**D2, decided (user, 2026-10-28): general source slices, a shared change
+shaped for TES as well.**
+- **Slices are written in the key's `original_variable_name`**, numpy style
+  with `:` for the obs axis: `x[:, 0:17]` here, and `ConstraintVector[17:34]`
+  or `AveragingKernel[0:17, 17:34]` for TES (`tes.md`, E1).
+  - The key's uniqueness rule becomes one canonical name per source
+    *slice*, so one source can feed several stores.
+  - The build slices the reader's array; the verifier slices raw on its
+    own.
+- **The config declares what the slices leave out** (`source_remainders`,
+  per source path): a range on an axis that must be `empty` (fill or NaN),
+  or `equal` to another range (v2 `pressure_ret` and `air_density` 17-33;
+  TES `Pressure`).
+  - The key's slices plus the declared remainders must cover every value
+    of the source, or the config is refused.
+  - A remainder that breaks its rule fails the build and the verifier.
+- **A lookup onto another grid** (`level_lookups`, for v2 `altitude`): the
+  value at the forward-model level whose pressure equals each retrieval
+  pressure, found exactly once per written level.
+- **Other products are unaffected:** no current config declares any of
+  this, so their code path is unchanged; the fixture test of every product
+  confirms it. IASI's proxy split (`musica_wvp_apriori[:, 0]`) fits the
+  same slice form; its rank padding is a separate need.
 
 **D3. Matrix stores (N18), a shared change.**
 - **The key:** a "Matrix Store Key" table gives the store's canonical name
