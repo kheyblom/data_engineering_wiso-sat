@@ -15,8 +15,12 @@ Read this first in a new session. Update it whenever work lands.
   (2026-10-28, after a scan of every 10th day, TESTING.md finding 17): 17
   levels (R42), `altitude` from Full (R43), v1's 19 stores plus `quality`,
   `averaging_kernel_h2o`, `air_density` and the three cross kernels. **Full only
-  (user, 2026-10-28).** Next: the full v2 audit tool over every Full file
-  (show its job first), then the production subset for review in place.
+  (user, 2026-10-28).** The v2 Full audit ran (job 7989391, TESTING.md
+  finding 18; R45, R46). **The v2 production subset is drafted for the
+  user's in-place review** (`tropess.md`, "v2 production subset", V1-V8;
+  Q1 `averaging_kernel_h2o` as the joint store's H2O block, Q2 the
+  `air_density` row, Q3 non-CF retained `standard_name`s). Next, after
+  review: the row, the N18 multi-array store change, the reader's v2 mode.
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:

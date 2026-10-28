@@ -402,6 +402,197 @@ the seam). Scripts and output were kept in the session scratchpad only.
 - **AIRS and CrIS share the v2 layout** of each type; only the instrument
   indices differ (CrIS adds `cris_fov` and, in Full, `cris_l1b_type`).
 
+## v2 production subset (draft for review, 2026-10-28)
+
+Drafted for the user's in-place review (`#@CLAUDE` comments), on the CrIS v1
+subset below: where a point is the same as v1's, it says so and points
+there. Facts are from the v2 Full audit (TESTING.md finding 18), the level
+scan (finding 17) and the probes above. Decisions already made: "v2:
+answers" and its follow-ups. Open questions are marked **Q**.
+
+### V1. Products, names and provenance
+
+- **Two products, one config each, built from the Full files only**
+  (`source: tropess`, `version_product: fs`):
+
+  | product | config | stores named | days | obs |
+  | --- | --- | --- | --- | --- |
+  | AIRS v2 FS | `config/airs_fs_v2/` | `wisosat.airs.v_2.fs.inst.native_swath.<variable>.zarr` | 30 (2026-06-01 .. 06-30) | 1,028,658 |
+  | CrIS-JPSS1 v2 FS | `config/cris_jpss1_fs_v2/` | `wisosat.cris_jpss1.v_2.fs.inst.native_swath.<variable>.zarr` | 137 (2026-06-01 .. 10-15) | 4,676,513 (4,687,895 less R37's 11,382) |
+
+  CrIS Full is on disk to 10-15; Standard runs to 10-17. Later days are
+  appended as they are downloaded (V8).
+- **Checked on every file**, as v1 (C1):
+  - `ShortName` `TRPSFL2HDOAIRSFS` / `TRPSFL2HDOCRS1FS`, `VersionID` 2;
+  - `Platform` `Aqua` / `JPSS-1`, `Instrument`;
+  - `source` against the file name's algorithm (all R1p25, F2p10).
+- **Per granule, in the index:** algorithm, format and joint flag, as v1;
+  for CrIS, the rows left out under R37; `granule_source_rows`.
+- **Store attributes:** as v1 (C1), plus:
+  - built from Full: every retrieved target, with TROPESS's quality flag
+    stored (V3). Standard v2 is exactly the `quality == 1` rows (R41);
+  - why `altitude` comes from Full (R43);
+  - the seam, as approved: v2 continues v1 from 2026-06-01, with no
+    observation in both. The sample changes there: v2 retrieves about
+    1.3-1.5x as many targets per day (CrIS v1 05-31 23,868; v2 06-01
+    35,300).
+
+### V2. Granules and sources
+
+- **A granule is one day: one Full file.** There is no merge; Standard and
+  Summary are not read. The folders are `AIRS/TRPSFL2HDOAIRSFS.2/<YYYY>/`
+  and `CRIS/TRPSFL2HDOCRS1FS.2/<YYYY>/`, matched on platform token, stream
+  and type `Full` (`FILE_RE` gains the type).
+- **No missing days** in either span, and no two files on one date.
+- **Row order: the source order** (`time_order: source`), with the repeat
+  check in place of the time order (look-back 2 for CrIS, as v1). The user's
+  rule, 2026-10-28: a v1 exception applies where the situation is the same.
+  It is the same:
+  - **AIRS** interleaves granules as v1 FS does (R32): 37% of steps go
+    back, up to 23.3 h;
+  - **CrIS** lists 16 latitude bands, each in time order, as v1's R1p24
+    files do (R40): 15 steps back per file, up to 57.5 h. 15,769 rows fall
+    before their file's date and 7,986 after (v1: up to ±2 days).
+- **R37 (CrIS), the same situation, so the same rule:** each footprint is
+  kept once, from the newest algorithm, then the latest
+  `ProductionDateTime`.
+  - 11,382 rows share time, lat and lon with the day before, and none with
+    two days before.
+  - 4,618 copies are identical, 6,763 differ in `observation_error_h2o`
+    only, and 1 differs in two kernels. That is the v1 JPSS1 pattern.
+  - The later file is the newer in all 123 pairs.
+  - `expected_left_out` 11,382 through 10-15. **AIRS has none**, as in v1.
+
+### V3. Stores
+
+**22 stores per product, 44 in all.** v1's 19, sourced from Full, plus
+three new: `quality`, `air_density` and the joint HDO/H2O kernel store.
+Every profile is cut to levels 0-16 (R42, decided), so the vertical grid
+is v1's 17 levels. Dims and conversions are as v1 (P3) unless stated.
+
+| store | Full source | note |
+| --- | --- | --- |
+| geolocation | `time`, `latitude`, `longitude` | as v1 |
+| `water_vapor_hdo_h2o_ratio` | `x[:, 0:17]` | no R22 mask: R22 does not occur in v2 |
+| `water_vapor_h2o_mole_fraction_dry_air` | `x_h2o[:, 0:17]` | x 1e6 |
+| the five 850-250 hPa and `_004` stores | `dd_col_p`, `dd_col_p_error`, `x_h2o_col_p`, `x_h2o_col_p_error`, `dd_004` | on every row now (v1: Summary rows only); reproduced from the profiles on every file |
+| `water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal` | `observation_ops/signal_dof` | equals `dofs` |
+| `cloud_effective_optical_depth`, `cloud_top_pressure`, `temperature_surface`, `land_flag`, `day_night_flag` | `geophysical/*` | as v1; flags int32 |
+| `water_vapor_hdo_h2o_ratio_apriori` | `observation_ops/xa[:, 0:17]` | |
+| `water_vapor_hdo_h2o_ratio_averaging_kernel_log` | `observation_ops/averaging_kernel[:, 0:17, 0:17]` | R45 fill on some `quality` 0 rows |
+| `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | `observation_ops/observation_error_h2o[:, 0:17]` | as v1 (R8, R12, R15) |
+| `pressure` | `pressure_ret[:, 0:17]` | 17-33 must equal 0-16 |
+| `altitude` | `altitude` at the level of `pressure_fm` equal to each `pressure_ret` | R43; found exactly once on every written level (audit) |
+| `quality_flags_retrieval` *(new store; row exists)* | `quality` | int32; 1 good, 0 bad. Standard's selection (R41); DOF > 1.1 on every 1 |
+| `air_density` (**Q2**) *(new row)* | `retrieval/air_density[:, 0:17]` / N_A | mol m-3. 17-33 must equal 0-16, and 34-66 must be fill. Equals Standard's mol m-3 values (finding 17) |
+| `water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log` *(new store; rows exist, TES)* | four arrays, each `[:, 0:17, 0:17]`: `hdo_hdo_averaging_kernel` → `water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log`; `hdo_h2o_averaging_kernel` → `..._hdo_..._log_cross_h2o`; `h2o_hdo_averaging_kernel` → `..._h2o_..._log_cross_hdo`; `h2o_h2o_averaging_kernel` → `water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log` | one store per matrix (N18). Rows retrieved, columns true: the ratio kernel equals `hdo_hdo` - `h2o_hdo` to 1e-6 (finding 18). (obs, level, level_2) |
+
+- **Q1, `averaging_kernel_h2o`:** approved as a store of its own, but it
+  equals the `h2o_h2o` block on every row. Under N18 it is the H2O block of
+  the joint kernel store, not a separate store. **Proposed:** store it once,
+  as that block.
+- **Q2, `air_density`:** it needs a nomenclature row. The files say "Density
+  of air" (Standard) and "number density of air" (Full). They do not say
+  dry or total air, and the values cannot settle it (the difference is
+  under ~2%).
+  - **Proposed:** the name `air_molar_density`, unit `mol m-3`,
+    "molar density of air (moles of air per cubic metre) at each level", with
+    the basis stated as unknown in the metadata.
+  - The source `standard_name` `air_number_density` is CF's for m-3 and
+    does not fit mol m-3, so retaining it would mislabel the store. Options:
+    (a) retain it anyway (the rule); (b) leave it off (an exception);
+    (c) store molecules m-3 under it. **Proposed: (b).**
+- **Q3, retained `standard_name`s that are not CF:** Full gives `quality`
+  the `standard_name` `quality`, and `cloud_top_pressure` the
+  `standard_name` `cloud_top_pressure`. v1's cloud-top store retained
+  Standard's `air_pressure_at_cloud_top`. The rule retains a source
+  `standard_name` unchanged, so v2's cloud-top store would carry a
+  different one from v1's. **Proposed:** keep the rule (retain as
+  published), and say so in each store's `comment`.
+- **Levels (R42, decided):** the build and the verifier fail on any value
+  in levels 17-33 of a stored array, except the declared copies
+  (`pressure_ret`, `air_density`), which must equal 0-16;
+  `air_density` 34-66 must be fill. Declared in config.
+- **Flags:**
+  - `day_night_flag` is `sunlit_binary_mask` in every v2 file, so no R38
+    declaration is needed;
+  - no file has `land_flag` 1 on every row, so there is no R36 mask. The
+    verifier's check for such a file (C3, Q1) stays.
+- **Always out:**
+  - as v1: `observation_error` (R11), `x_test`, `target_id`, `x_raw` and
+    `x_h2o_raw`, `year_fraction`, the microwindows, `datetime_utc`;
+  - and now:
+    - the Standard and Summary files;
+    - Standard's `altitude` (R43);
+    - the 67-level `species`, `constraint_vector`, `h2o_species` and
+      `h2o_constraint_vector` (R44);
+    - `dofs` (equals `signal_dof`);
+    - the `characterization` group;
+    - the int8-packed 67x67 blocks;
+    - the 17x17 observation-error blocks (`h2o_h2o` has negative
+      variances on almost every row, R11's defect).
+
+### V4. Time
+
+As v1 (C4): TAI93 less the leap seconds (10 throughout), checked against
+`datetime_utc` on every row (no mismatch in the audit), stored in seconds.
+
+### V5. Declared, never detected
+
+- **R37 (CrIS):** the repeat rule and `expected_left_out` (11,382 through
+  10-15).
+- **R42:** the level cut, with the two declared copies.
+- **R43:** `altitude` from the forward-model grid at the retrieval
+  pressures.
+- No R18, R22, R36 or R38 declarations: none occurs in v2.
+
+### V6. Filtering guidance in the metadata
+
+As v1 (C6), plus:
+- **`quality == 1` is TROPESS's selection**: it reproduces the v2 Standard
+  product exactly (R41), and every such row has DOF > 1.1. `quality` 0 rows
+  reach DOF 4.19 (CrIS) and 2.63 (AIRS).
+- **R45:** on some `quality` 0 rows the ratio kernel is fill at its lowest
+  levels.
+- **Sarkar et al. (2026)** used v1 only (DOF >= 1, COD <= 0.5).
+
+### V7. Chunks and compression
+
+As v1 (C7): the same chunk rule, and blosc zstd 5 + shuffle on the 2-D
+arrays. That means the ratio kernel and the joint kernel store's four
+arrays; default compression elsewhere. Uncompressed sizes:
+- CrIS: ratio kernel ~5.4 GB, joint kernel store ~21.7 GB, each 17-level
+  store ~0.32 GB;
+- AIRS: ~1.2 GB and ~4.8 GB.
+
+`granules_per_commit` about 1.3 M obs per commit: AIRS 30 (one commit),
+CrIS 30 (~5).
+
+### V8. Next, after review
+
+1. **The `air_density` row** (Q2) in style_guides, shown to the user before
+   commit.
+2. **Shared change: multi-array variable stores (N18).** The joint kernel
+   store is the first; TES and IASI need it too. Fixture test of every
+   product after it.
+3. **The reader's v2 mode**, each piece tested:
+   - the `Full` type in `FILE_RE` and the listing;
+   - Full-only granules;
+   - the level cut with its declared copies;
+   - `altitude` at the retrieval pressures;
+   - `air_density` / N_A;
+   - `quality`;
+   - the four kernel blocks;
+   - `LEVELS` taken from config, not 17 fixed (v1 keeps 17);
+   - the key's rows for the v2 sources.
+4. **Configs and fixtures:** AIRS three days, and CrIS with an R37 repeat
+   (06-01 .. 06-03), cut small.
+5. The full fixture test, a bench (a week of each), production, then
+   finalize with sign-off on every `--apply`.
+6. **Appending later days** (decision 3): each append is a build that
+   resumes, then a verify and a new tag. For CrIS the R37 count is
+   re-declared first: a later day adds repeats with the previous one.
+
 ## CrIS: handoff (written 2026-10-23, for a new session)
 
 AIRS v1 is finished; CrIS is the user's next task (chosen 2026-10-22: CrIS
@@ -1418,4 +1609,6 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R42 | **v2's 34 retrieval levels are v1's 17, padded** (probes 2026-10-28): every retrieval-grid array, the joint 34x34 blocks included, holds values only on levels 0-16. Full `pressure_ret` repeats the grid in 17-33; Standard `air_density` has two identical halves. **Full `air_density` is Standard's 34-wide array** (x N_A, to 1e-7) in the first 34 slots of a 67-wide array declared on `level_fm`, the rest fill: it is not on `pressure_fm`. No document explains the 34: the GES DISC catalog entries for every v2 HDO collection (Standard and Full) say "reported at 17 vertical levels from the surface to 0.1 hPa", and the README in the v2 folders is still the 2023-05-09 v1 text. The pattern matches a joint HDO+H2O state vector (17 + 17) used to size every retrieval-level array. `tools/survey/tropess_v2_levels.py` checks every v2 file. Confirmed on every 10th day of both instruments, all three types (51 files; TESTING.md finding 17). | decided (user, 2026-10-28): store levels 0-16 only. The build and the verifier fail on any value in 17-33, except declared copies (`pressure_ret`, `air_density`) that must equal 0-16; Full `air_density` slots 34-66 must be fill |
 | R43 | **v2 Standard `altitude` belongs to other targets** (probes 2026-10-28). Flattened to (2n, 17), its first n rows are exactly the altitudes of targets 0..n-1 (Summary's, which equal Full's at the retrieval pressures), on every row of AIRS and CrIS 2026-06-01. So Standard row i holds target 2i's altitude in levels 0-16 and target 2i+1's in 17-33, and rows n/2 .. n-1 are zeros. It looks like an (n, 17) array written into an (n, 34) one through the flat buffer. Only row 0's levels 0-16 are its own. This explains the R37 copies whose `altitude` differs: each file's shift is different. Summary and Full `altitude` are physically consistent (hypsometric layer temperatures 255-313 K). Confirmed on every 10th day (TESTING.md finding 17). | decided (user, 2026-10-28): `altitude` from Full, read at the 17 retrieval pressures (equal to Summary's); Standard's is never read |
 | R44 | **v2 Full `species` is the HDO mole fraction** on 67 levels, roughly `x` x `x_h2o` (ratio p50 1.0036, 0.98-1.15), though its `standard_name` is `molar_ratio_of_hdo_to_h2o` and units `mol mol-1`. `constraint_vector` is exactly `xa` x `h2o_constraint_vector`. | open: only if a Full store uses them |
+| R45 | **v2's ratio kernel has a square block of fill at its lowest levels** on some `quality` 0 rows (audit 2026-10-28): 898 AIRS rows (30 days) and 113 CrIS rows (137 days), up to 6x6 values where `pressure_ret` is written. The four joint blocks are complete on those rows. | record only; stored as published (NaN) |
+| R46 | **AIRS v2 Full has two layouts** (audit 2026-10-28): from 2026-06-03 the files carry a dimension-scale dataset `l1b_source_file` (an upstream `ncrename` of the `l1b_source` dimension). No stored source changes. | record only |
 | R39 | **CrIS integer dtypes drift as AIRS's do (R16):** SNPP RS Summary has 4 layouts, differing only in `land_flag` and `day_night_flag` int16/int32/int64; JPSS1 has 11 Standard and 8 Summary layouts, from the same drift, the `cris_*` indices int32 to int16, and unstored variables (`target_id`, microwindows, `retrieval/x_raw`) coming and going. | handled as for AIRS: flags stored int32 |

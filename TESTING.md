@@ -336,6 +336,70 @@ and `.log`. Every one-day probe finding held (`tropess.md`, R41-R43):
   altitudes on every row (CrIS 310,487, AIRS 48,312). Only row 0 of each
   file holds its own; the remaining flat rows are zeros, one fill each.
 
+### 18. Every TROPESS v2 Full day audited (2026-10-28, develop job 7989391, 195 s)
+
+`tools/survey/tropess_v2_audit.py` read every v2 Full file whole, except the
+int8-packed blocks and `characterization`: AIRS 30 days (06-01 .. 06-30,
+1,028,658 obs) and CrIS-JPSS1 137 days (06-01 .. 10-15, 4,687,895 obs). It
+ran on 8 workers with no read errors, well under 1 core-hour. Output:
+`/glade/derecho/scratch/$USER/data/wisosat/audit/tropess_v2_audit.jsonl` and
+`.log`. Results (`tropess.md`, "v2 production subset"):
+
+- **What the v2 stores rely on holds on every file:**
+  - every row has time, lat and lon, in range, with no duplicate keys and
+    unique `target_id`s;
+  - time is whole seconds, and TAI93 less 10 leap seconds equals
+    `datetime_utc` on every row;
+  - every header is right (ShortName, VersionID 2, Platform, Instrument,
+    `source` MUSES v1.25), and no dataset attribute changes over the record;
+  - every file is R1p25 F2p10;
+  - no day is missing in either span.
+- **R42:** nothing beyond level 16 in any stored array, both kernel axes
+  included. The `pressure_ret` and `air_density` copies equal 0-16 on every
+  row, and `air_density` 34-66 is never written.
+- **R43's fix:** every written `pressure_ret` level is found exactly once in
+  the row's `pressure_fm`, and `altitude` is written there.
+- **The profiles share `pressure_ret`'s fill:** `x`, `x_h2o`, `xa` and
+  `air_density` on every row. There is one fixed grid above the surface,
+  with no holes.
+- **R22 does not occur:** row 0's `x` is never `x_test`.
+- **`quality` and DOF:** `quality` is 0/1, every 1 has DOF > 1.1, and `dofs`
+  equals `signal_dof` on every row.
+- **Kernels:** `h2o_h2o_averaging_kernel` equals `averaging_kernel_h2o` on
+  every row.
+- **R36 does not occur:** no file's `land_flag` is 1 on every row.
+- **850-250 hPa means:** `dd_col_p` reproduces from `x` to 0.007 per mil
+  and `x_h2o_col_p` to 3e-7 (R30's `250 <= p < 850`).
+- **As in v1:**
+  - `observation_error_h2o` is written below the surface and NaN at the top
+    level (R15);
+  - `dd_col_p_error` is -9999 or NaN (R17);
+  - `day_night_flag` is -999 on 55,483 AIRS and 99,687 CrIS rows (R29);
+  - `x_h2o` reaches 0.916 (R7).
+- **Row order:**
+  - AIRS interleaves as v1 FS does (R32): 394,566 steps back, up to 23.3 h;
+  - CrIS has 15 steps back per file (the 16 latitude bands, R40), up to
+    57.5 h, with 15,769 rows before their file's date and 7,986 after.
+- **R37:** CrIS 11,382 rows share time, lat and lon with the day before, and
+  none with two days before.
+  - 4,618 copies are identical; 6,763 differ in `observation_error_h2o`
+    only; 1 differs in the ratio and `hdo_hdo` kernels.
+  - The later file was produced later in all 123 pairs.
+  - AIRS has none.
+- **The seam:** no row of the first two v2 days is in the last two v1
+  Standard days, for either instrument.
+- **New:**
+  - **R45:** the ratio kernel has a square block of fill at its lowest
+    levels on 898 AIRS and 113 CrIS rows, all with `quality` 0;
+  - **R46:** the AIRS files from 06-03 add a dimension-scale dataset,
+    `l1b_source_file`, so there are two AIRS layouts; nothing stored
+    changes.
+- **Kernel orientation (follow-up probe, 5,000 rows each of 06-01):** the
+  ratio kernel equals `hdo_hdo` - `h2o_hdo` to 1e-6 on every `quality` 1
+  row, and no other combination comes close. So `h2o_hdo` has H2O retrieved
+  in its rows and HDO true in its columns, as the ratio kernel's
+  convention (rows retrieved) and its `long_name` say.
+
 ## Tier 2: the TROPOMI bench (passed 2026-10-16)
 
 **What it is:** one real month, 2020-07: 390 orbit files and 346,391,445
