@@ -3,6 +3,9 @@
 Everything known about the TROPOMI raw data, and how the reader, configs and
 key handle it. Rules that apply to every product are in the root `CLAUDE.md`
 and the style guide; cross-product evidence is in `docs/l2-survey.md`.
+The retrieval itself (cloud pre-fit, quality and cloud filters, validation)
+is described in Schneider et al. (2022), in full text in
+`docs/schneider-2022-tropomi-hdo.md` (local only, beside its PDF).
 
 Each known data issue has an ID (T1, T2, ...) and a status:
 - **handled:** the build and the verifier deal with it, and the stores record
