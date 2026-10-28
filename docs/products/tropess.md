@@ -308,6 +308,15 @@ The audit over every v2 file follows the decision.
    approves it again.
 5. **The seam:** measure, then decide.
 
+**Follow-up (user, 2026-10-28), after the probes below:** leaning to Full
+only, pending the level question (R42), with the rest of that point
+approved; levels to be scanned over every file and looked up online;
+`altitude` to be explained (R43); v1's 19 stores plus `quality`,
+`averaging_kernel_h2o` and `air_density` approved (all three are new in
+v2: none is in the v1 Standard or Summary files); the seam approved (both
+products' metadata state the version change and the change in sample at
+2026-06-01).
+
 **Probes, 2026-10-28** (login node, one file per type: 2026-06-01 for AIRS
 and CrIS-JPSS1, plus 06-02 and 06-03 for repeats; v1 05-30 and 05-31 for
 the seam). Scripts and output were kept in the session scratchpad only.
