@@ -5,9 +5,19 @@ Read this first in a new session. Update it whenever work lands.
 ## Where we are (2026-10-26)
 
 **Nothing is running.** No batch jobs are queued.
-- **Current task: TROPESS v2 (AIRS and CrIS-JPSS1 together), decision 5;
-  to be started in a new session (user, 2026-10-26).** **Read
-  `docs/products/tropess.md`, section "v2: handoff", first.** It holds what
+- **Current task: TROPESS v2 (AIRS and CrIS-JPSS1 together).** **Decision 5
+  answered 2026-10-28; first probes done** (`tropess.md`, "v2: answers
+  (user, 2026-10-28) and first probes"; R41-R44). The user chose both
+  Standard and Full, v1's variables plus v2's new ones, to build now, and
+  v1 exceptions only where the situation is the same. **The probes found
+  v2 Standard to be exactly Full's `quality == 1` rows with identical
+  values**, so building both stores the same values twice. That, and the
+  questions it raises (product names, 17 or 34 levels, `altitude`, Full's
+  extra fields), is with the user before the audit tool is written.
+  Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
+  not occur in v2. The v1/v2 seam shares no rows.
+- **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
+  handoff", first. It holds what
   is settled (a separate `v_2` store set), what is on disk (AIRS 30 days,
   CrIS-JPSS1 139 days, each in Summary, Standard and Full), the layout
   known from R25, the decision to lay out for the user (which type: Standard

@@ -297,6 +297,94 @@ file of each v2 type (headers, row counts, levels); measure the v1/v2
 seam; then lay out decision 5 for the user, as the CrIS decisions were.
 The audit over every v2 file follows the decision.
 
+### v2: answers (user, 2026-10-28) and first probes
+
+**Answers to decision 5:**
+1. **Both** Standard and Full become products.
+2. **Variables:** v1's set as the base, plus v2's new fields.
+3. **Build now**, and append as CrIS v2 grows.
+4. **A v1 exception carries over only where the situation is the same as in
+   v1.** Where the setup, or the need for the exception, differs, the user
+   approves it again.
+5. **The seam:** measure, then decide.
+
+**Probes, 2026-10-28** (login node, one file per type: 2026-06-01 for AIRS
+and CrIS-JPSS1, plus 06-02 and 06-03 for repeats; v1 05-30 and 05-31 for
+the seam). Scripts and output were kept in the session scratchpad only.
+**One day each: the audit over every v2 file must confirm them.**
+
+- **Standard is Full's rows with `quality == 1`, exactly** (R41), not a
+  DOF cut. CrIS: 21,939 of 35,300 rows; DOF >= 1.1 alone would keep 24,818.
+  AIRS: 15,679 of 37,251; DOF alone 18,642. Full rows with `quality == 0`
+  reach DOF 3.05. The rows are in the same order, `target_id`s agree, and
+  every shared dataset is identical on them, except:
+  - `observation_error_h2o` below the surface, where both write values
+    (R15) and they differ;
+  - `altitude` (R43).
+- **Summary is Standard's levels 0-16 on the same rows**, identical in
+  every shared variable except `altitude` (R43). The five 850-250 hPa and
+  `_004` fields that v1 took from Summary are in v2 Standard and Full. So
+  **v2 needs no Summary merge**, unless `altitude` is taken from Summary.
+- **The 34 retrieval levels are v1's 17, padded** (R42). In Standard and
+  Full, every array on the retrieval grid holds values only on levels 0-16:
+  `x`, `x_h2o`, `xa`, `pressure`, `observation_error_h2o`, both kernels,
+  and Full's joint 34x34 blocks. The pressures are v1's 17 (1000 ..
+  0.1 hPa, the surface at level 0). The exceptions:
+  - Full `pressure_ret` repeats the 17-level grid in levels 17-33;
+  - Standard `air_density` holds two identical 17-level copies;
+  - Standard `altitude` holds two different ones (R43).
+  
+  Full adds the 67-level forward-model grid (`pressure_fm`, `altitude`,
+  `species`, `constraint_vector`, `air_density`, and the int8-packed
+  blocks).
+- **Full's own fields:**
+  - `quality` (0/1, the Standard selection);
+  - `dofs`, identical to `signal_dof`;
+  - `species`, the HDO mole fraction on 67 levels, roughly `x` x `x_h2o`
+    (p50 1.0036, 0.98-1.15) despite its `standard_name`
+    `molar_ratio_of_hdo_to_h2o` (R44);
+  - `constraint_vector`, exactly `xa` x `h2o_constraint_vector`;
+  - joint kernels `hdo_hdo`, `hdo_h2o`, `h2o_hdo`, `h2o_h2o` (each 17x17
+    in a 34x34 array; `h2o_h2o` equals `averaging_kernel_h2o`; the HDO/H2O
+    ratio kernel `averaging_kernel` is none of them);
+  - observation-error blocks: `hdo_hdo` is symmetric with no negative
+    variance; `h2o_h2o` has negative variances on almost every row;
+  - the `characterization` group (QA, emissivity, cloud, columns,
+    covariances);
+  - 67x67 int8-packed blocks (`averaging_kernel`, three covariances, and
+    the H2O/HDO ones), which need TROPESS's `tropess_compression` to read.
+- **R11 holds in v2:** `observation_error` (HDO/H2O ratio) has negative
+  variances on 87-100% of rows and is asymmetric on all. Same situation,
+  so it stays out.
+- **R22 does not occur in v2.** Row 0's `x` is not `x_test`, in Standard or
+  Full, for either instrument. In AIRS Standard, `x_test` is the kernel
+  applied to row 0's own `x` (to 1e-6), so row 0 is the retrieval. CrIS's
+  `x_test` drops the below-surface level, so it did not line up for that
+  check. Not the v1 situation, so no mask (the audit checks every file).
+- **R37 (CrIS) continues in v2:** consecutive days share footprints (exact
+  time, lat, lon, and CrIS indices). Standard: 17 (06-01/02) and 94
+  (06-02/03); Full: 38 and 113. None two days apart. The copies differ only
+  in `observation_error_h2o` below the surface, as most of v1 JPSS1's did,
+  and in Standard's `altitude` (R43). `x` never differs. Same situation as
+  v1. **AIRS v2 has no repeats** (none in v1 either).
+- **Row order:**
+  - **CrIS v2** lists 16 latitude bands, each in time order over the day:
+    15 steps back of ~22-24 h, and rows up to ~14 h beyond the file's date.
+    v1 JPSS1's R1p24 files (05-30, 05-31) have the same 16 bands. These are
+    R40's "larger blocks", without v1's 64 s jitter. Same situation as R40.
+  - **AIRS v2** interleaves granules as v1 FS does (R32): 37% of steps go
+    back (v1 05-31: 40%), most by one orbit (~5,850 s). Same situation as
+    R32.
+- **The v1/v2 seam is clean.** No row or footprint is shared between v1's
+  05-30 and 05-31 Standard and v2's 06-01 and 06-02 Standard or Full, for
+  either instrument. v2 06-01 holds no row before its date.
+- **The sample changes at the seam anyway.** Rows per day: CrIS v1 05-31
+  23,868 (every row), v2 06-01 Full 35,300 and Standard 21,939. AIRS v1
+  05-31 28,289; v2 Full 37,251 and Standard 15,679. v2 retrieves more
+  targets than v1, and v2 Standard drops ~40-58% of them by `quality`.
+- **AIRS and CrIS share the v2 layout** of each type; only the instrument
+  indices differ (CrIS adds `cris_fov` and, in Full, `cris_l1b_type`).
+
 ## CrIS: handoff (written 2026-10-23, for a new session)
 
 AIRS v1 is finished; CrIS is the user's next task (chosen 2026-10-22: CrIS
@@ -1309,4 +1397,8 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R37 | **CrIS rows repeat across days** (probes 2026-10-26, finding 16). No file repeats a row within itself, but a row of one day's file can have exactly the time, lat and lon of a row of the day before's: SNPP RS 620 Summary rows on 417 days; SNPP FS 8,057 Standard and 2,797 Summary rows; JPSS1 FS 136,702 Standard and 72,574 Summary rows (0.3%) through 2026-05-31, plus 21 and 19 that repeat a row two days back. The repeated rows' times spread over the whole of both days, not the midnight seam: each file holds up to 48 h either side of its date. Every repeat is the same footprint (CrIS indices equal). Compared in every dataset on sampled pairs: identical, SNPP RS 7%, SNPP FS 82%, JPSS1 44%; same retrieval with different errors, SNPP FS 17% (every level), JPSS1 55% (`observation_error_h2o` below the surface only); different retrieval, SNPP RS 93%, SNPP FS 0.5%, JPSS1 1% (and every repeat at an algorithm change). `check_repeats` fails on these, and checks only the day before. Detail and options: `docs/cris-repeats-r37.md`. | decided (user, 2026-10-26): each repeat stored once, the copy from the newest algorithm, then the latest `ProductionDateTime`; declared in config, applied from raw by the build and the verifier; an approved exception to keeping every observation (`docs/cris-repeats-r37.md`, Decision) |
 | R38 | **JPSS1 FS `day_night_flag` changes `standard_name`** as AIRS FS's did (R33): `day_binary_mask` in 364 files, 2021-04-01 .. 2022-03-30 (two of them R18 old files); `sunlit_binary_mask` from then and in the R1p24 backfill. Nine `long_name`s change case or wording at 2021-09-24 and again in 2021-11 (e.g. `bias_corrected_HDO_to_H2O_ratio` to `..._profile`); `units` and `_FillValue` never change. `retrieval/mw` is `m-6` in most files and `cm-1` in 2023-11 (not stored). SNPP's attributes never change. | decided (user, 2026-10-26): `sunlit_binary_mask` declared, the old name and dates in the `comment`, as for AIRS FS |
 | R40 | **CrIS rows are not in time order** (measured on every file, R37's rows left out, 2026-10-26). A file is mostly its UTC day in time order, with: <br>- **edge rows:** the first and last minutes of the neighbouring days at its start and end (SNPP RS 0.5%, SNPP FS 0.5%, JPSS1 0.4% of rows; a few strays further out), so time steps back at 1,350 of 1,864, 106 of 109 and 1,812 of 1,886 day seams; different observations, not copies (those are R37); <br>- **a 64 s jitter** (two 32 s CrIS granules) within the day: SNPP FS 9,272 steps, JPSS1 ~30,900; <br>- **larger blocks** in JPSS1 only: 13,260 steps back of more than 2 minutes, up to a day; SNPP RS has 11 within-day steps of ~24 h. <br>Far closer to time order than AIRS FS (36% of steps back, R32). | decided (user, 2026-10-26, option 1 of three): the source order is kept (`time_order: source`) for all three CrIS products, with the repeat check (look-back 2) in place of the time order. The alternatives were sorting within each file (the seams still step back) and regrouping granules by observation day |
+| R41 | **v2 Standard is v2 Full's rows with `quality == 1`** (probes 2026-10-28, one day each): same order, same `target_id`s, shared datasets identical except below-surface `observation_error_h2o` and `altitude` (R43). Summary is Standard's levels 0-16 on the same rows. R25's "cut at DOF >= 1.1" undercounts the cut: DOF alone would keep ~13-19% more rows. | open: confirm over every v2 file in the audit |
+| R42 | **v2's 34 retrieval levels are v1's 17, padded** (probes 2026-10-28): every retrieval-grid array, the joint 34x34 blocks included, holds values only on levels 0-16. Full `pressure_ret` repeats the grid in 17-33; Standard `air_density` has two identical halves. | open: confirm in the audit; storing 17 levels is a decision for the v2 subset |
+| R43 | **v2 Standard `altitude` disagrees with Summary and Full** (probes 2026-10-28): at 1000 hPa, Standard has 141 m (AIRS) and 51 m (CrIS) in its first 17 levels and different values again in levels 17-33, where Summary and Full `altitude` agree at 77 m. Standard's own `altitude` also differs between the two copies of a CrIS repeat (R37) on 90 of 94 rows. | open: which source to store, or none |
+| R44 | **v2 Full `species` is the HDO mole fraction** on 67 levels, roughly `x` x `x_h2o` (ratio p50 1.0036, 0.98-1.15), though its `standard_name` is `molar_ratio_of_hdo_to_h2o` and units `mol mol-1`. `constraint_vector` is exactly `xa` x `h2o_constraint_vector`. | open: only if a Full store uses them |
 | R39 | **CrIS integer dtypes drift as AIRS's do (R16):** SNPP RS Summary has 4 layouts, differing only in `land_flag` and `day_night_flag` int16/int32/int64; JPSS1 has 11 Standard and 8 Summary layouts, from the same drift, the `cris_*` indices int32 to int16, and unstored variables (`target_id`, microwindows, `retrieval/x_raw`) coming and going. | handled as for AIRS: flags stored int32 |
