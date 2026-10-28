@@ -49,7 +49,8 @@ import os
 
 from utils.granules import check_coverage, check_order, check_repeats, check_time
 from utils.log_utils import log_peak_memory, setup_logging
-from utils.nomenclature import coordinates, variables
+from utils.nomenclature import coordinates, source_path, variables
+from utils.selections import check_selections, read_paths
 from utils.path_utils import (
     GEOLOCATION,
     listing_options,
@@ -228,8 +229,10 @@ def prepare(settings):
     LOG.info(f'code revision {revision}')
     check_clean_tree(revision, settings)
 
-    known = [entry.original for entry in variables(source_name).values()]
+    known = [source_path(entry.original) for entry in variables(source_name).values()]
     known += [entry.original for entry in coordinates(source_name).values()]
+    # a lookup's grid is read but stored nowhere; its fill may be declared
+    known += [path for source in list(known) for path in read_paths(settings, [source])]
     check_fill_config(settings, known)
 
     raw = settings['directories']['raw']
@@ -326,10 +329,10 @@ def run_pass(settings, granules, revision, stores, num_workers):
     # so the list is fixed for the whole pass rather than per batch
     incomplete = [store for store in stores if states[store]['n_granules'] < len(granules)]
     sources = sorted(
-        {time} | (set(location) if repeats else set()) | {
+        {time} | (set(location) if repeats else set()) | read_paths(settings, [
             source for store in incomplete
             for source in store_sources(source_name, store).values()
-        }
+        ])
     )
     written = {store: 0 for store in stores}
     masked = {store: {} for store in stores}
@@ -346,6 +349,9 @@ def run_pass(settings, granules, revision, stores, num_workers):
                 pending = source_reader.submit(granules[nxt[0]:nxt[1]])
 
             check_versions(datas, settings)
+            # sliced sources: the slices and declared remainders cover every
+            # value, and each remainder holds what the config says
+            check_selections(datas, settings, source_name, sources)
             if time_order(settings) == 'sorted':
                 previous_end = check_time(datas, time, previous_end)
             elif repeats:

@@ -38,7 +38,7 @@ import re
 
 import yaml # type: ignore
 
-from .nomenclature import canonical_frequency, variable as key_variable, variables
+from .nomenclature import canonical_frequency, matrix_stores, variable as key_variable, variables
 
 # The variable slot of the geolocation store, per the style guide
 GEOLOCATION = 'geolocation'
@@ -161,12 +161,16 @@ def run_variables(settings):
     Args:
         settings (dict): The loaded configuration; ``variables`` lists them.
 
+    A name is a variable row of the product's key, or a matrix store of it
+    (N18), whose arrays are then built into that one store.
+
     Returns:
         list: Canonical names, without the geolocation store.
 
     Raises:
         KeyError: If a listed variable has no row in the product's key.
-        ValueError: If the list is empty or repeats a name, or omits a quality
+        ValueError: If the list is empty or repeats a name, lists an array of
+            a listed matrix store as a store of its own, or omits a quality
             flag the key carries.
     """
     names = list(settings.get('variables') or [])
@@ -174,12 +178,21 @@ def run_variables(settings):
         raise ValueError('config lists no variables')
     if len(set(names)) != len(names):
         raise ValueError(f'config lists a variable twice: {names}')
+    matrices = matrix_stores(source_product(settings))
     for name in names:
-        # raises with a pointer to the key when the row is missing
-        key_variable(source_product(settings), name)
+        if name not in matrices:
+            # raises with a pointer to the key when the row is missing
+            key_variable(source_product(settings), name)
+    within = {array: name for name in names if name in matrices for array in matrices[name].arrays}
+    twice = sorted(set(within) & set(names))
+    if twice:
+        raise ValueError(
+            f'config lists {twice} as stores of their own and as arrays of '
+            f'{sorted({within[name] for name in twice})}; a matrix is one store (N18)'
+        )
 
     flags = [name for name in variables(source_product(settings)) if name.startswith(QUALITY_FLAG_PREFIX)]
-    missing = [name for name in flags if name not in names]
+    missing = [name for name in flags if name not in names and name not in within]
     if missing:
         raise ValueError(
             f'config omits {missing}; the style guide requires quality flags in '
@@ -212,7 +225,8 @@ def template_fields(settings, store):
     - ``frequency`` is the canonical token (``inst``); ``temporal_resolution``
       is the config's word for it (``observation``).
     - ``variable`` is the store's variable slot: a canonical name, or
-      ``geolocation``. ``variable_label`` is the source path, or ``geolocation``.
+      ``geolocation``. ``variable_label`` is the source path, or the slot
+      itself for ``geolocation`` and a matrix store.
 
     Args:
         settings (dict): The loaded configuration.
@@ -234,7 +248,8 @@ def template_fields(settings, store):
     )
     fields['variable'] = store
     fields['variable_label'] = (
-        store if store == GEOLOCATION else key_variable(source_product(settings), store).original
+        store if store == GEOLOCATION or store in matrix_stores(source_product(settings))
+        else key_variable(source_product(settings), store).original
     )
     return fields
 

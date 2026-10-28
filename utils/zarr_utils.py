@@ -53,8 +53,11 @@ from .nomenclature import (
     coordinate_factor,
     coordinates,
     key_path,
+    matrix_stores,
+    source_path,
     variable as key_variable,
 )
+from .selections import select_source
 from .path_utils import (
     GEOLOCATION, format_attrs, load_reader, run_stores, source_product, template_fields,
 )
@@ -481,12 +484,12 @@ def absent_fill(settings, source):
 
     Args:
         settings (dict): The loaded configuration.
-        source (str): The source path.
+        source (str): The source path, or a key's sliced source (its path counts).
 
     Returns:
         int | None: The declared value.
     """
-    return (settings.get('absent_fill_values') or {}).get(source)
+    return (settings.get('absent_fill_values') or {}).get(source_path(source))
 
 
 def declared_fill(settings, source):
@@ -494,12 +497,12 @@ def declared_fill(settings, source):
 
     Args:
         settings (dict): The loaded configuration.
-        source (str): The source path.
+        source (str): The source path, or a key's sliced source (its path counts).
 
     Returns:
         list: The declared values, empty if none.
     """
-    return list((settings.get('source_fill_values') or {}).get(source) or [])
+    return list((settings.get('source_fill_values') or {}).get(source_path(source)) or [])
 
 
 def check_fill_config(settings, sources):
@@ -513,7 +516,8 @@ def check_fill_config(settings, sources):
         ValueError: On an unknown source, or more than one value for a source.
     """
     declared = settings.get('source_fill_values') or {}
-    for key in ('source_fill_values', 'absent_fill_values', 'allowed_on_rows_left_out', 'source_dtypes'):
+    for key in ('source_fill_values', 'absent_fill_values', 'allowed_on_rows_left_out', 'source_dtypes',
+                'source_remainders', 'level_lookups'):
         unknown = sorted(set(settings.get(key) or []) - set(sources))
         if unknown:
             raise ValueError(f'{key} names sources the key does not: {unknown}')
@@ -707,9 +711,9 @@ def entry_source(product, canonical):
         canonical (str): The canonical name.
 
     Returns:
-        str: Its ``original_variable_name``.
+        str: Its ``original_variable_name``'s path, without any selection.
     """
-    return key_variable(product, canonical).original
+    return source_path(key_variable(product, canonical).original)
 
 
 def coordinate_attrs(product, name, array, settings, fill):
@@ -811,10 +815,15 @@ def store_sources(product, store):
         store (str): The store's variable slot.
 
     Returns:
-        dict: Store variable name -> source path.
+        dict: Store variable name -> source, as the key writes it: a path, or
+            a path with a selection (``x[:, 0:17]``). A matrix store (N18)
+            holds one variable per array.
     """
     if store == GEOLOCATION:
         return {name: entry.original for name, entry in coordinates(product).items()}
+    matrix = matrix_stores(product).get(store)
+    if matrix is not None:
+        return {name: key_variable(product, name).original for name in matrix.arrays}
     return {store: key_variable(product, store).original}
 
 
@@ -853,8 +862,14 @@ def assemble(store, datas, obs_start, settings):
     casts = settings.get('source_dtypes') or {}
     variables, masked, fills = {}, {}, {}
     for name, source in store_sources(source_name, store).items():
-        arrays = [declared_cast(data.arrays[source], casts.get(source), data.granule.id)
-                  for data in datas]
+        # a source the key slices, or looks up onto another grid, is read
+        # whole and selected here (utils/selections.py)
+        path = source_path(source)
+        arrays = [
+            select_source(declared_cast(data.arrays[path], casts.get(path), data.granule.id),
+                          source, data, settings)
+            for data in datas
+        ]
         # attributes come from the first granule whose file holds the source:
         # in a merged granule that lacks one file, the source is absent
         # throughout and carries none (TROPESS's one-sided days, R23)
@@ -985,6 +1000,13 @@ def global_attrs(settings, store, versions):
             'Upstream guidance: ' + str(settings.get('filtering_guidance', '')).strip()
         ),
     }
+    matrix = matrix_stores(source_name).get(store)
+    if matrix is not None:
+        derived['matrix'] = (
+            f'{matrix.long_name}. One store per matrix (N18): its pieces are the '
+            f'arrays {", ".join(matrix.arrays)}, each with its own canonical name '
+            f'and attributes, all on the same obs axis.'
+        )
     return derived | format_attrs(settings, store)
 
 

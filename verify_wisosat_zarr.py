@@ -25,6 +25,10 @@ config declares the CrIS repeat rule (``repeated_footprints``, R37), how two
 files rank (``file_rank``). The rule itself is applied here on its own: the
 footprints it leaves out are worked out from raw (``repeated_footprints``)
 and dropped from every file of their granule by their time, lat and lon.
+A source the key slices (``x[:, 0:17]``), or the config looks up onto another
+grid (``level_lookups``), is selected here with this module's own code, and
+what the slices leave out is checked against the config's
+``source_remainders`` from raw (``docs/products/tropess.md`` V9, D2).
 Comparisons are bit-exact, reading the stored values undecoded through zarr:
 the build does the same arithmetic in the same order, so anything short of
 identical is a defect.
@@ -91,7 +95,10 @@ from utils.nomenclature import (
     conversion_factor,
     coordinate_factor,
     coordinates,
+    matrix_stores,
+    split_source,
     variable as key_variable,
+    variables,
 )
 from utils.path_utils import (
     GEOLOCATION,
@@ -246,8 +253,122 @@ def to_epoch(values, unit):
     return (values.astype(f'datetime64[{unit}]') - np.datetime64(TIME_EPOCH, unit)).astype('int64')
 
 
+def selection_specs(settings, source_name):
+    """What the verifier needs of the declared slices, remainders and lookups.
+
+    Args:
+        settings (dict): The loaded configuration.
+        source_name (str): Whose key.
+
+    Returns:
+        dict: ``sliced`` (path -> the key's selections), ``remainders``
+            (path -> the config's entries), ``lookups`` (path -> the config's
+            entry) and ``fills`` (path -> declared fill); picklable.
+    """
+    sliced = {}
+    for entry in variables(source_name).values():
+        path, selection = split_source(entry.original)
+        if selection is not None:
+            sliced.setdefault(path, []).append(selection)
+    remainders = dict(settings.get('source_remainders') or {})
+    lookups = dict(settings.get('level_lookups') or {})
+    paths = set(sliced) | set(remainders) | set(lookups)
+    for lookup in lookups.values():
+        paths |= {lookup['grid'], split_source(lookup['at'])[0]}
+    return {'sliced': sliced, 'remainders': remainders, 'lookups': lookups,
+            'fills': {path: declared_fill(settings, path) for path in paths}}
+
+
+def squeezed(values):
+    """The style guide's squeeze of length-1 axes after the first, done here on its own."""
+    return values.reshape([size for axis, size in enumerate(values.shape) if axis == 0 or size != 1])
+
+
+def gone(values, fill):
+    """True where a value is a declared fill or NaN."""
+    out = np.isnan(values) if values.dtype.kind == 'f' else np.zeros(values.shape, dtype=bool)
+    for value in fill:
+        out |= values == np.asarray(value, dtype=values.dtype)
+    return out
+
+
+def remainder_check(path, values, specs):
+    """From raw: the key's slices and the declared remainders cover the source, and each remainder holds.
+
+    Args:
+        path (str): The source path.
+        values (numpy.ndarray): Its stored rows, squeezed.
+        specs (dict): From ``selection_specs``.
+
+    Returns:
+        list: Problems.
+    """
+    problems = []
+    fill = specs['fills'].get(path, [])
+    covered = np.zeros(values.shape[1:], dtype=bool)
+    for selection in specs['sliced'].get(path, []):
+        covered[tuple(selection[1:])] = True
+    for entry in specs['remainders'].get(path, []):
+        axis, (start, stop) = entry['axis'], entry['range']
+        where = [slice(None)] * values.ndim
+        where[axis] = slice(start, stop)
+        region = values[tuple(where)]
+        cover = [slice(None)] * (values.ndim - 1)
+        cover[axis - 1] = slice(start, stop)
+        covered[tuple(cover)] = True
+        if entry['rule'] == 'empty':
+            written = int((~gone(region, fill)).sum())
+            if written:
+                problems.append(f'{path}: {written} values written in axis {axis} {start}:{stop}, declared empty')
+        else:
+            where[axis] = slice(*entry['to'])
+            other = values[tuple(where)]
+            match = (gone(region, fill) & gone(other, fill)) | (region == other)
+            differ = int((~match.reshape(len(match), -1).all(axis=1)).sum())
+            if differ:
+                problems.append(f'{path}: axis {axis} {start}:{stop} differs from {entry["to"]} on {differ} rows')
+    if (path in specs['sliced'] or path in specs['remainders']) and not covered.all():
+        problems.append(f'{path}: {int((~covered).sum())} values per observation are in no slice and no declared remainder')
+    return problems
+
+
+def looked_up(handle, kept, path, values, specs):
+    """From raw: a source on another grid, read at each written value of ``at`` (``level_lookups``).
+
+    Args:
+        handle (h5py.File): The open file.
+        kept (numpy.ndarray): bool per row, the rows stored.
+        path (str): The looked-up source path.
+        values (numpy.ndarray): Its stored rows, squeezed.
+        specs (dict): From ``selection_specs``.
+
+    Returns:
+        tuple: The values on ``at``'s levels, and the problems found.
+    """
+    lookup = specs['lookups'][path]
+    grid = squeezed(handle[lookup['grid']][...][kept])
+    at_path, at_selection = split_source(lookup['at'])
+    at = squeezed(handle[at_path][...][kept])
+    if at_selection is not None:
+        at = at[at_selection]
+    written = ~gone(at, specs['fills'].get(at_path, []))
+    fill = specs['fills'].get(path, [])
+    out = np.empty(at.shape, dtype=values.dtype)
+    out[...] = np.asarray(fill[0], dtype=values.dtype) if fill else np.nan
+    problems = 0
+    for level in range(at.shape[1]):
+        match = grid == at[:, level:level + 1]
+        count = match.sum(axis=1)
+        rows = written[:, level]
+        problems += int((rows & (count != 1)).sum())
+        hit = rows & (count == 1)
+        out[hit, level] = values[hit, np.argmax(match[hit], axis=1)]
+    return out, ([f'{path}: {problems} written values of {lookup["at"]} not found exactly once in '
+                  f'{lookup["grid"]}'] if problems else [])
+
+
 def read_expected(granule, reader_name, items, time, unit, location, allowed, declared=None, masks=(),
-                  left_out_keys=None):
+                  left_out_keys=None, specs=None):
     """Read every file of one granule with h5py and compute what it contributes.
 
     A top-level function of picklable arguments, so it runs in a process pool.
@@ -276,6 +397,8 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
             of the observations the repeat rule leaves out of this granule
             (``repeated_footprints``), as worked out here; dropped from every
             file.
+        specs (dict | None): From ``selection_specs``: the key's slices,
+            the config's remainders and lookups, applied and checked here.
 
     Returns:
         list: Per file, a dict with ``path``, ``n_rows``, ``n_obs``,
@@ -345,19 +468,28 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
                 reader.declared_masks(handle, path, masks, kept) if masks else ({}, [])
             )
             out['leaked'] = 0
+            specs = specs or {'sliced': {}, 'remainders': {}, 'lookups': {}, 'fills': {}}
+            # what the key's slices leave out, checked once per source path
+            for path in sorted({split_source(source)[0] for source, _, _, _ in items}):
+                if path in handle and (path in specs['sliced'] or path in specs['remainders']):
+                    out['problems'] += remainder_check(path, squeezed(handle[path][...][kept]), specs)
             for source, fill, factor, absent in items:
-                if source not in handle:
+                path, selection = split_source(source)
+                if path not in handle:
                     continue
-                dataset = handle[source]
+                dataset = handle[path]
                 raw = raw_location[source] if source in raw_location else dataset[...]
-                if not processed.all() and source not in location and source not in allowed:
+                if not processed.all() and source not in location and path not in allowed:
                     out['leaked'] += int((~missing_rows(raw[~processed], fill)).sum())
                 if not kept.all():
                     raw = raw[kept]
                 # the style guide's squeeze, done here without the build's helper
-                raw = raw.reshape(
-                    [size for axis, size in enumerate(raw.shape) if axis == 0 or size != 1]
-                )
+                raw = squeezed(raw)
+                if path in specs['lookups']:
+                    raw, problems = looked_up(handle, kept, path, raw, specs)
+                    out['problems'] += problems
+                if selection is not None:
+                    raw = raw[selection]
                 attrs = {
                     key: decode_text(value) for key, value in dataset.attrs.items()
                     if key not in ('DIMENSION_LIST', 'REFERENCE_LIST', 'CLASS', 'NAME', '_Netcdf4Dimid')
@@ -590,6 +722,13 @@ def check_structure(report, settings, store, group, chunks, codecs):
         )
 
     attrs = dict(group.attrs)
+    if store in matrix_stores(source_name):
+        matrix = matrix_stores(source_name)[store]
+        report.check(
+            f'{store}: matrix names its arrays',
+            all(name in str(attrs.get('matrix', '')) for name in matrix.arrays),
+            f'{str(attrs.get("matrix", ""))[:120]!r}',
+        )
     missing = [key for key in REQUIRED_ATTRS if not attrs.get(key)]
     report.check(f'{store}: carries every required global attribute', not missing, f'missing {missing}')
     frequency = canonical_frequency(source_name, settings['temporal_resolution'])
@@ -954,6 +1093,7 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared, l
     allowed = tuple(settings.get('allowed_on_rows_left_out') or [])
     targets = value_targets(settings, stores)
     items = value_items(settings, targets)
+    specs = selection_specs(settings, source_name)
     match_sources = tuple(getattr(reader, 'MATCH_SOURCES', ()))
 
     masks = tuple(settings.get('declared_masked_values') or ())
@@ -999,7 +1139,7 @@ def scan_values(settings, stores, begin, granules, primary, counted, declared, l
         position = begin + offset
         files = read_expected(
             granule, source_name, items, time, unit, location, allowed, declared.get(granule.id),
-            masks, left_out_keys.get(granule.id),
+            masks, left_out_keys.get(granule.id), specs,
         )
         lo = int(starts[position])
         hi = lo + int(counts[position])

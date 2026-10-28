@@ -26,6 +26,14 @@ Ported from ``data_engineering_mswep/utils/nomenclature.py``. What differs:
 - **Configs and stores name variables canonically.** The original name is the
   HDF5 path in the source file, which is no name for a store, so lookups run
   from the canonical side.
+- **A source may be sliced** (added 2026-10-28 for TROPESS v2, shaped for
+  TES; ``docs/products/tropess.md`` V9, D2): ``original_variable_name`` is a
+  path, optionally followed by a numpy-style selection with ``:`` for the
+  observation axis, e.g. ``x[:, 0:17]`` or ``AveragingKernel[:, 0:17, 17:34]``.
+  One source can so feed several canonical names, one per slice.
+- **A matrix store** (N18) holds several canonical arrays that form one
+  matrix. An optional "Matrix Store Key" table names the store, its arrays
+  (each a row of the variable key) and its long name.
 """
 
 from __future__ import annotations
@@ -45,6 +53,7 @@ VARIABLE_COLUMNS = frozenset(
 )
 COORDINATE_COLUMNS = frozenset({'original_name', 'name', 'units', 'unit_conversion'})
 FREQUENCY_COLUMNS = frozenset({'original_frequency_name', 'canonical_name'})
+MATRIX_COLUMNS = frozenset({'store', 'arrays', 'canonical_long_name'})
 
 # Constants a unit_conversion may name. N_A is exact by the 2019 SI definition,
 # so the factor has no measurement uncertainty to record
@@ -54,6 +63,13 @@ CONSTANTS = {'N_A': 6.02214076e23}
 # joined by * and /. Deliberately no + or -: an offset conversion would need
 # the fill masked before it is applied, and nothing in scope needs one
 FACTOR_TOKEN_RE = re.compile(r'\s*([*/]|[A-Za-z_]\w*|\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)')
+
+# 'x', 'observation_ops/averaging_kernel[:, 0:17, 0:17]': a path, then an
+# optional selection of integers and start:stop slices, one per axis from the
+# observation axis on. No steps or negatives: every slice reads as the range
+# of source indices it keeps
+SOURCE_RE = re.compile(r'^(?P<path>[^\[\]\s]+)(?:\[(?P<selection>[^\[\]]*)\])?$')
+SELECTION_ITEM_RE = re.compile(r'^(?:(?P<index>\d+)|(?P<start>\d*):(?P<stop>\d*))$')
 
 
 class Variable(NamedTuple):
@@ -95,6 +111,22 @@ class Coordinate(NamedTuple):
     name: str
     units: str
     unit_conversion: str
+
+
+class MatrixStore(NamedTuple):
+    """One row of the matrix store key: one store holding a matrix's pieces (N18).
+
+    Attributes:
+        store (str): The store's canonical name, e.g.
+            'water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log'.
+        arrays (tuple): The canonical names of its arrays, in order; each a
+            row of the variable key.
+        long_name (str): The matrix's canonical long name.
+    """
+
+    store: str
+    arrays: tuple
+    long_name: str
 
 
 class Frequency(NamedTuple):
@@ -229,16 +261,110 @@ def variables(product):
         # parsed now rather than at build time, so a typo in the key fails
         # before any file is opened
         conversion_factor(variable.unit_conversion)
+        split_source(variable.original)
         # a collision would point two stores at one name, and the second build
         # would overwrite the first
         if variable.canonical in key:
             raise ValueError(f'two rows map onto {variable.canonical!r} in {path}')
         key[variable.canonical] = variable
 
-    originals = [entry.original for entry in key.values()]
+    # one canonical name per source slice: a source may feed several names,
+    # but one slice of it only one
+    originals = [entry.original.replace(' ', '') for entry in key.values()]
     if len(set(originals)) != len(originals):
-        raise ValueError(f'one source variable maps onto two canonical names in {path}')
+        raise ValueError(f'one source slice maps onto two canonical names in {path}')
     return key
+
+
+@functools.lru_cache(maxsize=None)
+def split_source(original):
+    """A key's ``original_variable_name`` as a source path and a selection.
+
+    Args:
+        original (str): e.g. 'x', or 'x[:, 0:17]'.
+
+    Returns:
+        tuple: ``(path, selection)``: the source path, and a tuple of ``slice``
+            and ``int`` per axis from the observation axis on, or None where
+            the whole source is meant.
+
+    Raises:
+        ValueError: If the text does not parse, or the selection does not
+            keep the whole observation axis.
+    """
+    match = SOURCE_RE.match(original.strip())
+    if match is None:
+        raise ValueError(f'cannot parse the source {original!r}')
+    if match['selection'] is None:
+        return match['path'], None
+    items = []
+    for text in match['selection'].split(','):
+        item = SELECTION_ITEM_RE.match(text.strip())
+        if item is None:
+            raise ValueError(f'cannot parse {text.strip()!r} in the source {original!r}')
+        if item['index'] is not None:
+            items.append(int(item['index']))
+        else:
+            items.append(slice(int(item['start']) if item['start'] else None,
+                               int(item['stop']) if item['stop'] else None))
+    # every observation is kept: a slice selects within an observation
+    if items[0] != slice(None, None):
+        raise ValueError(f'the source {original!r} must keep the whole observation axis, written ":"')
+    return match['path'], tuple(items)
+
+
+def source_path(original):
+    """The source path of a key's ``original_variable_name``, without its selection.
+
+    Args:
+        original (str): e.g. 'x[:, 0:17]'.
+
+    Returns:
+        str: e.g. 'x'.
+    """
+    return split_source(original)[0]
+
+
+@functools.lru_cache(maxsize=None)
+def matrix_stores(product):
+    """The matrix store key, keyed by store name; empty where the key has none.
+
+    Args:
+        product (str): The product, e.g. 'tropess_v2'.
+
+    Returns:
+        dict: Store canonical name -> :class:`MatrixStore`.
+
+    Raises:
+        ValueError: If there is more than one such table, a row is incomplete,
+            a store is also a variable row, or an array is not a variable row,
+            is listed twice, or belongs to two stores.
+    """
+    tables, path = read_tables(product)
+    matches = [rows for rows in tables if MATRIX_COLUMNS <= set(rows[0])]
+    if not matches:
+        return {}
+    if len(matches) > 1:
+        raise ValueError(f'expected at most one matrix store table in {path}, found {len(matches)}')
+    key = variables(product)
+    stores, owner = {}, {}
+    for row in matches[0]:
+        arrays = tuple(name.strip().strip('`').strip() for name in row['arrays'].split(','))
+        entry = MatrixStore(store=row['store'], arrays=arrays, long_name=row['canonical_long_name'])
+        if not entry.store or not entry.long_name or not all(arrays):
+            raise ValueError(f'incomplete matrix store row for {entry.store!r} in {path}')
+        if entry.store in key or entry.store in stores:
+            raise ValueError(f'{entry.store!r} is named twice as a store in {path}')
+        if len(set(arrays)) != len(arrays):
+            raise ValueError(f'matrix store {entry.store!r} lists an array twice in {path}')
+        for name in arrays:
+            if name not in key:
+                raise ValueError(f'matrix store {entry.store!r} array {name!r} has no variable row in {path}')
+            if name in owner:
+                raise ValueError(f'{name!r} is an array of both {owner[name]!r} and {entry.store!r} in {path}')
+            owner[name] = entry.store
+        stores[entry.store] = entry
+    return stores
 
 
 @functools.lru_cache(maxsize=None)
