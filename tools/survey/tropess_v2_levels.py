@@ -24,9 +24,10 @@ instrument-day, all three types read whole. It records:
 The int8-packed blocks (1-D byte arrays) are not read. Run from the repo
 root, as a batch job (it reads every v2 file, ~117 GB):
 
-    .venv/bin/python -I tools/survey/tropess_v2_levels.py <output.jsonl> [--limit N]
+    .venv/bin/python -I tools/survey/tropess_v2_levels.py <output.jsonl> [--limit N | --every N]
 
-It writes one JSON line per instrument-day and prints a summary;
+``--every N`` reads every Nth day of each instrument from the first (the
+user's sample for R42, 2026-10-28: N = 10). It writes one JSON line per instrument-day and prints a summary;
 ``--summarize`` re-reads an existing output.
 """
 
@@ -245,6 +246,9 @@ def main():
         limit = int(sys.argv[sys.argv.index('--limit') + 1])
         days = [d for inst in FOLDERS for d in (lambda s: s[::max(1, len(s) // limit)][:limit])(
             [d for d in days if d['instrument'] == inst])]
+    if '--every' in sys.argv:
+        every = int(sys.argv[sys.argv.index('--every') + 1])
+        days = [d for inst in FOLDERS for d in [d for d in days if d['instrument'] == inst][::every]]
     workers = len(os.sched_getaffinity(0))
     print(f'{len(days)} instrument-days, {workers} workers', flush=True)
     with open(output, 'w') as handle, multiprocessing.Pool(workers) as pool:
