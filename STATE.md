@@ -4,8 +4,15 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-28)
 
-**Nothing is running; no batch job is queued; no task is current.** Start a
-new session by asking the user which of "Next: candidates" to take on.
+**Current task: TES (user, 2026-10-28).** Nothing is running; no batch job
+is queued. Decisions T1-T12 are laid out in `docs/products/tes.md`
+("Decisions for the user"), from probes of three files and the upstream
+listing; waiting on the user's answers. Found: v006 (on disk) is retired
+from CMR, and V007 lacks 2005-01 .. 2008-11 upstream (T1, E7); time is
+TAI93 (E4); the kernel is rows retrieved, columns true, as stored (E6,
+settled from the Lite HDO bias correction); 2,825,124 rows in 71.5 GB.
+Next: the user's answers, then the audit of every file (a batch job, shown
+first).
 
 **Finished products** (every store finalized: `--attrs` and a tag, each
 `--apply` signed off by the user). Facts, decisions and issues are in each
@@ -113,10 +120,8 @@ when it is time (2026-10-22).
     it to the TROPESS team is optional.
   - **TROPESS R12:** confirm that `observation_error_h2o` is 1-sigma.
   - **TES:** `ObservationErrorCovariance` has no `Units`; declare
-    `ln(vmr)^2`. Confirm its kernel's row/column convention (TROPESS v2's
-    joint blocks are rows retrieved, columns true: the ratio kernel equals
-    `hdo_hdo` - `h2o_hdo` to 1e-6, finding 18; a TES test of the same kind
-    may settle it).
+    `ln(vmr)^2`. The kernel convention is settled (E6, 2026-10-28). The rest
+    is in `tes.md` T1-T12.
   - **TROPESS v2, for later:** the int8-packed 67x67 blocks and the
     67-level `species` / prior (R44) are left out; addable as stores of
     their own (the packed ones need TROPESS's `tropess_compression` and an
