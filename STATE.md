@@ -19,8 +19,14 @@ Read this first in a new session. Update it whenever work lands.
   finding 18; R45, R46). **The v2 production subset is approved
   (2026-10-28, Q1-Q3 as proposed)** (`tropess.md`, "v2 production subset", V1-V8;
   Q1 `averaging_kernel_h2o` as the joint store's H2O block, Q2 the
-  `air_density` row, Q3 non-CF retained `standard_name`s). Next, after
-  review: the row, the N18 multi-array store change, the reader's v2 mode.
+  `air_density` row, Q3 non-CF retained `standard_name`s). **Code done
+  2026-10-28** (V9 design, user-approved: D1 a v2 reader and key, D2 general
+  source slices shaped for TES, D3 matrix stores, D4 the key; `tropess.md`
+  V8 "Done"): configs `config/airs_fs_v2/`, `config/cris_jpss1_fs_v2/`
+  (22 stores each), fixtures staged. **The full fixture test passes 445 cases over
+  11 fixtures** (2026-10-28, the two v2 included). Bench trees staged
+  (2026-06-01 .. 09, both instruments; `config_zarr_bench.yaml`). **Next: the
+  bench jobs (show them first).**
   Exceptions that match v1: R11, R32 (AIRS), R37 and R40 (CrIS). R22 does
   not occur in v2. The v1/v2 seam shares no rows.
 - **Earlier handoff text:** read `docs/products/tropess.md`, section "v2:
@@ -115,8 +121,8 @@ Read this first in a new session. Update it whenever work lands.
 - **The AIRS bench data is deleted** (user approved 2026-10-23): its stores
   and symlink trees in `wisosat_bench/`. The configs and stager stay, to
   rebuild it.
-- **The fixture test passes 350 cases** over 9 fixtures (~15 min, login
-  node), 2026-10-26.
+- **The fixture test passes 445 cases** over 11 fixtures (~15 min, login
+  node), 2026-10-28.
 
 - **Tasks 1-5 are done.** The shared pipeline (`CLAUDE.md`, Layout) and the
   testing tiers (`TESTING.md`) are in place.

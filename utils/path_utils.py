@@ -191,6 +191,11 @@ def run_variables(settings):
             f'{sorted({within[name] for name in twice})}; a matrix is one store (N18)'
         )
 
+    stored = set(names) - set(matrices) | set(within)
+    unknown = sorted(set(settings.get('withheld_standard_names') or {}) - stored)
+    if unknown:
+        raise ValueError(f'withheld_standard_names names variables this config does not store: {unknown}')
+
     flags = [name for name in variables(source_product(settings)) if name.startswith(QUALITY_FLAG_PREFIX)]
     missing = [name for name in flags if name not in names and name not in within]
     if missing:

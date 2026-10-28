@@ -42,6 +42,19 @@ each file that holds it, and the Summary rows of the Standard rows kept:
 - A day not declared under R36 keeps a row with ``land_flag`` 0, so the
   verifier's check of undeclared days (Q1) sees a real file.
 
+The two v2 fixtures (2026-10-28; ``tropess.md`` V8) are the Full files of
+2026-06-01, 06-02 and 06-04, cut as CrIS's (the first ``CRIS_ROWS`` and last
+``CRIS_TAIL`` rows, plus the footprints the staged days share, R37), so each
+holds both quality values, the 34-wide levels and the 67-level grid. The
+int8-packed blocks, which no store reads, are left out of the staged files
+(each is tens of MB):
+
+- **AIRS v2 FS:** no repeats, as upstream;
+- **CrIS-JPSS1 v2 FS:** repeats one day back (R37).
+
+06-03 is left out of both, so the missing-day check sees a gap (a fixture gap,
+not an upstream one).
+
 Run from the repo root (reads ~0.3 GB, light enough for a login node):
 
     uv run python validation/stage_tropess.py
@@ -60,7 +73,8 @@ import netCDF4
 import numpy as np
 
 import products.tropess as reader
-from products.tropess import list_granules, match_rows
+import products.tropess_v2 as reader_v2
+from products.tropess import match_rows
 from utils.path_utils import listing_options, load_config
 
 # product -> (production config, fixture config, days, cut)
@@ -76,7 +90,15 @@ FIXTURES = {
     'cris_jpss1_fs': ('config/cris_jpss1_fs/config_zarr.yaml', 'config/cris_jpss1_fs/config_zarr_fixture.yaml',
                       ('20210520', '20210521', '20211031', '20211101', '20211110',
                        '20230928', '20230929', '20230930'), 'cris'),
+    'airs_fs_v2': ('config/airs_fs_v2/config_zarr.yaml', 'config/airs_fs_v2/config_zarr_fixture.yaml',
+                   ('20260601', '20260602', '20260604'), 'v2'),
+    'cris_jpss1_fs_v2': ('config/cris_jpss1_fs_v2/config_zarr.yaml',
+                         'config/cris_jpss1_fs_v2/config_zarr_fixture.yaml',
+                         ('20260601', '20260602', '20260604'), 'v2'),
 }
+# the v2 Full files' int8-packed blocks sit on dimensions named so; no store
+# reads them, and they are left out of the staged files
+PACKED_SUFFIX = '_compressed_bytes'
 # CrIS: rows of each day's first file kept from its start and from its end
 # besides its repeats (the end, so a seam steps back in time, as the files'
 # do), and how many shared footprints each pair of nearby staged files keeps
@@ -103,14 +125,22 @@ def copy_group(src, dst, rows):
     src.set_auto_maskandscale(False)
     dst.setncatts({name: src.getncattr(name) for name in src.ncattrs()})
     for name, dim in src.dimensions.items():
+        if name.endswith(PACKED_SUFFIX):
+            continue
         size = len(rows) if name == 'target' and rows is not None else dim.size
         dst.createDimension(name, size)
     for name, variable in src.variables.items():
+        if any(dim.endswith(PACKED_SUFFIX) for dim in variable.dimensions):
+            continue
         fill = variable.getncattr('_FillValue') if '_FillValue' in variable.ncattrs() else False
         out = dst.createVariable(name, variable.datatype, variable.dimensions, zlib=True,
                                  complevel=1, fill_value=fill)
         out.setncatts({key: variable.getncattr(key) for key in variable.ncattrs() if key != '_FillValue'})
         out.set_auto_maskandscale(False)
+        # a char array with _Encoding (v2's target_id) is copied as chars,
+        # not decoded to strings and re-encoded
+        variable.set_auto_chartostring(False)
+        out.set_auto_chartostring(False)
         values = variable[...]
         if rows is not None and variable.dimensions and variable.dimensions[0] == 'target':
             values = values[rows]
@@ -145,6 +175,32 @@ def cut_rows(paths):
     standard = np.union1d(np.arange(min(half, keys[0]['time'].size)), matched[:half])
     summary = np.where(np.isin(matched, standard))[0]
     return [standard, summary]
+
+
+def shared_cut_rows(granules, days):
+    """The rows each staged file keeps: its first and last rows, and its shared footprints.
+
+    Args:
+        granules (dict): Day id -> Granule (one file each), from the production listing.
+        days (tuple): The staged days, in order.
+
+    Returns:
+        dict: Path -> int array of rows.
+    """
+    keys = {day: reader.footprint_keys(granules[day].paths[0]) for day in days}
+    chosen = set()
+    for i, day in enumerate(days):
+        for other in days[i + 1:i + 3]:
+            shared = (set(keys[day]) & set(keys[other])) - {None}
+            chosen |= set(sorted(shared)[:CRIS_SHARED])
+    return {
+        granules[day].paths[0]: np.union1d(
+            np.r_[np.arange(min(CRIS_ROWS, len(keys[day]))),
+                  np.arange(max(0, len(keys[day]) - CRIS_TAIL), len(keys[day]))],
+            [row for row, key in enumerate(keys[day]) if key in chosen],
+        ).astype(int)
+        for day in days
+    }
 
 
 def cris_cut_rows(granules, days, settings):
@@ -209,10 +265,12 @@ def stage(production, fixture, days, cut, restage):
     settings = load_config(production)
     raw = settings['directories']['raw']
     target = load_config(fixture)['directories']['raw']
+    module = reader_v2 if cut == 'v2' else reader
     # the R37 rule reads every production file; the staging needs only the days
-    options = dict(listing_options(settings, reader), repeated_footprints=None)
-    granules = {granule.id: granule for granule in list_granules(raw, **options)}
-    cris = cris_cut_rows(granules, days, settings) if cut == 'cris' else {}
+    options = dict(listing_options(settings, module), repeated_footprints=None)
+    granules = {granule.id: granule for granule in module.list_granules(raw, **options)}
+    cris = (cris_cut_rows(granules, days, settings) if cut == 'cris'
+            else shared_cut_rows(granules, days) if cut == 'v2' else {})
     for day in days:
         paths = granules[day].paths
         superseded = (settings.get('superseded_files') or {}).get(day)
@@ -221,13 +279,13 @@ def stage(production, fixture, days, cut, restage):
             old = glob.glob(os.path.join(raw, '*', superseded))
             paths = paths + tuple(old)
             cris[old[0]] = np.arange(CRIS_ROWS)
-        if cut == 'cris':
+        if cut in ('cris', 'v2'):
             rows = [cris[path] for path in paths]
         else:
             rows = cut_rows(paths) if cut else [None] * len(paths)
         for path, keep in zip(paths, rows):
             relative = os.path.relpath(path, raw)
-            if cut != 'cris' and RELOCATED[0] == day and '_Standard_' in path:
+            if cut not in ('cris', 'v2') and RELOCATED[0] == day and '_Standard_' in path:
                 relative = os.path.join(RELOCATED[1], RELOCATED[2], os.path.basename(path))
             destination = os.path.join(target, relative)
             if os.path.exists(destination) and not restage:

@@ -16,6 +16,9 @@ drift:
 - **CrIS-JPSS1 FS 2021-05:** the R1p24 replacement of 05-21 (R18; its old
   file is linked too), R36 on every day but that one, repeats between R1p12
   and R1p24 files; 31 days.
+- **AIRS v2 and CrIS-JPSS1 v2, 2026-06-01 .. 09** (2026-10-28; ``tropess.md``
+  V8): nine days of Full files each, read with the v2 reader; CrIS's hold
+  repeats (R37). A span is matched as a prefix of the day id.
 
 The verifier fails a declared fill value that never occurs, so this also
 reports, for each fill the production config declares, whether the month
@@ -39,8 +42,7 @@ import h5py
 import numpy as np
 
 import products.tropess as reader
-from products.tropess import list_granules
-from utils.path_utils import listing_options, load_config
+from utils.path_utils import listing_options, load_config, load_reader
 
 # product -> (production config, bench config, month)
 BENCHES = {
@@ -49,6 +51,9 @@ BENCHES = {
     'cris_snpp_rs': ('config/cris_snpp_rs/config_zarr.yaml', 'config/cris_snpp_rs/config_zarr_bench.yaml', '201512'),
     'cris_snpp_fs': ('config/cris_snpp_fs/config_zarr.yaml', 'config/cris_snpp_fs/config_zarr_bench.yaml', '202104'),
     'cris_jpss1_fs': ('config/cris_jpss1_fs/config_zarr.yaml', 'config/cris_jpss1_fs/config_zarr_bench.yaml', '202105'),
+    'airs_fs_v2': ('config/airs_fs_v2/config_zarr.yaml', 'config/airs_fs_v2/config_zarr_bench.yaml', '2026060'),
+    'cris_jpss1_fs_v2': ('config/cris_jpss1_fs_v2/config_zarr.yaml',
+                         'config/cris_jpss1_fs_v2/config_zarr_bench.yaml', '2026060'),
 }
 
 
@@ -80,16 +85,17 @@ def stage(production, bench, month):
     Args:
         production (str): The production config, for the raw root and listing.
         bench (str): The bench config, for the bench raw root.
-        month (str): YYYYMM.
+        month (str): YYYYMM, or any prefix of the day ids (``2026060``: 06-01 .. 09).
     """
     settings = load_config(production)
+    module = load_reader(settings)
     raw = settings['directories']['raw']
     target = load_config(bench)['directories']['raw'] if os.path.exists(bench) else None
     # the repeat rule reads every production file; the month is applied below
-    options = dict(listing_options(settings, reader))
+    options = dict(listing_options(settings, module))
     rule = options.get('repeated_footprints')
     options['repeated_footprints'] = None
-    granules = [granule for granule in list_granules(raw, **options) if granule.id.startswith(month)]
+    granules = [granule for granule in module.list_granules(raw, **options) if granule.id.startswith(month)]
     paths = [path for granule in granules for path in granule.paths]
     # R18: a replaced file of the month is linked too, so the bench declares it
     superseded = {day: name for day, name in (settings.get('superseded_files') or {}).items()

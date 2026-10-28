@@ -485,6 +485,10 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
                     raw = raw[kept]
                 # the style guide's squeeze, done here without the build's helper
                 raw = squeezed(raw)
+                # the source as read, before any lookup or slice: the declared
+                # fill is the source's, so it is tallied over all of it (R42's
+                # padding holds fill the kept levels may not)
+                whole = raw
                 if path in specs['lookups']:
                     raw, problems = looked_up(handle, kept, path, raw, specs)
                     out['problems'] += problems
@@ -504,18 +508,20 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
                     continue
 
                 masked = np.zeros(raw.shape, dtype=bool)
+                fill_count = 0
                 for value in fill:
                     masked |= raw == np.asarray(value, dtype=raw.dtype)
+                    fill_count += int((whole == np.asarray(value, dtype=whole.dtype)).sum())
                 default = netCDF4.default_fillvals.get(raw.dtype.str[1:])
                 undeclared = 0
                 if default is not None and not any(
                     np.asarray(value, dtype=raw.dtype) == np.asarray(default, dtype=raw.dtype)
                     for value in fill
                 ):
-                    undeclared = int((raw == np.asarray(default, dtype=raw.dtype)).sum())
+                    undeclared = int((whole == np.asarray(default, dtype=whole.dtype)).sum())
                 clashes = 0
                 if absent is not None:
-                    clashes = int((raw == np.asarray(absent, dtype=raw.dtype)).sum())
+                    clashes = int((whole == np.asarray(absent, dtype=whole.dtype)).sum())
 
                 if raw.dtype.kind == 'f':
                     expected = raw.astype('float64')
@@ -527,7 +533,7 @@ def read_expected(granule, reader_name, items, time, unit, location, allowed, de
                 else:
                     expected = raw
                 entry.update(
-                    expected=expected, fill=int(masked.sum()), undeclared=undeclared,
+                    expected=expected, fill=fill_count, undeclared=undeclared,
                     absent=clashes,
                 )
                 out['sources'][source] = entry
@@ -1624,11 +1630,23 @@ def check_values(report, settings, groups, compared, granules, index, num_worker
     # a source standard_name is retained unchanged, and none is ever added.
     # In a merged granule it may be on one of the files only (TROPESS's
     # Summary carries one for x_h2o, its Standard file none)
+    withheld = settings.get('withheld_standard_names') or {}
     for store, name, source, _ in targets:
         stored_attrs = dict(groups[store][name].attrs)
         names = seen.standard_names.get(source, set())
         declared = ((settings.get('variable_attrs') or {}).get(name) or {}).get('standard_name')
-        if declared is not None or len(names) > 1:
+        if name in withheld:
+            # the approved exception: no standard_name, the source's kept as
+            # original_standard_name, with the reason
+            report.check(
+                f'{store}/{name}: standard_name withheld as declared, the source one kept as '
+                f'original_standard_name',
+                'standard_name' not in stored_attrs and bool(stored_attrs.get('standard_name_withheld'))
+                and stored_attrs.get('original_standard_name') in (names or {None}),
+                f'{stored_attrs.get("standard_name")!r}, {stored_attrs.get("original_standard_name")!r} '
+                f'against source {sorted(names)!r}',
+            )
+        elif declared is not None or len(names) > 1:
             # set in config where the first commit may lack the file that
             # carries it (TROPESS x_h2o), or where the source renamed it over
             # the record (TROPESS R33): either way it must be a source one

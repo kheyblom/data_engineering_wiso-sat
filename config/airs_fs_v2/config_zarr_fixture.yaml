@@ -1,0 +1,305 @@
+# AIRS v2 FS pipeline test fixture: three real days, 2026-06-01, 02 and 04
+# (03 left out, a declared gap), each Full file cut to its first 200 and last 20 rows by
+# validation/stage_tropess.py, without the int8-packed blocks no store reads.
+# Every path differs from production.
+product: airs
+source: tropess_v2
+directories:
+  raw: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/raw/airs_fs_v2
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat_fixture/zarr/airs_fs_v2
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+log_file: wisosat_zarr_airs_fs_v2_fixture.log
+# the collection version every file declares (VersionID), checked on every file
+version: '2'
+# the stream, after the version in the store names; it also selects the
+# stream's collection folders under the raw root (LISTING_OPTIONS)
+version_product: fs
+# the files' Platform attribute, checked on every file; it also selects the
+# platform's folders and files
+platform: Aqua
+temporal_resolution: observation
+grid_name: native_swath
+# the style guide's exception, approved for AIRS v1 by the user 2026-10-23
+# (R32) and carried to v2 because the situation is the same (user rule
+# 2026-10-28; V2): rows kept in source order, AIRS granules interleaved, with
+# the repeat check in place of the time order
+time_order: source
+
+# canonical names, each a row (or matrix store) of nomenclature-key_tropess_v2.md:
+# v1's 19 stores, plus quality, air density and the joint kernel (V3)
+variables:
+  - water_vapor_hdo_h2o_ratio
+  - water_vapor_h2o_mole_fraction_dry_air
+  - water_vapor_delta_d_850_250hpa
+  - water_vapor_delta_d_850_250hpa_standard_error
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa
+  - water_vapor_h2o_mole_fraction_dry_air_850_250hpa_standard_error
+  - water_vapor_delta_d_004
+  - water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal
+  - cloud_effective_optical_depth
+  - cloud_top_pressure
+  - temperature_surface
+  - land_flag
+  - day_night_flag
+  - quality_flags_retrieval
+  - water_vapor_hdo_h2o_ratio_apriori
+  - water_vapor_hdo_h2o_ratio_averaging_kernel_log
+  - water_vapor_hdo_and_h2o_mole_fraction_dry_air_averaging_kernel_log
+  - water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log
+  - pressure
+  - altitude
+  - air_molar_density
+
+# 2026-06-03 is not staged: a fixture gap, declared, not an upstream one
+expected_missing_days: ['2026-06-03']
+
+# Only fixture configs may build from a working tree with uncommitted changes:
+# the pipeline test builds during development and its stores are throwaway.
+# Every other build refuses (check_clean_tree), and the test checks that no
+# other config sets this.
+allow_dirty_tree: true
+
+# every row has time, latitude and longitude (audit 2026-10-28)
+allowed_on_rows_left_out: []
+
+# fill each source holds (audit 2026-10-28, TESTING.md finding 18); NaN is
+# fill wherever it occurs. The verifier fails if a declared value never
+# occurs, so only what occurs is declared
+source_fill_values:
+  x: [-999]
+  x_h2o: [-999]
+  pressure_ret: [-999]
+  altitude: [-999]
+  retrieval/air_density: [-999]
+  observation_ops/xa: [-999]
+  observation_ops/observation_error_h2o: [-999]
+  observation_ops/averaging_kernel: [-999]
+  hdo_hdo_averaging_kernel: [-999]
+  hdo_h2o_averaging_kernel: [-999]
+  h2o_hdo_averaging_kernel: [-999]
+  h2o_h2o_averaging_kernel: [-999]
+  geophysical/day_night_flag: [-999]
+  dd_col_p_error: [-9999]
+  x_h2o_col_p_error: [-999]
+
+# integers stored as int32, as v1's flags (R16)
+source_dtypes:
+  geophysical/land_flag: int32
+  geophysical/day_night_flag: int32
+  quality: int32
+
+# R42 (user decision 2026-10-28): the key keeps levels 0-16 of the 34-wide
+# retrieval dimension; everything else each source holds is declared here and
+# checked from raw by the build and the verifier
+source_remainders:
+  x: &empty_levels
+    - {axis: 1, range: [17, 34], rule: empty}
+  x_h2o: *empty_levels
+  observation_ops/xa: *empty_levels
+  observation_ops/observation_error_h2o: *empty_levels
+  observation_ops/averaging_kernel: &empty_matrix
+    - {axis: 1, range: [17, 34], rule: empty}
+    - {axis: 2, range: [17, 34], rule: empty}
+  hdo_hdo_averaging_kernel: *empty_matrix
+  hdo_h2o_averaging_kernel: *empty_matrix
+  h2o_hdo_averaging_kernel: *empty_matrix
+  h2o_h2o_averaging_kernel: *empty_matrix
+  # the retrieval grid twice: HDO's levels, then H2O's, the same pressures
+  pressure_ret:
+    - {axis: 1, range: [17, 34], rule: equal, to: [0, 17]}
+  # Standard's 34-wide copy, then fill, in a 67-wide array (not on pressure_fm)
+  retrieval/air_density:
+    - {axis: 1, range: [17, 34], rule: equal, to: [0, 17]}
+    - {axis: 1, range: [34, 67], rule: empty}
+
+# R43 (user decision 2026-10-28): Full's altitude is on the 67-level
+# forward-model grid; it is read where pressure_fm equals each retrieval
+# pressure, found exactly once on every written level (audit)
+level_lookups:
+  altitude: {grid: pressure_fm, at: 'pressure_ret[:, 0:17]'}
+
+# Q2 (user decision 2026-10-28): the source's standard_name names a number
+# density (m-3); the store is a molar density (mol m-3)
+withheld_standard_names:
+  air_molar_density: >-
+    The source variable's standard_name, air_number_density, is CF's for a
+    number density in m-3; this store is converted to a molar density in
+    mol m-3 (divided by the Avogadro constant), so the name would mislabel it.
+    It is kept here as original_standard_name.
+
+# blosc zstd 5 + byte shuffle on the 2-D profile arrays and every kernel, as
+# v1 (C7); pressure, air density and every 1-D array keep zarr's default zstd
+compression:
+  blosc: {cname: zstd, clevel: 5, shuffle: shuffle}
+  arrays:
+    - water_vapor_hdo_h2o_ratio_averaging_kernel_log
+    - water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log
+    - water_vapor_hdo_mole_fraction_dry_air_averaging_kernel_log_cross_h2o
+    - water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log_cross_hdo
+    - water_vapor_h2o_mole_fraction_dry_air_averaging_kernel_log
+    - altitude
+    - water_vapor_hdo_h2o_ratio
+    - water_vapor_hdo_h2o_ratio_apriori
+    - water_vapor_h2o_mole_fraction_dry_air
+    - water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log
+
+# scale settings (condition 3; V7). ~1.0 M obs for 2026-06, ~34,000 a day:
+# the 17x17 kernels take 32,768-obs chunks, the 17-level arrays 524,288, the
+# rest 4,194,304; 30 days make a ~1 M-obs commit
+chunks:
+  obs: 1000
+  granule: 3
+granules_per_commit: 2
+num_workers: 2
+
+filtering_guidance: >-
+  None applied: every observation of the Full product is kept.
+  quality_flags_retrieval is TROPESS's retrieval quality flag (1
+  good, 0 bad): the v2 Standard product is exactly the observations with 1
+  (measured on every day, 2026-10-28), and every one of them has DOF > 1.1.
+  Observations with 0 reach DOF 2.6. On some observations with 0 the HDO/H2O
+  ratio kernel is fill at its lowest levels (R45). Sarkar et al. (2026)
+  filtered collection 1 with DOF >= 1 and COD <= 0.5
+  (water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal and
+  cloud_effective_optical_depth). The TROPESS User Guide gives "DOFS > 0.7" as
+  a rule of thumb.
+
+attrs:
+  title: >-
+    WISO-SAT AIRS Level 2 HDO/H2O (TROPESS forward stream, collection
+    {version_label}, Full product): {variable}
+  summary: >-
+    One variable of the NASA TROPESS AIRS (Aqua) HDO/H2O retrievals of the
+    forward stream, collection 2, from the Full product: every retrieved
+    observation, with TROPESS's quality flag, stored as an
+    icechunk-backed zarr store. Join with the geolocation store of the same
+    product on obs for time, latitude and longitude, and with the pressure
+    store for the 17 retrieval levels.
+  Conventions: ACDD-1.3
+  source: >-
+    NASA TROPESS AIRS-Aqua L2 Deuterated Water Vapor for Forward Stream, Full
+    Product V2 (TRPSFL2HDOAIRSFS, doi:10.5067/2OFL8HY2YL7T), one netCDF file
+    per day, GES DISC
+  source_collection_version: >-
+    {version_label} (VersionID), every file
+  source_algorithm: >-
+    MUSES v1.25 (R1p25), format F2p10 (joint retrieval, J1), every file; recorded per granule in the
+    granule index (granule_algorithm, granule_format)
+  institution: NASA Jet Propulsion Laboratory, TROPESS project (source data)
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Sarkar, M., Dee, S., Frazer, M., Bailey, A., Good, S., et al. (2026), WISO-SAT:
+    A global database of stable hydrogen isotopes in water vapor from eight
+    satellite missions, Scientific Data, doi:10.1038/s41597-026-08218-8.
+    TROPESS HDO/H2O Level 2 Product User Guides and the Forward Stream README,
+    GES DISC.
+  product_type: >-
+    Built from the Full (archival) product only (user decision 2026-10-28). The
+    v2 Standard product is exactly the Full observations with
+    quality_flags_retrieval 1, in the same order and with identical values,
+    and the v2 Summary product is Standard's 17 levels on the same
+    observations, so neither is read.
+  levels: >-
+    The Full files carry the retrieval profiles on a 34-wide dimension, of
+    which levels 0-16 hold values: v1's 17 retrieval levels, 1000 to 0.1 hPa
+    with the surface first. The rest is fill, or a copy of levels 0-16 (the
+    pressure grid and air density), checked on every observation by the build
+    and the verifier. Only levels 0-16 are stored.
+  altitude: >-
+    Altitude is Full's, read on the 67-level forward-model grid at the 17
+    retrieval pressures. The Standard files' 34-wide altitude holds other
+    observations' altitudes (two per row), so it is not used.
+  stream: >-
+    Forward stream (FS): low-latency processing, almost all daytime (~13:30
+    local solar time; R13). Collection 2 retrieves ~34,000 targets a day,
+    ~1.3 times collection 1's ~26,000.
+  related_product: >-
+    Collection 1 precedes this product:
+    wisosat.airs.v_1.fs.{frequency}.{grid_name}.<variable>.zarr
+    (2021-02-01 to 2026-05-31). This product continues it from 2026-06-01, with
+    no observation in both (checked on the files either side). The number of
+    observations per day rises at the change of collection, as collection 2
+    retrieves more targets.
+  related_store: >-
+    wisosat.{product}.{version}.{frequency}.{grid_name}.geolocation.zarr holds
+    time, lat and lon for every obs, and
+    wisosat.{product}.{version}.{frequency}.{grid_name}.pressure.zarr the 17
+    retrieval levels, surface first; every store of this product shares one
+    obs axis and granule index.
+  granule: >-
+    one day; granule_id is the date, and granule_file names the day's Full
+    file. A file runs from about 00:05 UTC to past midnight, so its last
+    observations are dated the next day (R27). Rows keep their source order,
+    which is not time order.
+  known_data_gaps: >-
+    none: every day from 2026-06-01 to 2026-06-30 has its Full file. Upstream
+    adds days as it processes them; later days are appended.
+
+variable_attrs:
+  water_vapor_hdo_h2o_ratio:
+    comment: >-
+      TROPESS's bias-corrected HDO/H2O profile: the source says "HDO / H2O
+      ratio (includes bias correction)". The data are bias corrected based on
+      comparison with aircraft measurements (TROPESS User Guide 5.1; Herman et
+      al. 2014, 2020). The uncorrected profile (retrieval/x_raw) is in the
+      source files but not stored.
+  water_vapor_h2o_mole_fraction_dry_air:
+    comment: >-
+      TROPESS's bias-corrected H2O dry-air mole fraction profile: the source
+      says "H2O only (includes bias correction)" (TROPESS User Guide 5.1). The
+      uncorrected profile (retrieval/x_h2o_raw) is in the source files but not
+      stored.
+  water_vapor_delta_d_850_250hpa:
+    comment: >-
+      TROPESS's formula (its source attribute in collection 1): 1000 *
+      (mean(x) / 3.11e-4 - 1), an unweighted mean of the HDO/H2O ratio over
+      the retrieval levels with 250 <= p < 850 hPa. Reproduced from the stored
+      profiles on every file (audit 2026-10-28). Written on every observation
+      in collection 2.
+  water_vapor_delta_d_850_250hpa_standard_error:
+    comment: >-
+      1-sigma: (1000 + delta D) sqrt(M S M^T), M the equal-weight mean over the
+      same levels and S the observation error. TROPESS writes no value where a
+      level in the range has a negative variance in S (R17).
+  water_vapor_h2o_mole_fraction_dry_air_850_250hpa:
+    comment: >-
+      The unweighted mean of the H2O profile over the retrieval levels with
+      250 <= p < 850 hPa, reproduced from the stored profile on every file.
+  water_vapor_delta_d_004:
+    comment: >-
+      TROPESS: "Deuterated water vapor content for water vapor volume mixing
+      ratio of 0.004". It does not reproduce by interpolating the stored
+      profiles; TROPESS computes it on its own grid.
+  cloud_top_pressure:
+    comment: >-
+      The source standard_name, cloud_top_pressure, is TROPESS's and not a CF
+      standard name; it is retained as published (user decision 2026-10-28).
+      Collection 1's store carries the Standard files' air_pressure_at_cloud_top.
+  quality_flags_retrieval:
+    comment: >-
+      TROPESS's retrieval quality flag: "Retrieval quality flag, 1=good, 0=bad".
+      The v2 Standard product is exactly the observations with 1. The source
+      standard_name, quality, is TROPESS's and not a CF standard name; it is
+      retained as published (user decision 2026-10-28).
+  water_vapor_hdo_h2o_ratio_averaging_kernel_log:
+    comment: >-
+      Rows retrieved, columns true. It equals the joint kernel's HDO block less
+      its H2O-from-HDO block (water_vapor_hdo_and_h2o_..._averaging_kernel_log)
+      to 1e-6. Fill at the lowest levels on some observations with quality 0
+      (R45).
+  altitude:
+    comment: >-
+      Full's altitude on the 67-level forward-model grid, read where its
+      pressure equals each retrieval pressure (found exactly once on every
+      level), so on the 17 retrieval levels. The Standard files' altitude is
+      misplaced between observations and is not used.
+  air_molar_density:
+    comment: >-
+      TROPESS's air density on the 17 retrieval levels: "number density of air"
+      (Full, molecules/m^3), divided by the Avogadro constant. TROPESS does not
+      state whether it is dry or total air. The Full files hold it in a 67-wide
+      array as the retrieval levels twice, then fill, not on the forward-model
+      grid; that layout is checked on every observation.

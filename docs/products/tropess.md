@@ -666,6 +666,24 @@ shaped for TES as well.**
 Then the configs, fixtures, the full fixture test of every product, and the
 bench (V8, steps 4 and 5).
 
+**Done 2026-10-28 (V8 steps 1-4):**
+- the `air_molar_density` row (style_guides `4711fe4`);
+- the shared changes D2 and D3, plus `withheld_standard_names` (Q2's
+  exception, declared);
+- the v2 reader and key (D1, D4), with `retrieval/air_density`'s axis
+  renamed to `level` (Full declares it on `level_fm`; R42);
+- `config/airs_fs_v2/` and `config/cris_jpss1_fs_v2/`. The R37 count, from
+  the reader's rule over every file, is 11,382, as the audit found;
+- the fixtures: 2026-06-01, 02 and 04 of each, cut, without the packed
+  blocks; 03 is a declared gap; CrIS keeps 38 repeats.
+
+Both v2 fixtures pass every case, new ones included: a wrong remainder fails
+both the build and the verifier from raw; an uncovered slice, a lookup off
+its grid, a matrix array listed twice and a stray withheld name are refused.
+The verifier now tallies a declared fill over the whole source as read
+(R42's padding holds `observation_error_h2o`'s -999, which levels 0-16 never
+do).
+
 ## CrIS: handoff (written 2026-10-23, for a new session)
 
 AIRS v1 is finished; CrIS is the user's next task (chosen 2026-10-22: CrIS

@@ -100,8 +100,10 @@ from utils.granules import (
 FOLDER_RE = re.compile(
     r'^TRPS(?P<kind>[DYF])L2HDO(?P<instrument>[A-Z0-9]+?)(?P<stream>RS|FS)[._](?P<collection>\d+)(?:-\d{8}_\d{6})?$'
 )
+# Full is v2's archival type (products/tropess_v2.py), which shares file_rank
+# and index_extra; this reader lists only Standard and Summary (KINDS)
 FILE_RE = re.compile(
-    r'^TROPESS_(?P<platform>[A-Za-z0-9-]+)_L2_(?P<type>Standard|Summary)_HDO_(?P<date>\d{8})_MUSES_'
+    r'^TROPESS_(?P<platform>[A-Za-z0-9-]+)_L2_(?P<type>Standard|Summary|Full)_HDO_(?P<date>\d{8})_MUSES_'
     r'(?P<algorithm>R\dp\d+)_(?P<stream>RS|FS)_(?P<format>F\dp\d+)(?:_(?P<joint>J\d))?\.nc$'
 )
 KINDS = {'D': 'Standard', 'Y': 'Summary'}

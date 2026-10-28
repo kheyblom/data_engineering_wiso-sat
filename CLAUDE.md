@@ -46,6 +46,7 @@ stores.
 | GOSAT, GOSAT-2 (IUP FOCAL v3.0.1), DED and H2O merged per day | `GOSAT*/IUP-GHG-L2-{DED,H2O}-GOSAT-FOCAL-YYYY-v3.0.1/v3.0.1/YYYY/` | day (2 files) | GOSAT: production finalized 2026-10-19, tag `v3.0.1-verified-20261019` (12 stores; geolocation rebuilt without `pressure`, which has its own store). GOSAT-2: production finalized 2026-10-22, tag `v3.0.1-verified-20261022` (12 stores; `source: gosat`) |
 | AIRS (TROPESS v1; one product per stream, RS and FS, Summary merged into Standard per day) | `AIRS/TRPS?L2HDOAIRS*` (`config/airs_rs/`, `config/airs_fs/`; `source: tropess`) | day (2 files) | v1 production finalized 2026-10-23, tag `v1-verified-20261023` (19 stores per stream; `docs/products/tropess.md`; TESTING.md AIRS v1 run log); v2 next, with CrIS-JPSS1 v2 (`tropess.md`, "v2: handoff") |
 | CrIS (TROPESS; SNPP RS Summary-only, SNPP FS, JPSS1 FS) | `CRIS/TRPS?L2HDOCRS*` (`config/cris_snpp_rs/`, `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; `source: tropess`) | day (1-2 files) | production finalized 2026-10-26, tag `v1-verified-20261026` (12, 19 and 19 stores; `tropess.md` C1-C8; TESTING.md CrIS v1 run log) |
+| AIRS and CrIS-JPSS1 v2 (TROPESS collection 2, Full only) | `AIRS/TRPSFL2HDOAIRSFS.2/`, `CRIS/TRPSFL2HDOCRS1FS.2/` (`config/airs_fs_v2/`, `config/cris_jpss1_fs_v2/`; `source: tropess_v2`) | day (1 file) | subset approved 2026-10-28 (`tropess.md` V1-V9; 22 stores each); code and fixtures done, bench next |
 | IASI (KIT MUSICA L2pp) | `IASI/IASI_L2/YYYY/` | half-day file | later |
 | TES (L2 HDO Nadir Lite v006) | `TES/TL2HDOLN_6-*/` | monthly file | later |
 
@@ -173,6 +174,25 @@ uv run python finalize_wisosat_zarr.py --config config/<product>/config_zarr.yam
     entry there. The verifier also fails on an undeclared file that holds
     the value on every row (Q1);
   - `expected_missing_days` takes `[first, last]` ranges.
+- **Added for TROPESS v2 (2026-10-28; `tropess.md` V9):**
+  - a v2 reader and key of their own (`products/tropess_v2.py`,
+    `nomenclature-key_tropess_v2.md`, `source: tropess_v2`), Full files only;
+  - **source slices** in the key's `original_variable_name` (`x[:, 0:17]`),
+    one canonical name per slice, after the reader's squeeze; the config's
+    `source_remainders` declares what they leave out (`empty`, or `equal` to
+    another range), slices plus remainders must cover the source, and the
+    build (`utils/selections.py`) and the verifier (its own code) check
+    every remainder. Shaped for TES's stacked HDO/H2O halves too;
+  - `level_lookups`: a source read on another grid at each written value of
+    a third (v2 `altitude` on `pressure_fm` at the retrieval pressures);
+  - **matrix stores** (N18): a key's "Matrix Store Key" table makes several
+    canonical arrays one store; the config lists the store, never its
+    arrays as well;
+  - `withheld_standard_names`: an approved exception keeping a source
+    `standard_name` as `original_standard_name` where it would mislabel the
+    store (v2 `air_molar_density`);
+  - the verifier tallies a declared fill over the whole source as read,
+    before any slice: the fill is the source's.
 - **Declared, never detected:**
   - empty granule directories (`expected_empty_granules`) and corrupt files
     (`expected_unreadable_granules`) are skipped only if listed, as missing

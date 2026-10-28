@@ -18,8 +18,9 @@ Per product:
 4. the verifier must fail on a tampered value, naming the store, on a
    store compressed other than as its config says, (where the config
    declares one) on a platform the files do not declare, (where it
-   declares rows left out) on a declaration that does not match raw, and
-   (CrIS) on a defective file whose day is not declared;
+   declares rows left out) on a declaration that does not match raw,
+   (CrIS) on a defective file whose day is not declared, and (TROPESS v2) on
+   a slice's remainder that is not what the config declares;
 5. guards: an undeclared missing day (or month), a wrong processor version
    or platform, declared rows that are missing, do not match, or are given
    to a reader that cannot apply them, declared defect values that do not
@@ -29,7 +30,11 @@ Per product:
    undeclared empty granule directory or unreadable file, an undeclared
    one-sided granule, or a claim that unordered files are in time order;
    and (CrIS) repeated footprints undeclared or miscounted, a replaced file
-   undeclared, and a whole-file defect declared on a file that is not;
+   undeclared, and a whole-file defect declared on a file that is not; and
+   (TROPESS v2) a declared remainder that is not what it says, a sliced
+   source with values in no slice or remainder, a lookup whose values are
+   not on its grid, a matrix store's array listed as a store of its own, and
+   a standard_name withheld for a variable not stored;
    A build without the fixture's ``allow_dirty_tree`` must refuse a working
    tree that is not a clean commit (an untracked probe file makes it dirty).
 6. finalize: ``--attrs`` refuses without verification evidence, and
@@ -42,7 +47,7 @@ Run from the repo root after staging each fixture:
     uv run python validation/stage_tropomi.py
     uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
     uv run python validation/stage_sciamachy.py
-    uv run python validation/stage_tropess.py    # AIRS RS and FS, the three CrIS
+    uv run python validation/stage_tropess.py    # AIRS RS and FS, the three CrIS, the two v2
     uv run python validation/test_pipeline.py
 
 About a minute per product on a login node; no allocation spent. Failures are
@@ -66,7 +71,7 @@ import yaml # type: ignore
 import zarr
 
 from utils.granules import COVERAGE_KEYS, check_repeats
-from utils.nomenclature import coordinates
+from utils.nomenclature import coordinates, matrix_stores, source_path
 from utils.nomenclature import variable as key_variable
 from utils.path_utils import (
     GEOLOCATION, listing_options, load_config, load_reader, run_stores, source_product,
@@ -74,7 +79,7 @@ from utils.path_utils import (
 )
 from utils.zarr_utils import (
     BRANCH, COMMIT_PREFIX, COMMIT_RE, repeat_look_back, row_rule, sharded_stores,
-    stored_seam_keys, time_source,
+    store_sources, stored_seam_keys, time_source,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -180,6 +185,24 @@ def history(settings, store):
         list: Snapshot infos.
     """
     return list(repository(settings, store).ancestry(branch=BRANCH))[::-1]
+
+
+def copy_declared_empty(remainders):
+    """The config's ``source_remainders`` with its first copy (an ``equal`` rule) declared empty.
+
+    Args:
+        remainders (dict): The config's ``source_remainders``.
+
+    Returns:
+        tuple: The source path changed, and the changed mapping; (None, None)
+            where nothing is declared a copy.
+    """
+    for path, rules in remainders.items():
+        if any(rule.get('rule') == 'equal' for rule in rules):
+            wrong = [{k: v for k, v in dict(rule, rule='empty').items() if k != 'to'}
+                     if rule.get('rule') == 'equal' else rule for rule in rules]
+            return path, dict(remainders, **{path: wrong})
+    return None, None
 
 
 def test_product(results, config, scratch):
@@ -337,6 +360,22 @@ def test_product(results, config, scratch):
             last_line(output, 'every file declares platform') or last_line(output, message),
         )
 
+    # ... and a slice's remainder that is not what the config declares (TROPESS
+    # v2: a copy declared empty), read from raw by the verifier itself
+    copied, wrong = copy_declared_empty(settings.get('source_remainders') or {})
+    if copied:
+        holder = next(store for store in run_stores(settings)
+                      if any(source_path(source) == copied
+                             for source in store_sources(source_product(settings), store).values()))
+        path = write_config(settings, scratch, f'{product}_remainder.yaml', source_remainders=wrong)
+        status, output = run(
+            'verify_wisosat_zarr.py', '--config', path, '--phases', 'values', '--stores', holder
+        )
+        results.check(
+            f'{product}: verifier fails on a remainder that is not what the config declares',
+            status != 0 and 'declared empty' in output, last_line(output, 'declared empty'),
+        )
+
     # ... and a standard_name the config declares that no source file uses
     named = [name for name, attrs in (settings.get('variable_attrs') or {}).items()
              if 'standard_name' in (attrs or {})]
@@ -437,7 +476,7 @@ def test_product(results, config, scratch):
     elif not getattr(load_reader(settings), 'DECLARED_MASKS', False):
         guards['declared masks for a reader that cannot apply them'] = (
             {'declared_masked_values': [{
-                'source': key_variable(source_product(settings), settings['variables'][0]).original,
+                'source': source_path(key_variable(source_product(settings), settings['variables'][0]).original),
                 'reason': 'test',
             }]},
             'does not apply declared masks',
@@ -469,6 +508,33 @@ def test_product(results, config, scratch):
             guards['a whole-file defect declared on a file that is not defective'] = (
                 {'declared_masked_values': wrong}, 'on every row, as declared'
             )
+    remainders = settings.get('source_remainders') or {}
+    copied, wrong = copy_declared_empty(remainders)
+    if copied:
+        # V9, D2: what a slice leaves out is checked, and must be declared
+        guards['a declared remainder that is not what it says'] = (
+            {'source_remainders': wrong}, 'declared empty'
+        )
+        guards['a sliced source with values in no slice or declared remainder'] = (
+            {'source_remainders': {p: r for p, r in remainders.items() if p != copied}},
+            'neither in a slice the key names nor in a declared remainder',
+        )
+    lookups = settings.get('level_lookups') or {}
+    if lookups:
+        looked, lookup = next(iter(lookups.items()))
+        guards['a lookup whose values are not on its grid'] = (
+            {'level_lookups': {looked: dict(lookup, at='x[:, 0:17]')}}, 'not found exactly once'
+        )
+    matrices = [name for name in settings['variables'] if name in matrix_stores(source_product(settings))]
+    if matrices:
+        guards['an array of a matrix store listed as a store of its own'] = (
+            {'variables': settings['variables'] + [matrix_stores(source_product(settings))[matrices[0]].arrays[0]]},
+            'a matrix is one store',
+        )
+    if settings.get('withheld_standard_names'):
+        guards['a standard_name withheld for a variable not stored'] = (
+            {'withheld_standard_names': {'no_such_variable': 'test'}}, 'does not store'
+        )
     if settings.get('time_order') == 'source':
         # the source order is kept only because the files are not in time
         # order; claiming they are must fail the build

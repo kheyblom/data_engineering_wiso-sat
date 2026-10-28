@@ -17,7 +17,10 @@ the store's dimensions (``utils/granules.py``), and this module does the rest.
 - **Attributes.** Source attributes are carried, the config's
   ``variable_attrs`` go on top, and the nomenclature goes on last so a config
   cannot override the key. A source ``standard_name`` is retained unchanged
-  and none is ever added.
+  and none is ever added, except where the config withholds one as wrong for
+  the stored quantity (``withheld_standard_names``, an approved exception:
+  TROPESS v2 ``air_number_density`` on a store in mol m-3, user decision
+  2026-10-28); it is then kept as ``original_standard_name``, with the reason.
 - **Writing.** A store is appended to granule by granule along two dimensions
   at once: ``obs`` for the data and ``granule`` for the index. Both land in
   one commit, so a store can never hold observations its index does not
@@ -694,6 +697,14 @@ def variable_attrs(product, canonical, array, settings, fill):
         attrs['declared_defects_masked'] = ' '.join(
             str(entry.get('reason', '')).strip() for entry in defects
         )
+    withheld = (settings.get('withheld_standard_names') or {}).get(canonical)
+    if withheld:
+        # an approved exception: the source's label does not fit the stored
+        # quantity, so it is kept as provenance, not as the standard_name
+        name = attrs.pop('standard_name', None)
+        if name is not None:
+            attrs['original_standard_name'] = name
+        attrs['standard_name_withheld'] = str(withheld).strip()
     cast = (settings.get('source_dtypes') or {}).get(entry_source(product, canonical))
     if cast:
         attrs['dtype_change'] = (
