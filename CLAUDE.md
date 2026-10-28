@@ -16,7 +16,9 @@ then extend to the other products (decided 2026-10-14).
   `sciamachy`, `gosat` (GOSAT and GOSAT-2), `tropess` (AIRS and CrIS), `iasi`,
   `tes`. Read only the one you need. Each sensor's doc holds everything known
   about it, including a **Known data issues** table (ID, evidence, status:
-  handled / open / record only). Add new findings there. The cross-product
+  handled / open / record only). Add new findings there. It also points to
+  the product's references (papers, user guides, local full-text copies):
+  look there before searching the web for one. The cross-product
   unit survey, the value checks and the WISO-SAT paper cross-check are in
   [docs/l2-survey.md](docs/l2-survey.md).
 - The WISO-SAT paper (Sarkar et al. 2026) is in full text in
