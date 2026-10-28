@@ -593,6 +593,71 @@ CrIS 30 (~5).
    resumes, then a verify and a new tag. For CrIS the R37 count is
    re-declared first: a later day adds repeats with the previous one.
 
+### V9. Code design (for review, 2026-10-28)
+
+Step 1 is done: `air_molar_density` is in style_guides `4711fe4`. What
+the code does today, and what v2 needs:
+- **One key per source.** The config's `source` picks the reader and the
+  key. v2 maps some canonical names onto different source datasets than v1
+  (`pressure` comes from `pressure_ret`, `altitude` from the forward-model
+  grid), so one key cannot serve both.
+- **Several arrays in one store already works.** The geolocation store is
+  one: `store_sources` returns one source per array, and the build, the
+  verifier and per-array compression all loop over it.
+- **The verifier reads every source whole** with h5py and applies only
+  fill and the unit factor. v2's stores are not whole sources: they are cut
+  to 17 levels, and `altitude` is picked from another grid.
+
+**D1. A v2 reader and key: `products/tropess_v2.py` and
+`nomenclature-key_tropess_v2.md`, with `source: tropess_v2`.**
+- The reader imports what v1 and v2 share from `products/tropess.py`:
+  the listing (with the `Full` type), time decoding and header checks, and
+  the R37 selection. It has no merge.
+- The v1 reader and key are left as they are, so the finalized v1 stores
+  can still be re-verified.
+- No new config key: "`source` picks the reader and key" still holds.
+- *Alternative:* a `nomenclature_key` override in config. That is a shared
+  change at ~15 call sites, for one product.
+
+**D2. Declared level selections, a shared change.** A config block,
+`level_selections`, applied by shared build code after the read, and by
+the verifier on its own from raw (its own code, not the build's helper).
+The reader does no level work. For each source it can declare:
+- `keep: 17` on the level axes: anything written beyond them fails the
+  build and the verifier, unless the config also declares
+  - `copies`: ranges that must equal the kept one (`pressure_ret` and
+    `air_density`, 17-33), or
+  - `fill_beyond` (`air_density` 34-66);
+- `at_levels_of` (for `altitude`): `{grid: pressure_fm, at: pressure_ret}`.
+  Each written retrieval pressure must be found exactly once in the row's
+  grid, and the value is taken there. The axis becomes `level`.
+
+The kernels are cut on both axes. Dims: `level_ret` becomes `level`, and a
+matrix's second axis becomes `level_2`, as v1.
+
+**D3. Matrix stores (N18), a shared change.**
+- **The key:** a "Matrix Store Key" table gives the store's canonical name
+  (it has a nomenclature row), its arrays in order (each a variable row),
+  and the store's long name.
+- **The config** lists the store's name in `variables`. It fails if one of
+  the store's arrays is also listed as a store of its own.
+- **The code:** `store_sources` returns the store's arrays. The build, the
+  verifier and per-array compression need no change beyond that, since
+  geolocation is the precedent. The store gains an attribute naming its
+  arrays and the matrix they form.
+- **Tests:** the TROPESS v2 fixtures exercise it, and `test_pipeline.py`
+  gains cases for a malformed table and an array listed twice.
+
+**D4. The key rows** for v2 (`nomenclature-key_tropess_v2.md`):
+- the v1 rows, with v2's source paths;
+- `quality` → `quality_flags_retrieval` (a quality flag, so the config
+  must list it);
+- `retrieval/air_density` → `air_molar_density`, `x 1 / N_A`;
+- the four kernel blocks.
+
+Then the configs, fixtures, the full fixture test of every product, and the
+bench (V8, steps 4 and 5).
+
 ## CrIS: handoff (written 2026-10-23, for a new session)
 
 AIRS v1 is finished; CrIS is the user's next task (chosen 2026-10-22: CrIS
