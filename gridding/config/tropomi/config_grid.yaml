@@ -2,9 +2,8 @@
 #
 # One build (grid_wisosat.py) writes the spatial stores of every grid x
 # frequency below in one pass over the UTC days; rechunk_wisosat.py then
-# makes the temporal stores from the tagged spatial ones. NOT YET RUN: the
-# scale settings below are placeholders until the bench (TESTING.md Tier 2,
-# config_grid_bench.yaml).
+# makes the temporal stores from the tagged spatial ones. Scale settings from
+# the July 2020 bench (TESTING.md Tier 2, config_grid_bench.yaml).
 product: tropomi
 # products/<source>.py: the quality levels and the footprint models
 source: tropomi
@@ -60,14 +59,20 @@ grids:
 frequencies: [day]
 
 chunks:
-  # one period, the whole grid: 0.25 deg is 720 x 1440, 7.9 MiB float64
-  spatial: {time: 1, rows: -1, cols: -1}
+  # 4 days, the whole grid (user decision 2026-11-10, after the bench): 0.25 deg
+  # is 720 x 1440, so 15.8 MiB raw float32 and 31.6 MiB float64 per chunk
+  # (~7 and ~15 MiB stored), ~740 files per store over the record rather than
+  # ~2,950; a one-day map read decompresses 4 days. time_coordinate: periods
+  # per chunk of time and time_bounds.
+  spatial: {time: 4, rows: -1, cols: -1, time_coordinate: 365}
   # the whole record per tile of 20 x 20 cells
   temporal: {time: -1, rows: 20, cols: 20}
 
-# Scale settings (per product, never in code): placeholders until the bench.
-periods_per_commit: 10
-num_workers: 8
+# Scale settings (per product, never in code), from the bench: 16 workers do
+# ~5.6 s per day (~4.6 h for the record) in ~45 GB on a develop node.
+# a multiple of the spatial time chunk (4), so each commit writes whole chunks
+periods_per_commit: 12
+num_workers: 16
 # (footprint, cell) pairs clipped at once; bounds a worker's memory
 max_pairs: 500000
 # obs per L2 read block: a multiple of the geolocation chunk (4,194,304)

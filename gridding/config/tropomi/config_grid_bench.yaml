@@ -63,13 +63,18 @@ grids:
 frequencies: [day]
 
 chunks:
-  # one period, the whole grid: 0.25 deg is 720 x 1440, 7.9 MiB float64
-  spatial: {time: 1, rows: -1, cols: -1}
+  # 4 days, the whole grid (user decision 2026-11-10, after the bench): 0.25 deg
+  # is 720 x 1440, so 15.8 MiB raw float32 and 31.6 MiB float64 per chunk
+  # (~7 and ~15 MiB stored), ~740 files per store over the record rather than
+  # ~2,950; a one-day map read decompresses 4 days. time_coordinate: periods
+  # per chunk of time and time_bounds.
+  spatial: {time: 4, rows: -1, cols: -1, time_coordinate: 365}
   # the whole record per tile of 20 x 20 cells
   temporal: {time: -1, rows: 20, cols: 20}
 
 # Scale settings (per product, never in code): placeholders until the bench.
-periods_per_commit: 10
+# a multiple of the spatial time chunk (4), so each commit writes whole chunks
+periods_per_commit: 12
 num_workers: 16
 # (footprint, cell) pairs clipped at once; bounds a worker's memory
 max_pairs: 500000

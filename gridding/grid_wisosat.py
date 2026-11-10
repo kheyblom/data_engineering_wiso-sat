@@ -240,6 +240,12 @@ class Writer:
         self.attrs = {quantity: global_attrs(settings, target.grid, target.frequency, 'spatial', snapshots, quantity)
                       for quantity in target.paths}
         self.per_commit = int(settings.get('periods_per_commit', 10))
+        time_chunk = stores.layout_chunks(settings, target.grid, 'spatial')[0]
+        if self.per_commit % time_chunk:
+            # correct, but each commit then rewrites a partly filled chunk (as extending the
+            # record later does once); production configs align them
+            LOG.warning(f'periods_per_commit ({self.per_commit}) is not a multiple of the spatial time '
+                        f'chunk ({time_chunk}): commits rewrite partly filled chunks')
         self.area = target.grid.row_area_km2()[np.arange(target.grid.n_cells) // target.grid.shape[1]]
 
     @property

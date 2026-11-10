@@ -80,6 +80,10 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   all 9 per-cell sums (float64), 17 stores per (grid, frequency, layout).
   The weight is w = overlap area × H2O column in **mol**. Rows in
   `nomenclature_data.md` added 2026-11-10 (style_guides `8144058`).
+- **Chunks** (after the bench): spatial 4 periods x the whole grid
+  (`periods_per_commit` a multiple of 4), time coordinates a year per
+  chunk; temporal the whole record x 20 x 20 cells. Keeps each store under
+  ~1,000 files.
 - **Temporal store = rechunk of the tagged spatial store**, not a second
   gridding; an exception to "each store built from its source", approved.
 - **Every value falls in a selection row** (2026-11-10, TROPOMI T24):

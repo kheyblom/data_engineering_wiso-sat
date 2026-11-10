@@ -140,7 +140,11 @@ def encoding(settings, grid, quantity, layout, n_time=None):
     row = nomenclature.quantities()[quantity]
     chunks = layout_chunks(settings, grid, layout, n_time)
     fill = None if np.issubdtype(np.dtype(row['dtype']), np.integer) else np.nan
-    time_chunk = chunks[0] if layout == 'temporal' else int(settings.get('periods_per_commit', 10))
+    # time and time_bounds: the whole axis in the temporal layout; in the spatial one, chunks
+    # of chunks.spatial.time_coordinate periods (a year of days by default), so the
+    # coordinates are a handful of files rather than one per commit
+    time_chunk = chunks[0] if layout == 'temporal' else int(
+        (settings['chunks'].get('spatial') or {}).get('time_coordinate', 365))
     return {
         row['canonical_name']: {'chunks': chunks, 'dtype': row['dtype'], '_FillValue': fill},
         'time': {'units': TIME_UNITS, 'calendar': CALENDAR, 'dtype': 'int64', 'chunks': (time_chunk,)},
@@ -152,14 +156,26 @@ def layout_chunks(settings, grid, layout, n_time=None):
     """(time, rows, cols) chunk shape: config ``chunks.<layout>``, per grid override, -1 = whole axis.
 
     Spatial defaults to one period and the whole grid; temporal to the whole
-    record and 20 x 20 cells (GLEAM/MSWEP's tile).
+    record and 20 x 20 cells (GLEAM/MSWEP's tile). The spatial time chunk is
+    never capped by the record: the store grows along time, so its chunk is
+    the config's whatever has been written so far.
+
+    Raises:
+        ValueError: For a spatial time chunk of -1 (a growing axis has no whole),
+            or a temporal one without ``n_time``.
     """
     spec = {**(settings['chunks'].get(layout) or {}),
             **((grid_spec(settings, grid).get('chunks') or {}).get(layout) or {})}
     defaults = {'spatial': (1, -1, -1), 'temporal': (-1, 20, 20)}[layout]
-    shape = (n_time or 1, *grid.shape)
-    chunk = [spec.get(key, default) for key, default in zip(('time', 'rows', 'cols'), defaults)]
-    return tuple(int(full if size == -1 else min(size, full)) for size, full in zip(chunk, shape))
+    time, rows, cols = (spec.get(key, default) for key, default in zip(('time', 'rows', 'cols'), defaults))
+    if time == -1:
+        if layout == 'spatial' or n_time is None:
+            raise ValueError(f'{layout} time chunk -1 needs the record length (temporal layout only)')
+        time = n_time
+    elif layout == 'temporal' and n_time is not None:
+        time = min(time, n_time)
+    sizes = [int(full if size == -1 else min(size, full)) for size, full in zip((rows, cols), grid.shape)]
+    return (int(time), *sizes)
 
 
 def grid_spec(settings, grid):
