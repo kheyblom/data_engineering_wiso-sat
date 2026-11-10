@@ -210,7 +210,8 @@ def tropomi_passes(v, level):
         clear = (tau < 0.3) & (albedo >= 0.02)
         if level == 'clear':
             return ok & clear
-        return ok & (clear | ((v['height_scattering_layer'] <= 2000) & (tau > 0.3)))
+        # the cloudy row at >= 0.3, not Table 1's > 0.3 (user decision 2026-11-10, TROPOMI T24)
+        return ok & (clear | ((v['height_scattering_layer'] <= 2000) & (tau >= 0.3)))
 
 
 SELECTIONS = {'tropomi': (tropomi_passes, {

@@ -82,6 +82,11 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   `nomenclature_data.md` added 2026-11-10 (style_guides `8144058`).
 - **Temporal store = rechunk of the tagged spatial store**, not a second
   gridding; an exception to "each store built from its source", approved.
+- **Every value falls in a selection row** (2026-11-10, TROPOMI T24):
+  TROPOMI's cloudy row is optical thickness >= 0.3, not Table 1's > 0.3,
+  and every threshold is compared at the stored precision, in the build
+  and the verifier alike. A new product's selection is checked for such
+  gaps between its rows.
 - **Verification is sampled** (approved exception to "every observation,
   not a sample", for gridding): structure of every store in full; values
   on sampled periods recomputed from L2 by independent code (shapely,

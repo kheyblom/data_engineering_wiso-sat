@@ -134,7 +134,7 @@ lists of what was missing are in git history (`0b0a3d7`,
 | T20 | Column averaging kernels reach p99 ~700 in some layers. This is unexplained and not a unit issue; it matters once kernels are stored. |
 | T22 | **Pressure is unphysical within ~0.1 deg of the North Pole.** In orbit 14069, 4 pixels at 89.91-89.98 N have a surface pressure of 5.2e5 to 1.2e8 Pa (the orbit's p99.9 is 1.03e5). `pressure_levels` still increases downward and its last level equals `meteo/surface_pressure`, and `dry_air_subcolumns` scales up with it, so this looks like SRON's meteo interpolation at the pole, not a read error. Orbit 32414 (January, polar night) has none. Stored as published (checked 2026-10-19). |
 | T23 | **`clear_or_low_cloud` still passes unphysical H2O columns.** UTC day 2020-07-01, 3,360,002 observations at that level: H2O median 1,021 mol m-2 (18.4 kg m-2), p99.9 4,428 (80 kg m-2), but 412 above 5,000 mol m-2 (90 kg m-2), 3 above 10,000 and 2 above 50,000: 1.15e5 mol m-2 (2,074 kg m-2; δD +246 ‰, σ 53 ‰) at 9.9 S 169.3 E and 5.7e4 at 15.1 N 137.3 E. All between 36 S and 53 N. Matters to H2O-weighted gridding, where such a footprint outweighs a typical one ~100x (gridding-notes.md, 2026-11-09). Five UTC days across seasons (2020-01-15, 04-15, 07-01, 10-15; 2023-07-15): 22-71 a day above 100 kg m-2, and four of the five hold one of 1,700-2,500 kg m-2; above 120 kg m-2 δD reaches +817 ‰. Stored as published; the daily L3 drops columns above 5,551 mol m-2 (100 kg m-2), a config value (user decision 2026-11-10; gridding-notes.md, "Decisions"). |
-| T24 | **Scattering-layer optical thickness of exactly 0.3 falls in neither Table 1 row** (found 2026-11-10 by the gridding bench verify). Clear sky is τ < 0.3 and the cloudy row τ > 0.3; a stored float32 0.3 is neither, so the footprint is not selected under `clear` or `clear_or_low_cloud`. Rare: 1 such footprint passing every other filter on UTC day 2020-07-31 (τ 0.3, height 1.0 m, near 52 N 10 E), none on 2020-07-01. Gridding compares every threshold at the stored precision (float32), as the drafting code did; cast to float64, a float32 0.3 reads 0.300000012 and would pass the cloudy row. Only 0.3 and the 0.02 albedo cut are not exact in float32 (none at albedo 0.02 on either day). Handled in gridding: excluded; `gridding/` verifies at the same precision. |
+| T24 | **Scattering-layer optical thickness of exactly 0.3 falls in neither Table 1 row** (found 2026-11-10 by the gridding bench verify). Clear sky is τ < 0.3 and the cloudy row τ > 0.3, so a stored float32 0.3 is neither. Rare: 1 such footprint passing every other filter on UTC day 2020-07-31 (τ 0.3, height 1.0 m, near 52 N 10 E), none on 2020-07-01. No other Table 1 test has a gap: the rest are one-sided cuts. **Handled in gridding** (user decision 2026-11-10): the cloudy row is τ >= 0.3, so every value falls in a row; thresholds are compared at the stored float32 precision (cast to float64, a float32 0.3 reads 0.300000012), in the build and the verifier. |
 
 ## Outside the Level 2 scope
 
@@ -156,7 +156,8 @@ applies to TROPOMI.
 | H2O column | `water_vapor_column_h2o` |
 
 - **Selection:** `clear_or_low_cloud` (Schneider et al. 2022, Table 1; their
-  recommendation), and an H2O column of at most 5,551 mol m-2 (100 kg m-2;
+  recommendation) with the cloudy row at optical thickness >= 0.3 rather
+  than > 0.3 (T24), and an H2O column of at most 5,551 mol m-2 (100 kg m-2;
   T23).
 - **Footprints:** 7.2 x 5.6 km at nadir, widening across track to ~38 x
   5.6 km at the swath edges (~7 km along track before August 2019).

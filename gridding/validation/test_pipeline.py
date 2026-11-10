@@ -10,7 +10,7 @@ log text and store contents. Every guard is watched failing at least once
 selection must fail verification. ~5 min on a login node.
 
 Cases, in order (each depends on the ones before):
- 1. unit: periods, grid tokens, nomenclature guard
+ 1. unit: periods, grid tokens, nomenclature guard, the TROPOMI optical-thickness boundary (T24)
  2. config guard: only fixture configs allow a dirty tree
  3. build from nothing
  4. rebuild is a no-op
@@ -32,6 +32,7 @@ import numpy as np
 import yaml  # type: ignore
 import zarr  # type: ignore
 
+from products import tropomi
 from utils import config, nomenclature, periods, stores
 from utils.grids import Ease2Grid, LatLonGrid
 
@@ -116,6 +117,21 @@ def test_units():
         pass
     else:
         raise AssertionError('0.7 degree accepted')
+    # T24 (user decision 2026-11-10): optical thickness exactly 0.3 (float32) is low cloud, in the
+    # build's selection and the verifier's, and just below it is clear: every value falls in a row
+    import verify_grid_wisosat as verifier
+    tau = np.array([0.3, np.nextafter(np.float32(0.3), np.float32(0))], dtype='float32')
+    values = {'quality_flags_retrieval': np.int32([0, 0]), 'iterations_retrieval': np.int32([5, 5]),
+              'solar_zenith_angle': np.float32([40, 40]), 'chi_squared_retrieval': np.float32([100, 100]),
+              'spectral_point_count_retrieval': np.int32([300, 300]), 'chi_squared_prefit': np.float32([100, 100]),
+              'spectral_point_count_prefit': np.int32([300, 300]), 'optical_thickness_scattering_layer': tau,
+              'albedo_surface_2365nm': np.float32([0.05, 0.05]), 'height_scattering_layer': np.float32([1.0, 1.0])}
+    fills = {name: (-2147483647 if array.dtype.kind == 'i' else None) for name, array in values.items()}
+    assert tropomi.select(values, fills, {'quality_level': 'clear_or_low_cloud'}).all()
+    assert list(tropomi.select(values, fills, {'quality_level': 'clear'})) == [False, True]
+    frame = {name: (array.astype('float64') if array.dtype.kind == 'i' else array) for name, array in values.items()}
+    assert verifier.tropomi_passes(frame, 'clear_or_low_cloud').all()
+    assert list(verifier.tropomi_passes(frame, 'clear')) == [False, True]
     try:
         nomenclature.check(settings(), ['5day'])
     except ValueError as error:

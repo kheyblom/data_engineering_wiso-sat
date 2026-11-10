@@ -43,10 +43,13 @@ selection:
   thresholds:
     water_vapor_column_h2o: {max: 5551.0}
   description: >-
-    The H2O column limit (5551 mol m-2, 100 kg m-2) drops broken retrievals
-    under clear_or_low_cloud (TROPOMI issue T23, 22-71 a day): above it
-    delta D runs to +817 per mil and columns to 2,500 kg m-2, and they would
-    dominate H2O-weighted cells.
+    The cloudy row of Schneider et al. (2022) Table 1 is taken as optical
+    thickness >= 0.3, not > 0.3, so a value of exactly 0.3 falls in a row
+    (TROPOMI issue T24; user decision 2026-11-10); thresholds are compared at
+    the stored float32 precision. The H2O column limit (5551 mol m-2, 100 kg
+    m-2) drops broken retrievals under clear_or_low_cloud (TROPOMI issue T23,
+    22-71 a day): above it delta D runs to +817 per mil and columns to 2,500
+    kg m-2, and they would dominate H2O-weighted cells.
 
 # Each grid is made straight from L2. Chunks may be overridden per grid.
 grids:
@@ -93,7 +96,11 @@ attrs:
   institution: University of Michigan
   creator_name: Kyle Heyblom
   creator_email: heyblom@umich.edu
+  # the WISO-SAT paper, whose data these stores grid (user decision 2026-11-10)
   references: >-
+    Sarkar, M., et al. (2026), WISO-SAT: A global database of stable hydrogen
+    isotopes in water vapor from eight satellite missions, Scientific Data,
+    doi:10.1038/s41597-026-08218-8;
     Schneider, A., et al. (2022), Retrieving H2O/HDO columns over cloudy and
     clear-sky scenes from the Tropospheric Monitoring Instrument (TROPOMI),
     Atmos. Meas. Tech., 15, 2251-2275, doi:10.5194/amt-15-2251-2022

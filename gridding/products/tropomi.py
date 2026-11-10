@@ -10,8 +10,15 @@ before:
   clear-sky row (optical thickness < 0.3, albedo >= 0.02), which is what
   Sarkar et al. (2026) apply;
 - 'clear_or_low_cloud': success, the all-scene rows, and clear sky or the
-  cloudy row (cloud height <= 2000 m and optical thickness > 0.3), as
+  cloudy row (cloud height <= 2000 m and optical thickness >= 0.3), as
   Schneider et al. recommend. The decided level (user, 2026-11-09).
+
+**One change to Table 1** (user decision 2026-11-10, TROPOMI T24): the
+cloudy row is optical thickness >= 0.3, not > 0.3. Table 1's clear (< 0.3)
+and cloudy (> 0.3) rows leave a value of exactly 0.3 in neither, and the
+stores hold such values; every value must fall in a row. Thresholds are
+compared at the stored precision (float32), so < 0.3 and >= 0.3 are exact
+complements.
 
 Reduced chi-squared is inferred as chi-squared over the spectral point
 count; no source defines it. Integer fill is excluded explicitly:
@@ -84,5 +91,5 @@ def select(values, fills, selection):
         clear = (thickness < 0.3) & (values['albedo_surface_2365nm'] >= 0.02)
         if level == 'clear':
             return passed & clear
-        low_cloud = (values['height_scattering_layer'] <= 2000) & (thickness > 0.3)
+        low_cloud = (values['height_scattering_layer'] <= 2000) & (thickness >= 0.3)
         return passed & (clear | low_cloud)
