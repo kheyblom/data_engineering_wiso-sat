@@ -1,0 +1,32 @@
+[project]
+name = "data_engineering_wiso-sat-gridding"
+version = "0.1.0"
+description = "Grids the finalized WISO-SAT L2 zarr stores (the l2/ half of this repo)."
+# capped below 3.14, as in l2/ and data_engineering_gleam: on 3.14 numpy's
+# temporary elision misfires and segfaults on `condition |= data == fill_value`
+# in xarray's CF masking. Same numpy, same xarray, no crash on 3.13.
+requires-python = ">=3.13,<3.14"
+# what the TROPOMI gridding drafts in notebooks/drafting/ import, plus the
+# notebook tools. Its own environment and lock (user decision 2026-11-10), so
+# a change here never touches the L2 build environment
+dependencies = [
+    "cartopy>=0.25.0",
+    "dask>=2026.1.2",
+    "icechunk>=2.1",
+    "ipykernel>=7.0",
+    "jupyter>=1.1.1",
+    "marimo>=0.25.1",
+    "matplotlib>=3.11.0",
+    "numpy>=2.4.2",
+    "pandas>=3.0.1",
+    "pillow>=11.0",
+    "scipy>=1.18.1",
+    "xarray>=2026.2.0",
+    "zarr>=3.1.5",
+]
+
+[tool.uv]
+# no code to install yet. When gridding/utils and gridding/products exist,
+# add a hatchling build-system listing them (as l2/pyproject.toml does) so
+# validation/ can import them
+package = false

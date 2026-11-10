@@ -7,11 +7,11 @@ Read this first in a new session. Update it whenever work lands.
 **Moved into `l2/` on 2026-11-10** (root TASKS.md task 8): run everything
 from this folder, with its own `.venv`; the clean-tree check covers `l2/`
 only. No store changed: `finalize --status` reports every store of every
-config finalized from `l2/`. The fixture test after the move: 446 cases, 3
-TROPOMI failures on the first run (clean build `RepositoryNotFoundError`,
-then a leftover `fixture` tag: the test's `rmtree(ignore_errors=True)`
-seems to have left part of the 2026-10-28 fixture store), not reproduced
-on a TROPOMI-only re-run (38 cases, 0 failures).
+config finalized from `l2/`. The fixture test after the move: 446 cases, 0
+failures, run alone (2026-11-10). Earlier runs that day failed in TROPOMI
+only because two runs overlapped (a session left running on another login
+node): the fixture stores are at a fixed path in each fixture config, not
+under `TMPDIR`, so **never run two fixture tests at once**.
 
 **Current task: TES (user, 2026-10-28).** Nothing is running; no batch job
 is queued. Decisions T1-T12 are laid out in `../docs/products/tes.md`
