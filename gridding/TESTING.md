@@ -92,6 +92,22 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   verifier was wrong** (TROPOMI T24): it now keeps float sources at their
   stored precision. The build, like the drafting code, was right. To rerun.
 
+- **Rerun after T24** (low cloud at optical thickness >= 0.3, `fcb90c5`;
+  bench root deleted first): build job 8143184, 2.8 min, 42.9 cpu-min, 45
+  GB; spatial verify job 8143185, **510 checks, 0 failures**, 10.5 min, 7.8
+  GB (~2 min per recomputed day). Finalize `--attrs` and `--tag
+  bench-spatial` on all 17 stores.
+- **Rechunk** (job 8143565, develop, 2 cpus): 17 stores x 4 blocks of 200
+  rows in 3 min 16 s, 0.7 GB; ~3 s per block for 31 days. Temporal size
+  1,450 MiB (spatial 1,377). **Temporal verify** (job 8143568): **1,457
+  checks, 0 failures**, 38 s.
+- **For production** (2,945 days, ~95 x the bench): the build ~4.6 h at 16
+  workers; the rechunk reads the whole spatial store once per block of
+  rows, ~5 min per block, ~5.7 h serially for 68 blocks, ~6.8 GB float64
+  per 200-row block. Files per store directory: ~2,950 data chunks plus
+  ~300 for each time coordinate in the spatial layout (over the ~2,000-3,000
+  guidance); 36 x 72 = 2,592 tiles in the temporal layout.
+
 ## Tier 3: production (not yet run)
 
 0.25° at day (user decision 2026-11-10); scale settings from the bench.
