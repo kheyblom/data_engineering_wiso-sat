@@ -2,8 +2,8 @@
 
 *Last edited: 2026-11-10*
 
-This document describes how WISO-SAT Level 2 retrievals are averaged onto regular daily grids, and what each
-gridded quantity means. The method is the same for every sensor. What
+This document describes how WISO-SAT Level 2 retrievals are averaged onto regular grids, by day or over
+longer periods, and what each gridded quantity means. The method is the same for every sensor. What
 differs between sensors (which variables supply each input, how a
 footprint is defined, which observations are selected) is in that sensor's
 product document under [`docs/products/`](../products/).
@@ -19,15 +19,17 @@ product document under [`docs/products/`](../products/).
 7. [Uncertainty](#7-uncertainty)
 8. [Combining cells and days](#8-combining-cells-and-days)
 9. [Choosing a cell size](#9-choosing-a-cell-size)
-10. [Notation](#10-notation)
-11. [References](#11-references)
+10. [The gridded stores](#10-the-gridded-stores)
+11. [Notation](#11-notation)
+12. [References](#12-references)
 
 ## 1. Overview
 
 Each footprint is treated as a polygon on the ground. It contributes to
 every grid cell it overlaps, in proportion to the area it shares with that
 cell multiplied by its H2O column. A cell's δD is the weighted mean over
-all footprints that touch it during one UTC day. Its standard error comes
+all footprints that touch it during one period: a UTC day, or a
+longer period made of whole UTC days ([Section 4](#4-the-day)). Its standard error comes
 from the retrieval noise of those footprints.
 
 Each cell keeps a set of weighted sums, and every cell value is computed
@@ -148,6 +150,20 @@ longitude, where the date changes. Where they overlap, a cell joins
 observations nearly 24 hours apart. Where this line falls depends on the
 sensor's overpass time.
 
+### Longer periods
+
+A gridded dataset's period is a day, *n* days, a month or *n* months. A
+longer period is made of whole UTC days, and its per-cell sums are its
+days' sums added up ([Section 8](#8-combining-cells-and-days)), so its
+values are exactly those of gridding all its observations at once.
+
+Periods are consecutive blocks counted from 1 January 1900. An *n*-day
+period is always exactly *n* days, and its boundaries fall on the same
+dates for every sensor and every year. *n*-month periods start in January,
+with *n* dividing 12 (three-month periods are January-March, April-June,
+July-September and October-December). A period at either end of a
+sensor's record holds only the days the record covers.
+
 ## 5. Assigning footprints to cells
 
 ### The footprint
@@ -206,6 +222,10 @@ column:
 $$
 w_{fc} = a_{fc} \, H_f .
 $$
+
+In the stores, *w* is in mol: km² × 10⁶ m² km⁻² × mol m⁻², the moles of
+water vapour the footprint puts in the cell. The unit cancels in every
+statistic.
 
 The footprint's total weight over the whole grid is
 
@@ -383,7 +403,52 @@ an EASE grid cells keep their area but grow long north-south. The
 footprint-to-cell ratio and the effective number of footprints show, cell
 by cell, where they apply.
 
-## 10. Notation
+## 10. The gridded stores
+
+Each quantity is its own store. Every store of a dataset has the same grid,
+period and time axis, in two layouts with the same values: one chunked for
+maps (one period per chunk), one for time series (the whole record per
+chunk of a small tile of cells).
+
+| quantity | store variable | units | from the sums |
+| --- | --- | --- | --- |
+| δD | `water_vapor_column_delta_d` | 1e-3 | Σ *w* δ / Σ *w* |
+| standard error | `water_vapor_column_delta_d_standard_error` | 1e-3 | √(Σ *w*² σ²) / Σ *w* |
+| spread | `water_vapor_column_delta_d_standard_deviation` | 1e-3 | √(Σ *w* δ² / Σ *w* − δD²) |
+| effective number of footprints | `observation_count_effective` | 1 | (Σ *w*)² / Σ *w*² |
+| count | `observation_count` | 1 | *N* |
+| mean H2O column | `water_vapor_column_h2o` | mol m-2 | Σ *w* / Σ *a* |
+| coverage | `footprint_coverage` | 1 | Σ *a* / *A*_c |
+| mean footprint area | `footprint_area` | km² | Σ *w* *A* / Σ *w* |
+| Σ *a* | `footprint_overlap_area_sum` | km² | |
+| Σ *w* | `gridding_weight_sum` | mol | |
+| Σ *w* δ | `gridding_weight_delta_d_sum` | mol 1e-3 | |
+| Σ *w* δ² | `gridding_weight_delta_d_squared_sum` | mol 1e-6 | |
+| Σ *w*² | `gridding_weight_squared_sum` | mol² | |
+| Σ *w*² σ² | `gridding_weight_squared_delta_d_variance_sum` | mol² 1e-6 | |
+| Σ *w* *A* | `gridding_weight_footprint_area_sum` | mol km² | |
+| Σ *w* *W* | `gridding_weight_footprint_weight_sum` | mol² | |
+| Σ *w* *W* σ² | `gridding_weight_footprint_weight_delta_d_variance_sum` | mol² 1e-6 | |
+
+Every sum of [Section 6](#6-cell-values) is stored, in float64, so
+[Section 8](#8-combining-cells-and-days) can be applied directly to the
+stores; the statistics are float32. The mean H2O column is Σ *w* / Σ *a*
+divided by 10⁶ when *w* is in mol and *a* in km². The footprint-to-cell
+ratio is `footprint_area` over the `cell_area` coordinate.
+
+- **Empty cells:** a cell no footprint touched has missing statistics, sums
+  of 0 and a count of 0. A sum over no footprints is 0, so sums still add
+  over days and cells.
+- **Time:** each period is labelled by its first day, and `time_bounds`
+  gives its first day and the day after its last.
+- **Coordinates:** rows run north to south. A lat/lon grid's dimensions are
+  `lat` and `lon`; an EASE grid's are its projected `y` and `x` (metres),
+  with `lat` along `y` and `lon` along `x`. Both carry cell edges
+  (`lat_bounds`, `lon_bounds`) and `cell_area` (km²).
+- **Provenance:** each store records the Level 2 tag and snapshots it was
+  made from, the selection, and the inputs.
+
+## 11. Notation
 
 | symbol | meaning | unit |
 | --- | --- | --- |
@@ -394,12 +459,12 @@ by cell, where they apply.
 | *a*_fc | area footprint *f* shares with cell *c* | km² |
 | *A*_f | footprint's whole area | km² |
 | *A*_c | cell area | km² |
-| *w*_fc | weight, *a*_fc *H*_f | km² mol m-2 |
-| *W*_f | footprint's total weight, Σ_c *w*_fc | km² mol m-2 |
+| *w*_fc | weight, *a*_fc *H*_f | mol (km² × 10⁶ × mol m-2) |
+| *W*_f | footprint's total weight, Σ_c *w*_fc | mol |
 | *N* | count of contributing footprints | |
 | *R* | a set of cells | |
 
-## 11. References
+## 12. References
 
 - Brodzik, M. J., Billingsley, B., Haran, T., Raup, B., and Savoie, M. H.
   (2012). EASE-Grid 2.0: Incremental but significant improvements for

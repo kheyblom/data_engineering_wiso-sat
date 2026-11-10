@@ -126,13 +126,18 @@ CLAUDE.md, "How the halves connect").
 
 # 9. Gridding: grid the L2 stores
 TROPOMI daily method decided 2026-11-09 (`notebooks/drafting/gridding-notes.md`).
-Next: the pipeline design questions in `gridding/CLAUDE.md`.
+**Pipeline scoped and built 2026-11-10** (`gridding/CLAUDE.md`, "Layout" and
+"Decisions"; `gridding/STATE.md`): one engine for every sensor, grid type,
+resolution and frequency (day, n-day, month, n-month) in config, spatial and
+temporal stores, sampled verification. The fixture test passes (8 cases), and
+the pipeline reproduces the drafting code on a full production day.
 
-- **User-facing method doc:** `docs/technical/gridding-method.md`
-  (2026-11-10), updated as decisions land.
-  - **To do once the store layout is decided:** add a table mapping each
-    per-cell sum and statistic (its Sections 6 and 8) to its store variable,
-    and say which sums are written.
+- **User-facing method doc:** `docs/technical/gridding-method.md`, updated as
+  decisions land. Its store table (Section 10) is written.
+- **Next:** choose TROPOMI's production grids and frequencies, then the bench
+  (`gridding/TESTING.md` Tier 2), then production.
+- **Other sensors:** each needs its gridding inputs decided first (footprint
+  model, δD, σ, weight, selection); what each lacks is in `gridding/STATE.md`.
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).

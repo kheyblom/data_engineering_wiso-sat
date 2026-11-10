@@ -1,0 +1,133 @@
+# Production config for the TROPOMI gridded stores (SRON HDO L2, processor 8.1).
+#
+# One build (grid_wisosat.py) writes the spatial stores of every grid x
+# frequency below in one pass over the UTC days; rechunk_wisosat.py then
+# makes the temporal stores from the tagged spatial ones. NOT YET RUN: the
+# grids, frequencies and scale settings below are placeholders until the
+# bench (TESTING.md).
+product: tropomi
+# products/<source>.py: the quality levels and the footprint models
+source: tropomi
+# the L2 processor version, as the L2 stores name it (v_8_1)
+version: '8.1'
+
+# The finalized L2 stores, read only at one tag (gridding/CLAUDE.md). The 19
+# core stores carry v8.1-verified-20261018; gridding reads only core stores.
+l2:
+  directory: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi
+  filename: 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr'
+  tag: v8.1-verified-20261018
+
+directories:
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/grid/tropomi
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, under
+  # spatial/ or temporal/ (user decision 2026-11-10)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+nomenclature_data: /glade/u/home/kheyblom/work/style_guides/nomenclature_data.md
+log_file: grid_tropomi.log
+
+# The gridding inputs (gridding-method.md, Section 2; docs/products/tropomi.md,
+# "Gridding inputs"). Units are checked against nomenclature-key_grid.md.
+inputs:
+  delta_d: water_vapor_column_delta_d
+  # SRON deltad_precision: the random (noise) part of the retrieval error
+  delta_d_uncertainty: water_vapor_column_delta_d_standard_error
+  weight: water_vapor_column_h2o
+  footprint: corners
+
+selection:
+  # Schneider et al. (2022) Table 1, their recommendation (user decision 2026-11-09)
+  quality_level: clear_or_low_cloud
+  # TROPOMI T23 (user decision 2026-11-10): H2O columns above 100 kg m-2
+  thresholds:
+    water_vapor_column_h2o: {max: 5551.0}
+  description: >-
+    The H2O column limit (5551 mol m-2, 100 kg m-2) drops broken retrievals
+    under clear_or_low_cloud (TROPOMI issue T23, 22-71 a day): above it
+    delta D runs to +817 per mil and columns to 2,500 kg m-2, and they would
+    dominate H2O-weighted cells.
+
+# Each grid is made straight from L2. Chunks may be overridden per grid.
+grids:
+  - {type: latlon, resolution: 1.0}
+  - {type: latlon, resolution: 0.25}
+  - {type: ease2, name: M25km}
+# day, <n>day, month or <n>month, each with a nomenclature_data.md row
+frequencies: [day, month]
+
+chunks:
+  # one period, the whole grid: 0.25 deg is 720 x 1440, 7.9 MiB float64
+  spatial: {time: 1, rows: -1, cols: -1}
+  # the whole record per tile of 20 x 20 cells
+  temporal: {time: -1, rows: 20, cols: 20}
+
+# Scale settings (per product, never in code): placeholders until the bench.
+periods_per_commit: 10
+num_workers: 8
+# (footprint, cell) pairs clipped at once; bounds a worker's memory
+max_pairs: 500000
+# obs per L2 read block: a multiple of the geolocation chunk (4,194,304)
+read_block_obs: 4194304
+
+# rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
+temporal:
+  source_tag: null
+  block_rows: 200
+
+attrs:
+  title: >-
+    WISO-SAT TROPOMI HDO, gridded {frequency_long_name} on {grid_name}: {variable}
+  summary: >-
+    {long_name}, from the SRON TROPOMI HDO/H2O total column retrieval
+    (Schneider et al. 2022, processor {version_label}) as distributed for
+    WISO-SAT, gridded by footprint overlap: each footprint polygon
+    contributes to every cell it overlaps with weight w = overlap area x H2O
+    column, and every observation whose UTC time falls in the period is
+    averaged. The method is in gridding_method.
+  Conventions: ACDD-1.3
+  source: >-
+    The finalized WISO-SAT TROPOMI Level 2 stores (source_l2_stores) at tag
+    source_l2_tag
+  institution: University of Michigan
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Schneider, A., et al. (2022), Retrieving H2O/HDO columns over cloudy and
+    clear-sky scenes from the Tropospheric Monitoring Instrument (TROPOMI),
+    Atmos. Meas. Tech., 15, 2251-2275, doi:10.5194/amt-15-2251-2022
+  neighbouring_cells: >-
+    Cells are filled by footprint overlap: a footprint contributes to every
+    cell it covers, so neighbouring cells share footprints and their errors
+    are correlated, most strongly east-west and where cells are smaller than
+    the footprints. Each cell's standard error is correct on its own; a mean
+    over several cells computed as if they were independent understates its
+    standard error. For such means, add the sums over the cells
+    (gridding_method, Section 8).
+
+# Per quantity (nomenclature-key_grid.md names), merged over the
+# nomenclature's long_name and units.
+variable_attrs:
+  standard_error:
+    # version A, user decision 2026-11-10
+    comment: >-
+      The standard error covers retrieval noise only (the L2
+      deltad_precision), assumes independent footprint errors, and excludes
+      systematic error, which averaging does not reduce. It also excludes the
+      error from sampling: each satellite pass sees its own part of the cell,
+      at its own viewing geometry and with its own mix of clear and low-cloud
+      retrievals. Two passes over the same cell an orbit apart typically
+      differ by much more than this standard error. Cells seen by one pass
+      carry this error in full; cells seen by several passes (north of ~60N,
+      and at high southern latitudes in austral summer) average part of it
+      away.
+  coverage:
+    comment: >-
+      Adds up footprint areas, so it exceeds 1 where passes overlap; it is not
+      the fraction of the cell observed.
+  footprint_area:
+    comment: >-
+      Divide by cell_area for the footprint-to-cell ratio: above 1, the cell
+      is smaller than the footprints behind it and neighbouring cells repeat
+      one another.
