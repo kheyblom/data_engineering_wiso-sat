@@ -36,7 +36,7 @@ Progress: Shared pipeline, TROPOMI reader, key, configs and fixture built 2026-1
 Develop a plan to test this codebase so that we know that it works before we move to production runs.
 
 Progress:
-- TESTING.md written 2026-10-14. Tiers 0-1 (fixtures for TROPOMI and GOSAT)
+- l2/TESTING.md written 2026-10-14. Tiers 0-1 (fixtures for TROPOMI and GOSAT)
   pass 46 cases.
 - The TROPOMI download was found incomplete (339 orbits, 12 days); see
   docs/products/tropomi.md (T7). It was re-downloaded and fully audited on
@@ -53,30 +53,30 @@ Progress: TROPOMI production built, verified and finalized on 2026-10-18.
 - 17 stores, 32,657,526,234 observations, 1.3 TiB. Two index stores and the
   corners joined on 2026-10-18: 19 stores, ~1.8 TiB.
 - Tag `v8.1-verified-20261018`.
-- See STATE.md and TESTING.md (Tier 3 run log, findings 9-11).
+- See l2/STATE.md and l2/TESTING.md (Tier 3 run log, findings 9-11).
 - Their data-lake location is still to be decided.
 
 SCIAMACHY production built, verified and finalized 2026-10-22: 22 stores,
 78,666,297 observations, 0 failures, tag `v8.1-verified-20261022`; two
 upstream defects left out by declaration, one a one-time exception approved
-by the user (`docs/products/sciamachy.md` P6; TESTING.md, SCIAMACHY run log).
+by the user (`docs/products/sciamachy.md` P6; l2/TESTING.md, SCIAMACHY run log).
 
 GOSAT-2 production built, verified and finalized 2026-10-22: 12 stores,
 1,620,006 observations, 0 failures, tag `v3.0.1-verified-20261022`, read with
-the GOSAT reader and key (`source: gosat`; TESTING.md Tier 3).
+the GOSAT reader and key (`source: gosat`; l2/TESTING.md Tier 3).
 
 AIRS v1 production built, verified and finalized 2026-10-23: two products
 (RS, FS), 38 stores, 0 failures, tag `v1-verified-20261023`. CrIS v1
 2026-10-26: three products (SNPP RS, SNPP FS, JPSS1 FS), 50 stores, 0
-failures, tag `v1-verified-20261026` (`docs/products/tropess.md`; TESTING.md
+failures, tag `v1-verified-20261026` (`docs/products/tropess.md`; l2/TESTING.md
 run logs). TROPESS v2 (AIRS and CrIS-JPSS1, Full files) 2026-10-28: two
 products, 44 stores, 0 failures, tag `v2-verified-20261028` (`tropess.md`
-V1-V9; TESTING.md, TROPESS v2 run log); later days are appended as they are
+V1-V9; l2/TESTING.md, TROPESS v2 run log); later days are appended as they are
 downloaded. Remaining for task 6: IASI and TES.
 
 GOSAT production built, verified and finalized 2026-10-19: 12 stores,
 8,856,028 observations, 0 failures, tag `v3.0.1-verified-20261019`
-(TESTING.md Tier 3).
+(l2/TESTING.md Tier 3).
 
 
 # 7. Model-comparison stores: kernels, priors, dry-air columns, pressure grid
@@ -111,12 +111,22 @@ needed eventually; all were deferred from the first production subset.
     verified and finalized in production 2026-10-19 with the rest of GOSAT;
     `pressure` moved to its own store the same day.
   - TROPOMI: key rows, configs, compression, shards and `finalize --expire`
-    done; bench passed 2026-10-19 (TESTING.md Tier 2b); **production built,
+    done; bench passed 2026-10-19 (l2/TESTING.md Tier 2b); **production built,
     verified and finalized 2026-10-22** (tag `v8.1-verified-20261022`, 19.6
     TiB, ~815 core-hours).
   - Multi-array (matrix) stores (N18) and source slices are built
     (2026-10-28, for TROPESS v2's joint kernel, shaped for TES). IASI still
     needs its rank padding (N10).
+
+# 8. Restructure the repo into l2/ and gridding/ [COMPLETED 2026-11-10]
+The L2 zarr pipeline moved into `l2/` with its own CLAUDE.md, STATE.md,
+TESTING.md and environment; `gridding/` has the same, and `docs/`,
+`notebooks/` and this file stay at the root (user decisions 2026-11-10; root
+CLAUDE.md, "How the halves connect").
+
+# 9. Gridding: grid the L2 stores
+TROPOMI daily method decided 2026-11-09 (`notebooks/drafting/gridding-notes.md`).
+Next: the pipeline design questions in `gridding/CLAUDE.md`.
 
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).
@@ -125,6 +135,6 @@ needed eventually; all were deferred from the first production subset.
 - use and update a CLAUDE.md that will take this information and effectively and efficiently handle this project. Don't be overly verbose. Keep the CLAUDE.md minimal and clean.
 - use information learned in each of the directories in: @/glade/u/home/kheyblom/work/data_engineering and add to this project's CLAUDE.md. Each directory contains a codebase for creating zarr stores for our data lake.
 - it is always important to minimize compute costs on derecho. we have a finite allocation and we need to managing our usage.
-- keep notes on your current working state. you may lose connection to the HPC system or I may need to start new sessions, so I need you to be able to easily pick up where you left off. Create and use the file STATE.md.
+- keep notes on your current working state. you may lose connection to the HPC system or I may need to start new sessions, so I need you to be able to easily pick up where you left off. Create and use the file STATE.md (since 2026-11-10, one per half: l2/STATE.md and gridding/STATE.md).
 - additional tasks may come up that need to occur between the above tasks. this task list can be flexible, but if substantial changes are need, I need to approve them.
 - mark tasks as completed when they are completed
