@@ -71,6 +71,17 @@ max_pairs: 500000
 # obs per L2 read block: a multiple of the geolocation chunk (4,194,304)
 read_block_obs: 4194304
 
+# verify_grid_wisosat.py: sampled by decision (user, 2026-11-10). Besides the
+# first and last period, `samples` more periods per frequency are drawn with
+# `seed` and every cell recomputed from L2; a month sample regrids 28-31 days.
+# Temporal stores: `tiles` x `times` samples per store against the spatial
+# store. Placeholders until the bench measures the cost.
+verify:
+  seed: 20261110
+  samples: {day: 10, month: 2}
+  tiles: 6
+  times: 6
+
 # rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
 temporal:
   source_tag: null

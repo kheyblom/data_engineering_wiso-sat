@@ -15,7 +15,7 @@ Read this first in a new session. Update it whenever work lands.
   `latlon_0p25x0p25` / `ease2_m25km`; `spatial/` + `temporal/`
   directories; 8 statistics + 9 sums per (grid, frequency); temporal =
   rechunk of the tagged spatial store; sampled verification. New
-  nomenclature rows (15 variables, `month`, `3day`) added in style_guides
+  nomenclature rows (14 variables: 5 statistics, 9 sums; `month`, `3day`) added in style_guides
   `8144058`.
 - **TROPOMI method:** as decided 2026-11-09 (`../docs/technical/gridding-method.md`).
   The pipeline reproduces the drafting code on a full production day to
