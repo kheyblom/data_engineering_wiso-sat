@@ -141,6 +141,35 @@ lists of what was missing are in git history (`0b0a3d7`,
 | --- | --- |
 | T21 | The WISO-SAT TROPOMI L3 files (`TROPOMI_averaged_files`, excluded) seemed to hold `deltad_1deg` as a fraction (median -0.175), with no `units` attribute. Sarkar et al. (2026) state per mil. Worth raising with the authors if those are the published files. |
 
+## Gridding inputs (2026-11-10)
+
+How the method in [docs/technical/gridding-method.md](../technical/gridding-method.md)
+applies to TROPOMI.
+
+| input | L2 variable |
+| --- | --- |
+| time | geolocation `time` |
+| footprint | geolocation `lat_corners`, `lon_corners`: corners 0-1 are the back edge (toward the previous scanline), 2-3 the front, so 0-1-2-3 runs round the footprint |
+| δD | `water_vapor_column_delta_d` |
+| δD uncertainty (random) | `water_vapor_column_delta_d_standard_error` (SRON `deltad_precision`) |
+| H2O column | `water_vapor_column_h2o` |
+
+- **Selection:** `clear_or_low_cloud` (Schneider et al. 2022, Table 1; their
+  recommendation), and an H2O column of at most 5,551 mol m-2 (100 kg m-2;
+  T23).
+- **Footprints:** 7.2 x 5.6 km at nadir, widening across track to ~38 x
+  5.6 km at the swath edges (~7 km along track before August 2019).
+  Neighbouring footprints tile the swath with no gaps. Across track runs
+  roughly east-west, so neighbouring cells' errors are most correlated
+  east-west.
+- **Passes:** ~14 orbits a day, crossing the equator northbound at ~13:30
+  local time. Each orbit file holds only the sunlit part of the orbit. The
+  UTC day's first and last orbits meet near 157.5 W. North of ~60 N in
+  boreal summer, and south of ~60 S in austral summer, a cell is seen on
+  several passes in one day.
+- **Poles:** the few footprints that enclose a pole are not gridded (4 on
+  2020-07-01).
+
 ## Build details (built 2026-10-14; every file audited 2026-10-16; bench next)
 
 - **Granule:** an orbit. The granule index has ~38.6k entries and is stored

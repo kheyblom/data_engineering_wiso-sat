@@ -15,6 +15,12 @@ Read this first in a new session. Update it whenever work lands.
   (T23), every pass of the day averaged, standard error from independent
   errors, effective n, resolution and grid type (lat/lon or EASE-Grid 2.0)
   set in config.
+- **User-facing method doc:** `../docs/technical/gridding-method.md`
+  (2026-11-10). It is production documentation: the settled method only,
+  sensor-general, with no open questions, decisions or logistics. Sensor
+  specifics go in `../docs/products/<product>.md` ("Gridding inputs" in
+  `tropomi.md`). Update it as the method lands in code. Once the store
+  layout is decided, add its quantity-to-variable table (TASKS.md 9).
 - **Next:** the pipeline design questions in `CLAUDE.md` ("To decide before
   the first pipeline code"), laid out for the user.
 - **Environment:** `gridding/pyproject.toml` and `uv.lock`; see the root

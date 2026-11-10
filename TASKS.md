@@ -128,6 +128,12 @@ CLAUDE.md, "How the halves connect").
 TROPOMI daily method decided 2026-11-09 (`notebooks/drafting/gridding-notes.md`).
 Next: the pipeline design questions in `gridding/CLAUDE.md`.
 
+- **User-facing method doc:** `docs/technical/gridding-method.md`
+  (2026-11-10), updated as decisions land.
+  - **To do once the store layout is decided:** add a table mapping each
+    per-cell sum and statistic (its Sections 6 and 8) to its store variable,
+    and say which sums are written.
+
 # General notes:
 - all file paths are relative to this TASKS.md file (the repo root).
 - the git remote is: https://github.com/kheyblom/data_engineering_wiso-sat.git
