@@ -66,7 +66,32 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   store. These size production (`num_workers`, `periods_per_commit`, queue,
   walltime and the job chain over 2,945 days).
 
+### Bench results (2026-11-10)
+
+- **Build** (job 8142727, develop, 18 cpus, 64 GB, `a7a3402`): 31 days in
+  2.9 min (walltime 3 min 18 s), 44.6 cpu-min (~86 cpu-s per day at 16
+  workers, against 35 s alone on a login node), 43.8 GB peak (~2.7 GB per
+  worker). Commits of 10 periods to 17 stores: 9.6 s for the first (store
+  creation), then 1.5-2.1 s. 1.0-3.8 M footprints gridded a day into
+  179-551 k cells; 24-173 a day over the H2O limit (T23).
+- **Size:** 1,377 MiB for 31 days and 17 stores, ~44 MiB a day (float64
+  sums ~3.7 MiB a day each, float32 statistics ~1.7, count ~0.5). Each
+  store holds one chunk file per day: ~2,950 files per store over the
+  record, at the edge of the ~2,000-3,000 per directory guidance.
+- **Production estimate** (2,945 days, if throughput holds): ~4.6 h at 16
+  workers on develop (two jobs chained afterany; develop caps at 6 h), ~90
+  core-hours; ~130 GiB spatial plus as much temporal.
+- **Verify** (job 8142728) failed at once: the submit wrapper checked the
+  build's `num_workers` (16) against the verify job's 2 cpus. Fixed
+  (`ba519f0`: the guard is for builds only).
+- **Verify** (job 8142763, develop, 2 cpus, 32 GB): 10 min 14 s, 7.3 GB, 5
+  days recomputed (~2 min each). 4 days matched in every cell; 2020-07-31
+  failed in one cell: one footprint with optical thickness exactly 0.3
+  (float32), which the build excludes (neither Table 1 row) and the
+  verifier, casting to float64 (0.300000012), counted as low cloud. **The
+  verifier was wrong** (TROPOMI T24): it now keeps float sources at their
+  stored precision. The build, like the drafting code, was right. To rerun.
+
 ## Tier 3: production (not yet run)
 
-The production grids and frequencies are placeholders in
-`config/tropomi/config_grid.yaml` until the user chooses them.
+0.25° at day (user decision 2026-11-10); scale settings from the bench.

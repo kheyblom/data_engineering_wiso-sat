@@ -145,7 +145,12 @@ class IndependentL2:
         return '; '.join(out)
 
     def day(self, day, stores, keep=None):
-        """Every row whose time falls on the day, with the named stores' values (float64, fill as NaN).
+        """Every row whose time falls on the day, with the named stores' values.
+
+        Float stores keep their stored dtype, so every threshold is compared at
+        the stored precision, as the published values mean it: a float32 0.3
+        is 0.3, not 0.300000012 (TROPOMI T24). Integer stores become float64
+        with their fill as NaN, which is exact.
 
         Read one geolocation chunk at a time, and only the rows ``keep``
         accepts are held, so memory follows the selected rows rather than
@@ -173,10 +178,11 @@ class IndependentL2:
             for store in stores:
                 array = self.group(store)[store]
                 values = array[window][rows]
-                fill = array.attrs.get('_FillValue') if np.issubdtype(array.dtype, np.integer) else None
-                values = values.astype('float64')
-                if fill is not None:
-                    values[values == fill] = np.nan
+                if np.issubdtype(array.dtype, np.integer):
+                    fill = array.attrs.get('_FillValue')
+                    values = values.astype('float64')
+                    if fill is not None:
+                        values[values == fill] = np.nan
                 frame[store] = values
             chosen = np.ones(rows.size, dtype=bool) if keep is None else keep(frame)
             rows = rows[chosen]
@@ -234,7 +240,8 @@ def regrid_day(frame, settings, grid):
             keep &= ~(frame[store] > bounds['max'])
         if 'min' in bounds:
             keep &= ~(frame[store] < bounds['min'])
-    delta, sigma, h2o = (frame[inputs[name]] for name in ('delta_d', 'delta_d_uncertainty', 'weight'))
+    # the sums in float64, as the build's
+    delta, sigma, h2o = (frame[inputs[name]].astype('float64') for name in ('delta_d', 'delta_d_uncertainty', 'weight'))
     keep &= np.isfinite(delta) & np.isfinite(sigma) & np.isfinite(h2o)
     lat, lon = frame['lat_corners'][keep].astype('float64'), frame['lon_corners'][keep].astype('float64')
     delta, sigma, h2o = delta[keep], sigma[keep], h2o[keep]
