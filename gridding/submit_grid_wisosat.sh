@@ -44,12 +44,15 @@ export PATH="$HOME/.local/bin:$PATH"
 export TMPDIR="${TMPDIR:-/glade/derecho/scratch/$USER/tmp}"; mkdir -p "$TMPDIR" logs
 export OMP_NUM_THREADS=1
 
-# num_workers may not exceed the cpus this job can use (sched_getaffinity, not $NCPUS or nproc)
-read -r workers available < <(uv run python -c "
+# a build's num_workers may not exceed the cpus this job can use (sched_getaffinity, not
+# $NCPUS or nproc); verify and rechunk are serial and do not use it
+if [[ -z ${VERIFY:-} && -z ${RECHUNK:-} ]]; then
+    read -r workers available < <(uv run python -c "
 import os
 from utils.config import load_config
 print(load_config('${CONFIG}').get('num_workers') or 0, len(os.sched_getaffinity(0)))")
-(( workers > available )) && { echo "error: num_workers ${workers} exceeds ${available} cpus" >&2; exit 1; }
+    (( workers > available )) && { echo "error: num_workers ${workers} exceeds ${available} cpus" >&2; exit 1; }
+fi
 
 if [[ -n ${VERIFY:-} ]]; then
     uv run python verify_grid_wisosat.py --config "${CONFIG}" --layout "${LAYOUT}"
