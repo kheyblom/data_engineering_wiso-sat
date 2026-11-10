@@ -36,13 +36,35 @@ bench, then production (root CLAUDE.md: the allocation is finite).
   polar ones). Grid of one day at 1° on a login node: 42 s including the
   read.
 
-## Tier 2: bench (not yet run)
+## Tier 2: bench (planned 2026-11-10)
 
-To plan with the user: one month (31 days) of the production config on a
-compute node, to measure per-day cost per grid, worker scaling, memory, and
-commit time per (grid, frequency), and to size `num_workers`,
-`periods_per_commit` and the job chain. Then a temporal rechunk of the bench
-month to measure the region path.
+The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
+
+- **Measured first (login node, 2026-11-10):** one UTC day (2020-07-01) at
+  0.25° in one worker: 35 s to read and grid (47 s with start-up), peak RSS
+  2.1 GiB; 514,632 occupied cells (the drafting notes' number), 8,285,606
+  (footprint, cell) pairs. The verifier's full-day recompute could not be
+  measured there: the login node's per-user cap (~10 GiB) was already 7.1
+  GiB used by VS Code extensions, and the recompute needs more than the
+  rest. It is measured in the bench instead (reads are now chunk-wise with
+  the selection applied while reading, and the clipping is in blocks of
+  `verify.max_pairs`).
+- **Config:** `config/tropomi/config_grid_bench.yaml`: production limited to
+  July 2020 (31 days), bench root
+  `/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`,
+  `num_workers: 16`, 5 verify sample days.
+- **Jobs** (develop queue, shared node, billed per cpu):
+  1. build: `NCPUS=18 MEM=64GB WALLTIME=01:00:00`;
+  2. verify spatial, `AFTER` the build: `NCPUS=2 MEM=32GB WALLTIME=01:00:00`;
+  3. on a login node, with the user's sign-off: finalize spatial
+     (`--attrs`, `--tag bench-spatial`);
+  4. rechunk: `RECHUNK=1 NCPUS=2 MEM=32GB WALLTIME=00:30:00`, then verify
+     temporal.
+- **To measure:** per-day cost and throughput at 16 workers, worker and
+  main-process memory, commit time per 10 periods x 17 stores, store size
+  per day, the verifier's cost per sampled day, and the rechunk's cost per
+  store. These size production (`num_workers`, `periods_per_commit`, queue,
+  walltime and the job chain over 2,945 days).
 
 ## Tier 3: production (not yet run)
 

@@ -24,11 +24,10 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-1. **Choose TROPOMI's production grids and frequencies** (the config's are
-   placeholders: 1°, 0.25°, EASE 25 km; day and month) and the
-   verification sample sizes (`verify.samples`).
-2. **Bench** (TESTING.md Tier 2): one month on a compute node; show the
-   user the job first.
+1. **TROPOMI first: 0.25° at day** (user decision 2026-11-10); the other
+   sensors' decisions come after TROPOMI is built.
+2. **Bench** (TESTING.md Tier 2): July 2020 on the develop queue; jobs
+   shown to the user before submitting.
 3. Production, verify, finalize, rechunk, verify, finalize.
 4. **Other sensors** need their gridding inputs decided by the user before
    any config (survey 2026-11-10, from the product docs). What each lacks

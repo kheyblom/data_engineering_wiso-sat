@@ -3,8 +3,8 @@
 # One build (grid_wisosat.py) writes the spatial stores of every grid x
 # frequency below in one pass over the UTC days; rechunk_wisosat.py then
 # makes the temporal stores from the tagged spatial ones. NOT YET RUN: the
-# grids, frequencies and scale settings below are placeholders until the
-# bench (TESTING.md).
+# scale settings below are placeholders until the bench (TESTING.md Tier 2,
+# config_grid_bench.yaml).
 product: tropomi
 # products/<source>.py: the quality levels and the footprint models
 source: tropomi
@@ -50,12 +50,11 @@ selection:
     dominate H2O-weighted cells.
 
 # Each grid is made straight from L2. Chunks may be overridden per grid.
+# The first TROPOMI build: 0.25 degree, daily (user decision 2026-11-10).
 grids:
-  - {type: latlon, resolution: 1.0}
   - {type: latlon, resolution: 0.25}
-  - {type: ease2, name: M25km}
 # day, <n>day, month or <n>month, each with a nomenclature_data.md row
-frequencies: [day, month]
+frequencies: [day]
 
 chunks:
   # one period, the whole grid: 0.25 deg is 720 x 1440, 7.9 MiB float64
@@ -78,7 +77,7 @@ read_block_obs: 4194304
 # store. Placeholders until the bench measures the cost.
 verify:
   seed: 20261110
-  samples: {day: 10, month: 2}
+  samples: {day: 10}
   tiles: 6
   times: 6
 

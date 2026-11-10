@@ -144,8 +144,13 @@ class IndependentL2:
             out.append(f'{store}={repository.lookup_tag(self.settings["l2"]["tag"])}')
         return '; '.join(out)
 
-    def day(self, day, stores):
-        """Every row whose time falls on the day, with the named stores' values."""
+    def day(self, day, stores, keep=None):
+        """Every row whose time falls on the day, with the named stores' values (float64, fill as NaN).
+
+        Read one geolocation chunk at a time, and only the rows ``keep``
+        accepts are held, so memory follows the selected rows rather than
+        the ~12 M rows of a TROPOMI day.
+        """
         geo = self.group(config.GEOLOCATION)
         units = geo['time'].attrs['units'].split(' since ')[0]
         per_day = pd.Timedelta(days=1) / pd.Timedelta(1, unit={'milliseconds': 'ms', 'seconds': 's',
@@ -155,16 +160,33 @@ class IndependentL2:
         index = index[(index.obs_count > 0) & (index.time_end >= begin) & (index.time_start < end)]
         if index.empty:
             return None
-        window = slice(int(index.obs_start.min()), int((index.obs_start + index.obs_count).max()))
-        time = geo['time'][window]
-        rows = np.flatnonzero((time >= begin) & (time < end))
-        frame = {'lat_corners': geo['lat_corners'][window][rows], 'lon_corners': geo['lon_corners'][window][rows]}
-        for store in stores:
-            array = self.group(store)[store]
-            values = array[window][rows]
-            fill = array.attrs.get('_FillValue') if np.issubdtype(array.dtype, np.integer) else None
-            frame[store] = np.where(values == fill, np.nan, values.astype('float64')) if fill is not None else values.astype('float64')
-        return frame
+        first, stop = int(index.obs_start.min()), int((index.obs_start + index.obs_count).max())
+        step = geo['time'].chunks[0]
+        parts = []
+        for edge in range(first - first % step, stop, step):
+            window = slice(max(edge, first), min(edge + step, stop))
+            time = geo['time'][window]
+            rows = np.flatnonzero((time >= begin) & (time < end))
+            if rows.size == 0:
+                continue
+            frame = {}
+            for store in stores:
+                array = self.group(store)[store]
+                values = array[window][rows]
+                fill = array.attrs.get('_FillValue') if np.issubdtype(array.dtype, np.integer) else None
+                values = values.astype('float64')
+                if fill is not None:
+                    values[values == fill] = np.nan
+                frame[store] = values
+            chosen = np.ones(rows.size, dtype=bool) if keep is None else keep(frame)
+            rows = rows[chosen]
+            frame = {store: values[chosen] for store, values in frame.items()}
+            frame['lat_corners'] = geo['lat_corners'][window][rows]
+            frame['lon_corners'] = geo['lon_corners'][window][rows]
+            parts.append(frame)
+        if not parts:
+            return None
+        return {name: np.concatenate([part[name] for part in parts]) for name in parts[0]}
 
 
 def tropomi_passes(v, level):
@@ -243,19 +265,42 @@ def regrid_day(frame, settings, grid):
         row0 = np.clip(np.floor((y0 - y.max(1)) / size).astype(int), 0, rows - 1)
         row1 = np.clip(np.floor((y0 - y.min(1)) / size).astype(int), 0, rows - 1)
     n_pairs = (row1 - row0 + 1) * (col1 - col0 + 1)
-    foot = np.repeat(np.arange(lat.shape[0]), n_pairs)
-    within = np.arange(n_pairs.sum()) - np.repeat(np.cumsum(n_pairs) - n_pairs, n_pairs)
+    # whole footprints per block, about verify.max_pairs candidate pairs each, so
+    # memory stays bounded (shapely objects are large); a footprint's W is
+    # complete within its block
+    limit = int((settings.get('verify') or {}).get('max_pairs', 2_000_000))
+    ends = np.cumsum(n_pairs)
+    parts, first = [], 0
+    while first < lat.shape[0]:
+        last = max(first + 1, int(np.searchsorted(ends, ends[first] - n_pairs[first] + limit, side='right')))
+        block = np.arange(first, last)
+        parts.append(_block_sums(block, n_pairs, row0, col0, col1, polygons, grid, size, delta, sigma, h2o, whole,
+                                 x0y0=None if grid.kind == 'latlon' else (x0, y0)))
+        first = last
+    if not parts:
+        return pd.DataFrame(columns=['count', *nomenclature.quantity_names('sum')], dtype='float64')
+    return pd.concat(parts).groupby(level=0).sum()
+
+
+def _block_sums(block, n_pairs, row0, col0, col1, polygons, grid, size, delta, sigma, h2o, whole, x0y0):
+    """The per-cell sums of one block of whole footprints (``regrid_day``)."""
+    rows, cols = grid.shape
+    counts = n_pairs[block]
+    foot = np.repeat(block, counts)
+    within = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
     width = (col1 - col0 + 1)[foot]
     row = row0[foot] + within // width
     col = col0[foot] + within % width
-    if grid.kind == 'latlon':
+    if x0y0 is None:
         boxes = shapely.box(-180 + col * size, 90 - (row + 1) * size, -180 + (col + 1) * size, 90 - row * size)
     else:
+        x0, y0 = x0y0
         boxes = shapely.box(x0 + col * size, y0 - (row + 1) * size, x0 + (col + 1) * size, y0 - row * size)
     piece = shapely.area(shapely.intersection(polygons[foot], boxes))
+    del boxes
     hit = piece > 0
     foot, row, col, piece = foot[hit], row[hit], col[hit] % cols, piece[hit]
-    if grid.kind == 'latlon':
+    if x0y0 is None:
         north, south = np.deg2rad(90 - row * size), np.deg2rad(90 - (row + 1) * size)
         km2 = piece / size**2 * EARTH_KM**2 * np.deg2rad(size) * (np.sin(north) - np.sin(south))
     else:
@@ -286,9 +331,20 @@ def recompute(l2, settings, grid, start, end):
     needed = list(dict.fromkeys([*stores_for[settings['selection']['quality_level']],
                                  *(settings['selection'].get('thresholds') or {}),
                                  *(settings['inputs'][name] for name in ('delta_d', 'delta_d_uncertainty', 'weight'))]))
+    inputs, selection = settings['inputs'], settings['selection']
+
+    def keep(frame):
+        # the selection again, applied while reading so only kept rows are held
+        ok = passes(frame, selection['quality_level'])
+        for store, bounds in (selection.get('thresholds') or {}).items():
+            ok &= ~(frame[store] > bounds.get('max', np.inf)) & ~(frame[store] < bounds.get('min', -np.inf))
+        for name in ('delta_d', 'delta_d_uncertainty', 'weight'):
+            ok &= np.isfinite(frame[inputs[name]])
+        return ok
+
     parts = []
     for day in range(start, end):
-        frame = l2.day(day, needed)
+        frame = l2.day(day, needed, keep)
         if frame is not None and len(frame['lat_corners']):
             parts.append(regrid_day(frame, settings, grid))
     names = nomenclature.quantity_names('sum')
