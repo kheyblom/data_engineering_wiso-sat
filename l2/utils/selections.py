@@ -1,6 +1,6 @@
 """Source slices, the checks on what they leave out, and lookups onto another grid.
 
-Added 2026-10-28 for TROPESS v2 and shaped for TES (``docs/products/tropess.md``
+Added 2026-10-28 for TROPESS v2 and shaped for TES (``../docs/products/tropess.md``
 V9, D2, user decision 2026-10-28). Three declared things, never detected:
 
 - **A slice** of a source, written in the nomenclature key's

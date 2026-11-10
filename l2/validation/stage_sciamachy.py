@@ -17,7 +17,7 @@ Chosen deliberately (see config/sciamachy/config_zarr_fixture.yaml):
 - **A hidden transfer folder holding a duplicate, and a .DS_Store**, as the
   real tree has (S5), which the reader must not walk.
 
-Run from the repo root (reads ~11 MB):
+Run from l2/ (reads ~11 MB):
 
     uv run python validation/stage_sciamachy.py
 

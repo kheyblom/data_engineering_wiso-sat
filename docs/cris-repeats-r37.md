@@ -1,6 +1,6 @@
 # R37: CrIS rows repeated across days — outline for a decision
 
-Written 2026-10-26 for the user's review. Evidence: TESTING.md finding 16,
+Written 2026-10-26 for the user's review. Evidence: l2/TESTING.md finding 16,
 `tropess.md` R37; the probes ran on the login node and are described under
 "How it was measured".
 

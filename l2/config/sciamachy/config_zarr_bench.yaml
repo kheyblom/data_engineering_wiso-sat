@@ -57,7 +57,7 @@ expected_missing_months: []
 
 # Observations left out by name, each confirmed by the build and the verifier
 # before it is left out (DeclaredRows in utils/granules.py; user decisions
-# 2026-10-22, docs/products/sciamachy.md P6). Both keep time from decreasing.
+# 2026-10-22, ../docs/products/sciamachy.md P6). Both keep time from decreasing.
 declared_rows_left_out:
   # S9: a ONE-TIME EXCEPTION to "never select observations" (user decision
   # 2026-10-22). The two orbits' L1B files overlap, so 32 scenes are retrieved

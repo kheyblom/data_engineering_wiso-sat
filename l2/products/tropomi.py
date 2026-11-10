@@ -7,7 +7,7 @@ One granule is one orbit file:
 ```
 
 Format facts the reader depends on, measured 2026-10-13/14 (see
-``docs/products/tropomi.md``):
+``../docs/products/tropomi.md``):
 
 - **No root variables.** Everything sits in the groups ``target_product``,
   ``instrument``, ``diagnostics``, ``meteo`` and ``side_product``, so a source

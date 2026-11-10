@@ -107,7 +107,7 @@ on 2026-10-16:
 - the 19 new missing days are all real upstream gaps (404);
 - 2025-11-30 exists upstream only as empty orbit directories.
 
-See `docs/products/tropomi.md` (T7).
+See `../docs/products/tropomi.md` (T7).
 
 ### 6. A source `calendar` attribute blocks the time write
 
@@ -181,7 +181,7 @@ The first production verification (V1-V3, jobs 7841010-12, ~97 core-hours)
 failed. Every value matched raw, but `instrument/latitude_center` and
 `longitude_center` held 6 netCDF default fills on stored rows.
 - **The rows:** orbit 8480 (1 row), 8674 (2) and 8726 (3), all June 2019 (see
-  `docs/products/tropomi.md`, T8).
+  `../docs/products/tropomi.md`, T8).
   - Each is the only row with a time in its file.
   - SRON wrote time, SZA (~101 deg, night) and other viewing angles, and
     nothing else: no position, retrieval or flags.
@@ -209,7 +209,7 @@ The build of the corner geolocation store and the two index stores was stamped
 - **The stores:** the stamp in their commit messages is permanent. Their
   `history` explains it, through `finalize --dirty-notes`.
 - **The fix:**
-  - `notebooks/` is ignored;
+  - `../notebooks/` is ignored;
   - a build refuses a dirty tree, at submit and at start (`check_clean_tree`);
   - only fixture configs may set `allow_dirty_tree`.
 - **The test:** an untracked probe file makes the tree dirty, and the build

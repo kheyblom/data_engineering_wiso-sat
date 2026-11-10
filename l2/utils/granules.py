@@ -178,7 +178,7 @@ class DeclaredRows(NamedTuple):
 
     For a defect the row rule cannot see: rows that are observations, but
     repeats of others, so keeping them would break "time never decreases"
-    (user decision 2026-10-22; ``docs/products/sciamachy.md`` P6). Declared in
+    (user decision 2026-10-22; ``../docs/products/sciamachy.md`` P6). Declared in
     config (``declared_rows_left_out``), never detected, and left out only
     while the build and the verifier each confirm the stated match:
 

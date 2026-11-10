@@ -42,7 +42,7 @@ Per product:
    ``--expire``, ``--gc`` sequence, after which a sharded store keeps only
    its tip and every store reports finalized; then the verifier still passes.
 
-Run from the repo root after staging each fixture:
+Run from l2/ after staging each fixture:
 
     uv run python validation/stage_tropomi.py
     uv run python validation/stage_gosat.py      # GOSAT and GOSAT-2
@@ -116,7 +116,7 @@ class Results:
 
 
 def run(*args):
-    """Run one entry point from the repo root.
+    """Run one entry point from l2/.
 
     Args:
         *args: The command line after the interpreter.
@@ -210,7 +210,7 @@ def test_product(results, config, scratch):
 
     Args:
         results (Results): Where to record cases.
-        config (str): The fixture config, relative to the repo root.
+        config (str): The fixture config, relative to l2/.
         scratch (str): A scratch directory for variant configs and logs.
     """
     settings = load_config(os.path.join(ROOT, config))
@@ -744,7 +744,24 @@ def test_rules(results):
         results (Results): Collects the outcomes.
     """
     from finalize_wisosat_zarr import parse_dirty_notes
-    from utils.zarr_utils import check_clean_tree
+    from utils.zarr_utils import check_clean_tree, uncommitted_changes
+
+    # the clean-tree check covers l2/ only (user decision 2026-11-10): an
+    # untracked file inside l2/ is a change, one beside it in the repo root
+    # (the gridding half, docs/) is not. Judged by the probe's own line, so
+    # other edits in progress do not decide it
+    def probe_seen(folder):
+        probe = os.path.join(folder, '.dirty_tree_scope_probe')
+        try:
+            open(probe, 'w').close()
+            return any(line.endswith('.dirty_tree_scope_probe') for line in uncommitted_changes() or [])
+        finally:
+            os.remove(probe)
+
+    results.check(
+        'the clean-tree check sees l2/ and nothing beside it',
+        probe_seen(ROOT) and not probe_seen(os.path.dirname(ROOT)),
+    )
 
     def refuses(revision, settings):
         try:

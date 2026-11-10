@@ -3,7 +3,7 @@
 #
 # One run builds the geolocation store plus one store per variable listed, in a
 # single pass over the orbits. NOT YET RUN. The subset was decided with the
-# user on 2026-10-22 (docs/products/sciamachy.md, Production subset). The scale
+# user on 2026-10-22 (../docs/products/sciamachy.md, Production subset). The scale
 # settings below are placeholders until the bench measures them.
 product: sciamachy
 directories:
@@ -57,7 +57,7 @@ expected_missing_months: []
 
 # Observations left out by name, each confirmed by the build and the verifier
 # before it is left out (DeclaredRows in utils/granules.py; user decisions
-# 2026-10-22, docs/products/sciamachy.md P6). Both keep time from decreasing.
+# 2026-10-22, ../docs/products/sciamachy.md P6). Both keep time from decreasing.
 declared_rows_left_out:
   # S8: the file holds its 312 observations three times, identical in every
   # variable but pixel_id

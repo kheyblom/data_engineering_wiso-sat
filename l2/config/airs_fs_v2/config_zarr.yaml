@@ -1,7 +1,7 @@
 # Production config for the AIRS Forward Stream v2 stores: TROPESS AIRS-Aqua
 # HDO Level 2, collection version 2, from the Full files.
 #
-# docs/products/tropess.md holds every decision this encodes ("v2: answers",
+# ../docs/products/tropess.md holds every decision this encodes ("v2: answers",
 # the v2 production subset V1-V9, approved 2026-10-28; issues R41-R46). In
 # short:
 # - one product, wisosat.airs.v_2.fs..., built from the Full files only

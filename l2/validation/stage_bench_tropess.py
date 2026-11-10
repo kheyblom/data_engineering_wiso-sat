@@ -26,7 +26,7 @@ holds it: the bench config declares only those that occur. Where the config
 declares the repeat rule (R37), it also reports how many rows the rule leaves
 out of the month alone, which the bench config declares.
 
-Run from the repo root (symlinks, and reads the declared variables of the
+Run from l2/ (symlinks, and reads the declared variables of the
 month's files, ~2 GB at most):
 
     uv run python validation/stage_bench_tropess.py

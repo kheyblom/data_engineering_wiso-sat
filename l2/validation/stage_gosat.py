@@ -14,7 +14,7 @@ The real GOSAT-2 2019 folder holds L3 files beside the L2 ones, which the
 reader must skip. Each fixture's first year folder gets empty files of those
 names (the real ``GOSAT2_monthly_1deg.nc`` is 373 MB).
 
-Run from the repo root (copies ~3 MB):
+Run from l2/ (copies ~3 MB):
 
     uv run python validation/stage_gosat.py
 

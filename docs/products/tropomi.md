@@ -36,7 +36,7 @@ not introduced by the download.
 ## Record coverage and file defects
 
 Every file was audited on 2026-10-16 (develop job 7839486,
-`tools/survey/tropomi_file_audit.py`; TESTING.md finding 7). For each file,
+`l2/tools/survey/tropomi_file_audit.py`; l2/TESTING.md finding 7). For each file,
 the audit recorded whether it opens, its version, and whether every source the
 pipeline reads was written.
 
@@ -57,10 +57,10 @@ clean. The orbit lists are in the appendix.
 | T2 | **353 orbit directories are empty upstream**: the directory exists on the server but holds no file. Each was checked against the server listing (2026-10-14). | handled: `expected_empty_granules` |
 | T3 | **3 files are corrupt upstream**, byte-identical to the server copies, and HDF5 cannot open them. Worth reporting to SRON: **03335** (2018-06-05, "wrong fractal heap header signature"), **07821** (2019-04-17, truncated to 3.6 MB of 645 MB) and **07844** (2019-04-19, truncated to 18 MB of 1.2 GB). | handled: `expected_unreadable_granules`; left out of every store and named in `known_data_gaps`. The build confirms each still fails to open. |
 | T4 | **109 shell files**: every variable is declared at full size (e.g. 693,590 observations), but no data was ever written, so every read returns fill. Mostly 68,534 bytes; 93 are in 2019. The upstream copies are identical. | handled: indexed as granules with no observations; `granule_source_rows` keeps their declared size |
-| T5 | **77 partially processed files.** In 73 of them, 93-100% of rows were never processed: time, lat/lon, SZA and every retrieval variable are unwritten. Across all 48,741,476 such rows, none of the 20 other variables the pipeline reads holds a value. In the other 4, every row was processed but some retrieval variables were never written. The processed rows (1,356,964 in all) often lack retrieval variables, quality flags and even scanline indices too. Mostly 2019. | handled (user decision 2026-10-16; TESTING.md finding 8): an observation is a row whose time is written. Unprocessed rows are left out, but only after the build confirms every source is fill on them; the verifier re-derives this from raw. `granule_source_rows` keeps each file's own row count. |
+| T5 | **77 partially processed files.** In 73 of them, 93-100% of rows were never processed: time, lat/lon, SZA and every retrieval variable are unwritten. Across all 48,741,476 such rows, none of the 20 other variables the pipeline reads holds a value. In the other 4, every row was processed but some retrieval variables were never written. The processed rows (1,356,964 in all) often lack retrieval variables, quality flags and even scanline indices too. Mostly 2019. | handled (user decision 2026-10-16; l2/TESTING.md finding 8): an observation is a row whose time is written. Unprocessed rows are left out, but only after the build confirms every source is fill on them; the verifier re-derives this from raw. `granule_source_rows` keeps each file's own row count. |
 | T6 | **The upstream record ends at 2025-11-29.** The server lists 2025-11-30, but its 14 orbit directories are empty. | record only |
 | T7 | **The first download (2026-10) was incomplete**; details below. | handled: re-downloaded 2026-10-16 and re-audited |
-| T8 | **6 rows have a time but no position**, in three partial files: orbit 8480 (row 0), 8674 (rows 0 and 3) and 8726 (rows 0-2), all June 2019. Each is the only row its file has a time on. SRON wrote the time (2-3 rows share one timestamp), SZA ~100.5-101 deg (night), solar azimuth, viewing zenith, and in 8674 viewing azimuth. Lat/lon centre and corners, scanline, ground pixel, every retrieval, meteo and flag variable are fill. The first production build stored them, with lat/lon 9.96921e36 in the geolocation store; verification caught it (2026-10-17). | handled: a row needs time, lat and lon to be an observation (user decision 2026-10-17); `allowed_on_rows_left_out` lets their SZA go. The three orbits hold no observations (TESTING.md finding 10) |
+| T8 | **6 rows have a time but no position**, in three partial files: orbit 8480 (row 0), 8674 (rows 0 and 3) and 8726 (rows 0-2), all June 2019. Each is the only row its file has a time on. SRON wrote the time (2-3 rows share one timestamp), SZA ~100.5-101 deg (night), solar azimuth, viewing zenith, and in 8674 viewing azimuth. Lat/lon centre and corners, scanline, ground pixel, every retrieval, meteo and flag variable are fill. The first production build stored them, with lat/lon 9.96921e36 in the geolocation store; verification caught it (2026-10-17). | handled: a row needs time, lat and lon to be an observation (user decision 2026-10-17); `allowed_on_rows_left_out` lets their SZA go. The three orbits hold no observations (l2/TESTING.md finding 10) |
 
 ### History: the first download (found 2026-10-14, resolved 2026-10-16)
 
@@ -152,7 +152,7 @@ lists of what was missing are in git history (`0b0a3d7`,
 - **Gaps and defects** (T1-T5) are declared in the config, never detected:
   `expected_missing_days`, `expected_empty_granules` and
   `expected_unreadable_granules`. The build fails on anything undeclared.
-- **Fixture:** `validation/stage_tropomi.py` stages the following.
+- **Fixture:** `l2/validation/stage_tropomi.py` stages the following.
   - Orbits 13857, 13870, 13871, 13899 and 13900, each cut to 23-47 mid-orbit
     scanlines (38,055 obs). 2020-06-18, a real upstream gap, falls between
     them.
@@ -249,7 +249,7 @@ Named in the cross-product naming pass. The grammar and decisions are in
 (style_guides `fee64ec`). Units are after conversion. The key rows and the
 three configs carry them (2026-10-19), and the fixture builds and verifies
 them. **Built, verified and finalized in production 2026-10-22**, tag
-`v8.1-verified-20261022`: 19.6 TiB (TESTING.md, Tier 3).
+`v8.1-verified-20261022`: 19.6 TiB (l2/TESTING.md, Tier 3).
 
 - **Dims:** `nlayer` (50) becomes `layer`; `nlevel` (51) becomes `level`, the
   layer interfaces.

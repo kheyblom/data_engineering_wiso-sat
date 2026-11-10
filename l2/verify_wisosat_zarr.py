@@ -28,7 +28,7 @@ and dropped from every file of their granule by their time, lat and lon.
 A source the key slices (``x[:, 0:17]``), or the config looks up onto another
 grid (``level_lookups``), is selected here with this module's own code, and
 what the slices leave out is checked against the config's
-``source_remainders`` from raw (``docs/products/tropess.md`` V9, D2).
+``source_remainders`` from raw (``../docs/products/tropess.md`` V9, D2).
 Comparisons are bit-exact, reading the stored values undecoded through zarr:
 the build does the same arithmetic in the same order, so anything short of
 identical is a defect.

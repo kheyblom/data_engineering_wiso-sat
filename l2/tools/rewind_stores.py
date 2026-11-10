@@ -13,7 +13,7 @@ must hold exactly N entries, equal to the first N of the current index, and its
 obs length must be the sum of their counts. Every store must reach the same N,
 so they stay on one obs axis.
 
-Run from the repo root; nothing changes without ``--apply``:
+Run from l2/; nothing changes without ``--apply``:
 
     uv run python tools/rewind_stores.py --config <config> --granules N [--apply]
 """

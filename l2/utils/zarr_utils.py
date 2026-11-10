@@ -166,22 +166,29 @@ def layout_note(settings):
     return LAYOUT_NOTE.format(time_order=TIME_ORDER_NOTES[time_order(settings)])
 
 
+# l2/, the half of the repository that builds the stores. The clean-tree
+# check covers this folder only (user decision 2026-11-10): the gridding half
+# and the shared docs/ never reach a build, so their uncommitted edits must
+# not block one. l2/ holds its own pyproject.toml and uv.lock, so the build
+# environment is covered too. The revision stamped is still the repo's HEAD.
+L2_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def code_revision():
     """The git revision of this working tree, for provenance.
 
     Returns:
-        str: The short revision, '-dirty' if the tree has uncommitted changes,
-            or 'unknown' if git cannot answer.
+        str: The short revision, '-dirty' if l2/ has uncommitted changes, or
+            'unknown' if git cannot answer.
     """
-    here = os.path.dirname(os.path.abspath(__file__))
     try:
         revision = subprocess.run(
             ['git', 'rev-parse', '--short', 'HEAD'],
-            capture_output=True, text=True, check=True, cwd=here,
+            capture_output=True, text=True, check=True, cwd=L2_ROOT,
         ).stdout.strip()
         dirty = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            capture_output=True, text=True, check=True, cwd=here,
+            ['git', 'status', '--porcelain', '--', L2_ROOT],
+            capture_output=True, text=True, check=True, cwd=L2_ROOT,
         ).stdout.strip()
         return f'{revision}-dirty' if dirty else revision
     except Exception:
@@ -190,17 +197,16 @@ def code_revision():
 
 
 def uncommitted_changes():
-    """What ``git status`` reports for this working tree.
+    """What ``git status`` reports for l2/.
 
     Returns:
-        list | None: ``git status --porcelain`` lines (empty when clean), or
-            None if git cannot answer.
+        list | None: ``git status --porcelain`` lines for l2/ (empty when
+            clean), or None if git cannot answer.
     """
-    here = os.path.dirname(os.path.abspath(__file__))
     try:
         output = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            capture_output=True, text=True, check=True, cwd=here,
+            ['git', 'status', '--porcelain', '--', L2_ROOT],
+            capture_output=True, text=True, check=True, cwd=L2_ROOT,
         ).stdout
     except Exception:
         return None
@@ -213,7 +219,7 @@ def check_clean_tree(revision, settings):
     Every build commit is stamped with the revision that wrote it, and that
     stamp is permanent. A dirty tree makes it say ``-dirty``, which nobody can
     later explain from the store alone, so a build has to start from a
-    committed tree.
+    committed tree. Only l2/ counts (``L2_ROOT``).
 
     Only a fixture config may set ``allow_dirty_tree``. The pipeline test
     builds during development, and its stores are throwaway; the test checks
@@ -224,7 +230,7 @@ def check_clean_tree(revision, settings):
         settings (dict): The loaded configuration.
 
     Raises:
-        ValueError: If the tree has uncommitted or untracked changes, or git
+        ValueError: If l2/ has uncommitted or untracked changes, or git
             cannot say which revision this is.
     """
     if settings.get('allow_dirty_tree'):
@@ -234,7 +240,7 @@ def check_clean_tree(revision, settings):
     if revision.endswith('-dirty'):
         changes = uncommitted_changes() or []
         raise ValueError(
-            f'the working tree is not a clean commit ({len(changes)} changes, e.g. '
+            f'l2/ is not a clean commit ({len(changes)} changes, e.g. '
             f'{changes[:5]}); commit them, or move them out, before building: every '
             f'build commit is stamped with the revision that wrote it'
         )

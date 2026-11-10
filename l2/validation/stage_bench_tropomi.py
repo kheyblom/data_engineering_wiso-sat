@@ -5,7 +5,7 @@ directories of 2020-07 (395 orbits, no missing days) into a tree of its own,
 rather than copying ~365 GB. The production config's raw root is the source,
 and the bench config's is the target, so the two cannot drift.
 
-Run from the repo root (31 symlinks; reads nothing):
+Run from l2/ (31 symlinks; reads nothing):
 
     uv run python validation/stage_bench_tropomi.py
 """

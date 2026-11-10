@@ -128,7 +128,7 @@ Totals: AIRS ~8,830 files and ~92 GB; CrIS ~3,295 files and ~145 GB.
 ## What to hand back
 
 To the `data_engineering_wiso-sat` session, which updates `tropess.md` and
-`STATE.md` from it:
+`l2/STATE.md` from it:
 
 - each new folder's path, with files downloaded vs CMR count, and the cutoff
   date for v2;

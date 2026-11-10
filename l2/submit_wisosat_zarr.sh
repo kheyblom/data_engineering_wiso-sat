@@ -32,14 +32,16 @@ if [[ -z ${PBS_ENVIRONMENT:-} ]]; then
 
     # a build is stamped with the code revision that wrote it, so it must start
     # from a clean commit (user decision 2026-10-18). The build checks again
-    # when the job starts; this refuses before anything is queued
+    # when the job starts; this refuses before anything is queued. Only l2/
+    # (this script's folder) counts: the gridding half and the shared docs/
+    # never reach a build (user decision 2026-11-10)
     if [[ -z ${VERIFY:-} ]]; then
-        dirty=$(git -C "$(dirname "$(readlink -f "$0")")" status --porcelain 2>&1) || {
+        dirty=$(git -C "$(dirname "$(readlink -f "$0")")" status --porcelain -- . 2>&1) || {
             echo "error: git cannot report the working tree's state" >&2
             exit 1
         }
         if [[ -n ${dirty} ]]; then
-            echo "error: the working tree is not a clean commit; commit or move these first:" >&2
+            echo "error: l2/ is not a clean commit; commit or move these first:" >&2
             echo "${dirty}" | head -10 | sed 's/^/         /' >&2
             exit 1
         fi

@@ -1,7 +1,7 @@
 """Audit every TROPESS v1 day: the Standard and Summary files, read whole.
 
 Written 2026-10-23 for AIRS before the TROPESS reader
-(``docs/products/tropess.md``, production subset P8), and generalised
+(``../docs/products/tropess.md``, production subset P8), and generalised
 2026-10-26 to the CrIS v1 products (CrIS handoff). A granule is one day: the
 Standard file and the Summary file, merged (Product scheme). CrIS-SNPP RS has
 only Summary files upstream, so its days are Summary only. AIRS is ~142 GB
@@ -44,7 +44,7 @@ order; the matched rows are exactly those with DOF >= 1.1; every shared
 variable is identical on them (except ``x`` row 0, R22); ``target_id``
 agrees; and ``dd_col_p_error`` against (1000 + dD) sqrt(M S M^T).
 
-Run from the repo root, naming the products (keys of ``PRODUCTS``):
+Run from l2/, naming the products (keys of ``PRODUCTS``):
 
     .venv/bin/python -I tools/survey/tropess_file_audit.py <output.jsonl> --products airs_rs,airs_fs [--limit N]
 

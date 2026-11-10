@@ -1,7 +1,7 @@
 """Audit every SCIAMACHY orbit file: does it open, what does it hold, and where is fill?
 
 Written 2026-10-22 before the SCIAMACHY reader (issue S2 in
-``docs/products/sciamachy.md``). TROPOMI's audit found shells and partial
+``../docs/products/sciamachy.md``). TROPOMI's audit found shells and partial
 files by unwritten chunks; SCIAMACHY's datasets are contiguous, so that test
 does not apply and this audit reads every value instead. The files are ~4 MB
 (173 GB in all), so it runs as a batch job over a process pool.
@@ -23,7 +23,7 @@ Per file it records:
 
 Every file lands in one category: ``unreadable``, ``wrong_version``,
 ``empty`` (nobs 0), ``partial`` (some row's time, lat or lon is fill) or
-``ok``. Run from the repo root:
+``ok``. Run from l2/:
 
     .venv/bin/python -I tools/survey/sciamachy_file_audit.py <output.jsonl> [--limit N]
 

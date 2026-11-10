@@ -2,7 +2,7 @@
 
 Each fixture is real TROPESS files in the real folder layout, chosen to
 exercise what the AIRS reader does beyond the shared code
-(``docs/products/tropess.md``):
+(``../docs/products/tropess.md``):
 
 - **RS, copied whole** (~6 MB a day): 2002-08-30 and -31, the two real days
   upstream has no Summary file for (one-sided, declared); 2002-09-01 and -03,
@@ -55,7 +55,7 @@ int8-packed blocks, which no store reads, are left out of the staged files
 06-03 is left out of both, so the missing-day check sees a gap (a fixture gap,
 not an upstream one).
 
-Run from the repo root (reads ~0.3 GB, light enough for a login node):
+Run from l2/ (reads ~0.3 GB, light enough for a login node):
 
     uv run python validation/stage_tropess.py
 

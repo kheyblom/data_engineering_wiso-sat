@@ -1,7 +1,7 @@
 # Production config for the CrIS-JPSS1 Forward Stream (FS) stores: TROPESS
 # CrIS-JPSS1 HDO Level 2, collection version 1, Standard and Summary merged.
 #
-# docs/products/tropess.md holds every decision this encodes (Product scheme;
+# ../docs/products/tropess.md holds every decision this encodes (Product scheme;
 # the CrIS v1 production subset C1-C8; issues R1-R39). In short:
 # - one product per platform, stream and collection version, named
 #   wisosat.cris_jpss1.v_1.fs... (product + version + version_product);
@@ -74,7 +74,7 @@ superseded_files:
 # files is stored once, the newest algorithm's copy, then the latest produced.
 # The listing applies it and fails unless it leaves out exactly this many; the
 # verifier works it out again from raw. An approved exception to keeping every
-# observation, for CrIS only (docs/cris-repeats-r37.md)
+# observation, for CrIS only (../docs/cris-repeats-r37.md)
 repeated_footprints:
   keep: newest_algorithm_then_latest_production
   look_back: 2

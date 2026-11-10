@@ -1,7 +1,7 @@
 [build-system]
 # the project is installed (editable, by uv sync) for one reason, as in
 # data_engineering_gleam: so that `from utils...` and `from products...`
-# resolve from validation/. Without it only the repo root works, because a
+# resolve from validation/. Without it only l2/ works, because a
 # script's own directory is what lands on sys.path.
 requires = ["hatchling"]
 build-backend = "hatchling.build"

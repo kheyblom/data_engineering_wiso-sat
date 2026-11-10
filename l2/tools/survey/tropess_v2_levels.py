@@ -1,7 +1,7 @@
 """Scan every TROPESS v2 file's vertical levels, and the cross-type checks behind R41-R43.
 
 Written 2026-10-28 for the user's question on v2's 34-wide level dimension
-(``docs/products/tropess.md``, "v2: answers ... and first probes", R42). One
+(``../docs/products/tropess.md``, "v2: answers ... and first probes", R42). One
 day's probes found every retrieval-grid array written only on levels 0-16 of
 the 34, with three exceptions: Full ``pressure_ret`` repeats the grid in
 17-33, ``air_density`` holds two identical copies, and Standard ``altitude``

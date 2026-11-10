@@ -3,7 +3,7 @@
 The style guide requires each project to keep a
 ``nomenclature-key_<dataset_source>.md`` mapping its original names, units and
 temporal frequency onto the authoritative ``nomenclature_data.md``. Here there
-is one key per product, ``nomenclature-key_<product>.md`` at the repo root, and
+is one key per product, ``nomenclature-key_<product>.md`` in l2/, and
 this module parses it rather than restating it in Python. So there is one place
 the mapping is written down and no way for the documentation and the stores to
 disagree.
@@ -27,7 +27,7 @@ Ported from ``data_engineering_mswep/utils/nomenclature.py``. What differs:
   HDF5 path in the source file, which is no name for a store, so lookups run
   from the canonical side.
 - **A source may be sliced** (added 2026-10-28 for TROPESS v2, shaped for
-  TES; ``docs/products/tropess.md`` V9, D2): ``original_variable_name`` is a
+  TES; ``../docs/products/tropess.md`` V9, D2): ``original_variable_name`` is a
   path, optionally followed by a numpy-style selection with ``:`` for the
   observation axis, e.g. ``x[:, 0:17]`` or ``AveragingKernel[:, 0:17, 17:34]``.
   One source can so feed several canonical names, one per slice.
@@ -150,7 +150,7 @@ def key_path(product):
         product (str): The product, e.g. 'tropomi'.
 
     Returns:
-        str: Absolute path to ``nomenclature-key_<product>.md`` at the repo root.
+        str: Absolute path to ``nomenclature-key_<product>.md`` in l2/.
     """
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

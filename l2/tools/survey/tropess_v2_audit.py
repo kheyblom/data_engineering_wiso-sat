@@ -1,6 +1,6 @@
 """Audit every TROPESS v2 Full day (AIRS and CrIS-JPSS1), before the v2 reader.
 
-Written 2026-10-28 after decision 5 (``docs/products/tropess.md``, "v2:
+Written 2026-10-28 after decision 5 (``../docs/products/tropess.md``, "v2:
 answers (user, 2026-10-28) and first probes"): v2 is built from the Full
 files only, one product per platform, on 17 levels (R42), with ``altitude``
 read from Full at the retrieval pressures (R43). One-day probes and a scan of
@@ -42,7 +42,7 @@ the repeated rows):
 - the v1/v2 seam: the first two v2 days against the last two v1 Standard
   days.
 
-Run from the repo root, as a batch job (it reads every v2 Full file, ~105 GB):
+Run from l2/, as a batch job (it reads every v2 Full file, ~105 GB):
 
     .venv/bin/python -I tools/survey/tropess_v2_audit.py <output.jsonl> [--workers N] [--limit N]
 

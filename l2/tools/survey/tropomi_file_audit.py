@@ -22,7 +22,7 @@ Every file lands in exactly one category:
 - ``partial``: ``time`` is written, but at least one other source is not;
 - ``bad_layout``: everything written, but nobs is not whole scanlines.
 
-Empty orbit directories are counted separately. Run from the repo root:
+Empty orbit directories are counted separately. Run from l2/:
 
     .venv/bin/python -I tools/survey/tropomi_file_audit.py <output.jsonl>
 

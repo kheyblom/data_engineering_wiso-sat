@@ -1,8 +1,8 @@
 # AIRS and CrIS (NASA TROPESS / MUSES HDO)
 
 **AIRS v1 is built and finalized** (2026-10-23, tag `v1-verified-20261023`;
-TESTING.md, AIRS v1 run log). **CrIS v1 is built and finalized**
-(2026-10-26, tag `v1-verified-20261026`; TESTING.md, CrIS v1 run log).
+l2/TESTING.md, AIRS v1 run log). **CrIS v1 is built and finalized**
+(2026-10-26, tag `v1-verified-20261026`; l2/TESTING.md, CrIS v1 run log).
 **v2 (AIRS and CrIS-JPSS1) is next: start at "v2: handoff" below.**
 Sources:
 - **Surveyed 2026-10-22:** a header scan of every AIRS file then on disk
@@ -17,7 +17,7 @@ Sources:
 
 AIRS v1 was built first, then CrIS v1. AIRS v2 is designed with CrIS-JPSS1
 v2 (user decision 2026-10-23), which has 139 days of the same v2 layout.
-One reader (`products/tropess.py`) serves every v1 collection (one file
+One reader (`l2/products/tropess.py`) serves every v1 collection (one file
 format); it assumes v1 in the places the v2 handoff lists.
 
 ## Collections: stream, product type, platform
@@ -199,7 +199,7 @@ kept.
   - collection `ShortName`, version and DOI.
 
   Today `source_processor_version` comes from the first granule only
-  (`utils/zarr_utils.py` `global_attrs`), which would be wrong for FS. IASI
+  (`l2/utils/zarr_utils.py` `global_attrs`), which would be wrong for FS. IASI
   (I7) needs the same.
 - **CrIS carries the platform in the product token** (`cris_snpp`,
   `cris_jpss1`, as `gosat` and `gosat2`). SNPP and JPSS1 FS overlap
@@ -286,15 +286,15 @@ the user decides exceptions, and wants evidence first.
    share footprints (as R37, but across two products). Measure it, and
    state it in both products' metadata if it occurs.
 
-**Code that assumes v1** (`products/tropess.py`, unless named):
+**Code that assumes v1** (`l2/products/tropess.py`, unless named):
 - `LEVELS = 17` sets the profile shapes (`ABSENT_LAYOUT`, the level-count
   check); v2 Standard has 34 levels, Full 34 and 67;
-- `FILE_RE` here and in `tools/survey/tropess_file_audit.py` accepts only
+- `FILE_RE` here and in `l2/tools/survey/tropess_file_audit.py` accepts only
   `Standard|Summary`; Full needs its own token (and `granule_types`);
 - the audit tool's `PRODUCTS` has no v2 entries;
 - `target_id` (a 36-character string) and Full's int8-packed blocks are
   read nowhere yet;
-- the `nomenclature-key_tropess.md` rows map v1's datasets only.
+- the `l2/nomenclature-key_tropess.md` rows map v1's datasets only.
 
 **First steps in the new session:** read this section and R25; probe one
 file of each v2 type (headers, row counts, levels); measure the v1/v2
@@ -322,7 +322,7 @@ products' metadata state the version change and the change in sample at
 2026-06-01).
 
 **Second follow-up (user, 2026-10-28):**
-- the level scan of every 10th day held (TESTING.md finding 17), so the empty levels are cut: 17 levels, as v1 (R42);
+- the level scan of every 10th day held (l2/TESTING.md finding 17), so the empty levels are cut: 17 levels, as v1 (R42);
 - `altitude` from Full (R43);
 - the cross kernels (`hdo_hdo`, `hdo_h2o`, `h2o_hdo`) are in, with three new nomenclature rows;
 - the 67-level `species` and `constraint_vector` (R44) and the int8-packed 67x67 blocks are left out (addable later as stores of their own).
@@ -411,11 +411,11 @@ the seam). Scripts and output were kept in the session scratchpad only.
 ## v2 production subset (approved 2026-10-28)
 
 **Built, verified and finalized 2026-10-28** (tag `v2-verified-20261028`,
-44 stores; TESTING.md Tier 2f and the TROPESS v2 run log).
+44 stores; l2/TESTING.md Tier 2f and the TROPESS v2 run log).
 
 **Approved 2026-10-28, with Q1, Q2 and Q3 as proposed.** Drafted for the user's in-place review (`#@CLAUDE` comments), on the CrIS v1
 subset below: where a point is the same as v1's, it says so and points
-there. Facts are from the v2 Full audit (TESTING.md finding 18), the level
+there. Facts are from the v2 Full audit (l2/TESTING.md finding 18), the level
 scan (finding 17) and the probes above. Decisions already made: "v2:
 answers" and its follow-ups. Open questions are marked **Q**.
 
@@ -426,8 +426,8 @@ answers" and its follow-ups. Open questions are marked **Q**.
 
   | product | config | stores named | days | obs |
   | --- | --- | --- | --- | --- |
-  | AIRS v2 FS | `config/airs_fs_v2/` | `wisosat.airs.v_2.fs.inst.native_swath.<variable>.zarr` | 30 (2026-06-01 .. 06-30) | 1,028,658 |
-  | CrIS-JPSS1 v2 FS | `config/cris_jpss1_fs_v2/` | `wisosat.cris_jpss1.v_2.fs.inst.native_swath.<variable>.zarr` | 137 (2026-06-01 .. 10-15) | 4,676,513 (4,687,895 less R37's 11,382) |
+  | AIRS v2 FS | `l2/config/airs_fs_v2/` | `wisosat.airs.v_2.fs.inst.native_swath.<variable>.zarr` | 30 (2026-06-01 .. 06-30) | 1,028,658 |
+  | CrIS-JPSS1 v2 FS | `l2/config/cris_jpss1_fs_v2/` | `wisosat.cris_jpss1.v_2.fs.inst.native_swath.<variable>.zarr` | 137 (2026-06-01 .. 10-15) | 4,676,513 (4,687,895 less R37's 11,382) |
 
   CrIS Full is on disk to 10-15; Standard runs to 10-17. Later days are
   appended as they are downloaded (V8).
@@ -617,9 +617,9 @@ the code does today, and what v2 needs:
   fill and the unit factor. v2's stores are not whole sources: they are cut
   to 17 levels, and `altitude` is picked from another grid.
 
-**D1. A v2 reader and key: `products/tropess_v2.py` and
-`nomenclature-key_tropess_v2.md`, with `source: tropess_v2`.**
-- The reader imports what v1 and v2 share from `products/tropess.py`:
+**D1. A v2 reader and key: `l2/products/tropess_v2.py` and
+`l2/nomenclature-key_tropess_v2.md`, with `source: tropess_v2`.**
+- The reader imports what v1 and v2 share from `l2/products/tropess.py`:
   the listing (with the `Full` type), time decoding and header checks, and
   the R37 selection. It has no merge.
 - The v1 reader and key are left as they are, so the finalized v1 stores
@@ -665,7 +665,7 @@ shaped for TES as well.**
 - **Tests:** the TROPESS v2 fixtures exercise it, and `test_pipeline.py`
   gains cases for a malformed table and an array listed twice.
 
-**D4. The key rows** for v2 (`nomenclature-key_tropess_v2.md`):
+**D4. The key rows** for v2 (`l2/nomenclature-key_tropess_v2.md`):
 - the v1 rows, with v2's source paths;
 - `quality` → `quality_flags_retrieval` (a quality flag, so the config
   must list it);
@@ -681,7 +681,7 @@ bench (V8, steps 4 and 5).
   exception, declared);
 - the v2 reader and key (D1, D4), with `retrieval/air_density`'s axis
   renamed to `level` (Full declares it on `level_fm`; R42);
-- `config/airs_fs_v2/` and `config/cris_jpss1_fs_v2/`. The R37 count, from
+- `l2/config/airs_fs_v2/` and `l2/config/cris_jpss1_fs_v2/`. The R37 count, from
   the reader's rule over every file, is 11,382, as the audit found;
 - the fixtures: 2026-06-01, 02 and 04 of each, cut, without the packed
   blocks; 03 is a declared gap; CrIS keeps 38 repeats.
@@ -700,7 +700,7 @@ once AIRS is finalized). Nothing about CrIS has been built. Follow the AIRS
 path: decisions with the user, then the audit, the production subset
 reviewed in place, the reader at fixture level, the full fixture test, a
 bench, production, and finalize with sign-off on every `--apply` (CLAUDE.md;
-STATE.md, How we work).
+l2/STATE.md, How we work).
 
 **Settled already (user):**
 - one product per platform, stream and collection version, each its own
@@ -779,7 +779,7 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
     lat and lon. SNPP RS Summary has no Standard to compare with, so the cut
     is inferred there.
 
-**Reader changes known to be needed** (`products/tropess.py`):
+**Reader changes known to be needed** (`l2/products/tropess.py`):
 - **Filter by instrument:** `list_granules` selects folders by stream and
   collection only; under `raw/CRIS` the SNPP and JPSS1 FS v1 folders both
   match, and every overlapping day would fail as "two Standard files". Match
@@ -793,7 +793,7 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 - **`FILE_RE`** accepts only `RS|FS`; the `SC_AUS` files are skipped
   silently, which is right now that decision 4 is out. The skip should
   still be stated in config rather than left silent.
-- **The audit script** `tools/survey/tropess_file_audit.py` is generalised
+- **The audit script** `l2/tools/survey/tropess_file_audit.py` is generalised
   (2026-10-26): `--products` names entries of `PRODUCTS`, files are matched
   on the platform token, every file of an R18 day is audited, and every
   dataset's `standard_name`, `long_name`, `units` and `_FillValue` is
@@ -813,7 +813,7 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
   them, so expect `time_order: source`.
 - Fill values must occur in the record to be declared (the verifier fails
   otherwise): take them from the audit, and the bench config's from the
-  bench month (`validation/stage_bench_tropess.py` reports them).
+  bench month (`l2/validation/stage_bench_tropess.py` reports them).
 - Compression: blosc on the 2-D arrays, default on `pressure` (Tier 2d);
   re-measure only if CrIS differs.
 - The fixture test now takes ~12 min (the AIRS fixtures ~5 of it); CrIS
@@ -825,14 +825,14 @@ geolocation (`cris_atrack`, `cris_xtrack`, `cris_fov`, `cris_granule`,
 
 Drafted for the user's in-place review, on the AIRS v1 subset below: where a
 point is the same as AIRS's, it says so and points there. **Approved
-2026-10-26**, with Q1 yes and Q2 as proposed. Facts are from the full CrIS audit (TESTING.md finding 16) and the
+2026-10-26**, with Q1 yes and Q2 as proposed. Facts are from the full CrIS audit (l2/TESTING.md finding 16) and the
 R37 probes. Decisions already made: the CrIS handoff's Answers, R36, R37,
 R38. Open questions are marked **Q**.
 
 ### C1. Products, names and provenance
 
-- **Three products, one config each** (`config/cris_snpp_rs/`,
-  `config/cris_snpp_fs/`, `config/cris_jpss1_fs/`; `source: tropess`,
+- **Three products, one config each** (`l2/config/cris_snpp_rs/`,
+  `l2/config/cris_snpp_fs/`, `l2/config/cris_jpss1_fs/`; `source: tropess`,
   `version_product: rs` or `fs`):
 
   | product | `product` | stores named | days (span) | obs |
@@ -1017,15 +1017,15 @@ commits), SNPP FS 50 (3), JPSS1 50 (~38).
      Summary file's attribute; the SNPP FS fixture tests that.
 3. **Done 2026-10-26: the exact R37 counts** (C1), from a dry pass of the selection over every
    file (light: time, lat, lon and attributes only), then declared.
-4. **Done 2026-10-26: fixtures** (`validation/stage_tropess.py`), cut small
+4. **Done 2026-10-26: fixtures** (`l2/validation/stage_tropess.py`), cut small
    (~100-300 rows a file, the last 20 rows kept so seams step back) and
    chosen to span: SNPP RS with a
    repeat and a leap second; SNPP FS with the R36 defect and a repeat;
    JPSS1 with an R18 date, the R36 boundary (2021-10-31 / 11-01), an
    algorithm-change repeat and a lag-2 repeat (2023-09-28 .. 30).
-5. The full fixture test (done), a bench (**done 2026-10-26**, TESTING.md
+5. The full fixture test (done), a bench (**done 2026-10-26**, l2/TESTING.md
    Tier 2e: 0 failures on all three), production (**built and verified
-   2026-10-26**, 0 failures on all three; TESTING.md, CrIS v1 run log),
+   2026-10-26**, 0 failures on all three; l2/TESTING.md, CrIS v1 run log),
    finalize (**done 2026-10-26**, tag `v1-verified-20261026`).
 
 ## AIRS v1 production subset (reviewed 2026-10-23)
@@ -1037,8 +1037,8 @@ full-record audit (P8) follows and may revise the facts here.
 
 ### P1. Products, names and provenance
 
-- **Two products, one config each** (`config/airs_rs/config_zarr.yaml`,
-  `config/airs_fs/config_zarr.yaml`; `product: airs`, `source: tropess`,
+- **Two products, one config each** (`l2/config/airs_rs/config_zarr.yaml`,
+  `l2/config/airs_fs/config_zarr.yaml`; `product: airs`, `source: tropess`,
   `version_product: rs` or `fs`):
 
   | product | stores named | days (span) | obs |
@@ -1386,7 +1386,7 @@ Recorded, not applied:
   chunks. That is few enough that no shards are needed (TROPOMI's ~249,000
   were the reason for its shards).
 - **Each 17-level store** is FS 3.3 GB and RS 1.2 GB.
-- **Compression, decided 2026-10-23 (user) from the bench** (TESTING.md Tier
+- **Compression, decided 2026-10-23 (user) from the bench** (l2/TESTING.md Tier
   2d): blosc zstd 5 + byte shuffle on the kernel, `altitude`, the ratio, its
   a priori, H2O and H2O's error (5-28% smaller than the default zstd; ~9 GB
   over both streams). `pressure` keeps the default, which beats blosc on it
@@ -1403,7 +1403,7 @@ Recorded, not applied:
 
 1. **Done 2026-10-23: the 14 new nomenclature rows** (style_guides
    `f18168e`).
-2. **Done 2026-10-23 (TESTING.md finding 15): a full-record audit, as a batch job shown first.** Every RS and FS file
+2. **Done 2026-10-23 (l2/TESTING.md finding 15): a full-record audit, as a batch job shown first.** Every RS and FS file
    (~142 GB), checking:
    - layout per version;
    - time against `datetime_utc` with the leap table;
@@ -1701,13 +1701,13 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R33 | **`day_night_flag` changes `standard_name` within FS** (production verify 7924572, 2026-10-23; header scan of every FS file). Standard files 2021-02-01 .. 2022-03-27 (R1p11, R1p12, R1p13, R1p14 and R1p15 to 03-27; 360 files) say `day_binary_mask`; Standard from 2022-03-28 (mid-R1p15) and every Summary file say `sunlit_binary_mask`, as RS does throughout. The first production FS store took the first file's name, and the verifier failed it. | decided (user, 2026-10-23, option A): the FS store carries `sunlit_binary_mask`, declared in config `variable_attrs`, with the old name and the date of the change in its `comment`. The verifier checks a declared `standard_name` is one the source uses; the FS fixture's 2022-06-17 Standard file carries the early name |
 | R34 | **RS covers 50°S to 70°N only** (production `--attrs` dry run and stored geolocation, 2026-10-23): latitude -50.0 to 70.0 exactly, 1 observation at -50 and 5 at 70. FS reaches ~67°S to 85°N. | record only |
 | R35 | **CrIS-SNPP RS Summary has 134 dates without a file** in 2015-12-01 .. 2021-05-21 (1,865 of 1,999 days; scan of every file, 2026-10-26). CMR lists 1,865 granules, so the gaps are upstream. | open, for CrIS: list them in `expected_missing_days` from the audit |
-| R36 | **CrIS `land_flag` is 1 on every row of 324 Standard files** (audit 2026-10-26, TESTING.md finding 16): all 110 SNPP FS days (R1p11, R1p12 F0p1) and JPSS1 2021-04-01 .. 10-31 plus 2021-11-10 (R1p12 F0p1, F0p2; 214 files). Open-ocean rows (central Pacific, southern Indian Ocean) are flagged 1 in those files and 0 from 2021-11-01. On JPSS1 2021-05-21 the old R1p12 file flags all 15,571 targets it shares with the R1p24 replacement 1; the replacement flags 4,028 of them 0. The Summary files of those days carry the same values. SNPP RS (R1p17) and AIRS F0p1 are not affected. | decided (user, 2026-10-26): masked as a declared defect on the listed files, after the reader and the verifier each confirm every row is 1 (a new kind of declared mask: whole files, not a first row) |
+| R36 | **CrIS `land_flag` is 1 on every row of 324 Standard files** (audit 2026-10-26, l2/TESTING.md finding 16): all 110 SNPP FS days (R1p11, R1p12 F0p1) and JPSS1 2021-04-01 .. 10-31 plus 2021-11-10 (R1p12 F0p1, F0p2; 214 files). Open-ocean rows (central Pacific, southern Indian Ocean) are flagged 1 in those files and 0 from 2021-11-01. On JPSS1 2021-05-21 the old R1p12 file flags all 15,571 targets it shares with the R1p24 replacement 1; the replacement flags 4,028 of them 0. The Summary files of those days carry the same values. SNPP RS (R1p17) and AIRS F0p1 are not affected. | decided (user, 2026-10-26): masked as a declared defect on the listed files, after the reader and the verifier each confirm every row is 1 (a new kind of declared mask: whole files, not a first row) |
 | R37 | **CrIS rows repeat across days** (probes 2026-10-26, finding 16). No file repeats a row within itself, but a row of one day's file can have exactly the time, lat and lon of a row of the day before's: SNPP RS 620 Summary rows on 417 days; SNPP FS 8,057 Standard and 2,797 Summary rows; JPSS1 FS 136,702 Standard and 72,574 Summary rows (0.3%) through 2026-05-31, plus 21 and 19 that repeat a row two days back. The repeated rows' times spread over the whole of both days, not the midnight seam: each file holds up to 48 h either side of its date. Every repeat is the same footprint (CrIS indices equal). Compared in every dataset on sampled pairs: identical, SNPP RS 7%, SNPP FS 82%, JPSS1 44%; same retrieval with different errors, SNPP FS 17% (every level), JPSS1 55% (`observation_error_h2o` below the surface only); different retrieval, SNPP RS 93%, SNPP FS 0.5%, JPSS1 1% (and every repeat at an algorithm change). `check_repeats` fails on these, and checks only the day before. Detail and options: `docs/cris-repeats-r37.md`. | decided (user, 2026-10-26): each repeat stored once, the copy from the newest algorithm, then the latest `ProductionDateTime`; declared in config, applied from raw by the build and the verifier; an approved exception to keeping every observation (`docs/cris-repeats-r37.md`, Decision) |
 | R38 | **JPSS1 FS `day_night_flag` changes `standard_name`** as AIRS FS's did (R33): `day_binary_mask` in 364 files, 2021-04-01 .. 2022-03-30 (two of them R18 old files); `sunlit_binary_mask` from then and in the R1p24 backfill. Nine `long_name`s change case or wording at 2021-09-24 and again in 2021-11 (e.g. `bias_corrected_HDO_to_H2O_ratio` to `..._profile`); `units` and `_FillValue` never change. `retrieval/mw` is `m-6` in most files and `cm-1` in 2023-11 (not stored). SNPP's attributes never change. | decided (user, 2026-10-26): `sunlit_binary_mask` declared, the old name and dates in the `comment`, as for AIRS FS |
 | R40 | **CrIS rows are not in time order** (measured on every file, R37's rows left out, 2026-10-26). A file is mostly its UTC day in time order, with: <br>- **edge rows:** the first and last minutes of the neighbouring days at its start and end (SNPP RS 0.5%, SNPP FS 0.5%, JPSS1 0.4% of rows; a few strays further out), so time steps back at 1,350 of 1,864, 106 of 109 and 1,812 of 1,886 day seams; different observations, not copies (those are R37); <br>- **a 64 s jitter** (two 32 s CrIS granules) within the day: SNPP FS 9,272 steps, JPSS1 ~30,900; <br>- **larger blocks** in JPSS1 only: 13,260 steps back of more than 2 minutes, up to a day; SNPP RS has 11 within-day steps of ~24 h. <br>Far closer to time order than AIRS FS (36% of steps back, R32). | decided (user, 2026-10-26, option 1 of three): the source order is kept (`time_order: source`) for all three CrIS products, with the repeat check (look-back 2) in place of the time order. The alternatives were sorting within each file (the seams still step back) and regrouping granules by observation day |
 | R41 | **v2 Standard is v2 Full's rows with `quality == 1`** (probes 2026-10-28, one day each): same order, same `target_id`s, shared datasets identical except below-surface `observation_error_h2o` and `altitude` (R43). Summary is Standard's levels 0-16 on the same rows. R25's "cut at DOF >= 1.1" undercounts the cut: DOF alone would keep ~13-19% more rows. | open: confirm over every v2 file in the audit |
-| R42 | **v2's 34 retrieval levels are v1's 17, padded** (probes 2026-10-28): every retrieval-grid array, the joint 34x34 blocks included, holds values only on levels 0-16. Full `pressure_ret` repeats the grid in 17-33; Standard `air_density` has two identical halves. **Full `air_density` is Standard's 34-wide array** (x N_A, to 1e-7) in the first 34 slots of a 67-wide array declared on `level_fm`, the rest fill: it is not on `pressure_fm`. No document explains the 34: the GES DISC catalog entries for every v2 HDO collection (Standard and Full) say "reported at 17 vertical levels from the surface to 0.1 hPa", and the README in the v2 folders is still the 2023-05-09 v1 text. The pattern matches a joint HDO+H2O state vector (17 + 17) used to size every retrieval-level array. `tools/survey/tropess_v2_levels.py` checks every v2 file. Confirmed on every 10th day of both instruments, all three types (51 files; TESTING.md finding 17). | decided (user, 2026-10-28): store levels 0-16 only. The build and the verifier fail on any value in 17-33, except declared copies (`pressure_ret`, `air_density`) that must equal 0-16; Full `air_density` slots 34-66 must be fill |
-| R43 | **v2 Standard `altitude` belongs to other targets** (probes 2026-10-28). Flattened to (2n, 17), its first n rows are exactly the altitudes of targets 0..n-1 (Summary's, which equal Full's at the retrieval pressures), on every row of AIRS and CrIS 2026-06-01. So Standard row i holds target 2i's altitude in levels 0-16 and target 2i+1's in 17-33, and rows n/2 .. n-1 are zeros. It looks like an (n, 17) array written into an (n, 34) one through the flat buffer. Only row 0's levels 0-16 are its own. This explains the R37 copies whose `altitude` differs: each file's shift is different. Summary and Full `altitude` are physically consistent (hypsometric layer temperatures 255-313 K). Confirmed on every 10th day (TESTING.md finding 17). | decided (user, 2026-10-28): `altitude` from Full, read at the 17 retrieval pressures (equal to Summary's); Standard's is never read |
+| R42 | **v2's 34 retrieval levels are v1's 17, padded** (probes 2026-10-28): every retrieval-grid array, the joint 34x34 blocks included, holds values only on levels 0-16. Full `pressure_ret` repeats the grid in 17-33; Standard `air_density` has two identical halves. **Full `air_density` is Standard's 34-wide array** (x N_A, to 1e-7) in the first 34 slots of a 67-wide array declared on `level_fm`, the rest fill: it is not on `pressure_fm`. No document explains the 34: the GES DISC catalog entries for every v2 HDO collection (Standard and Full) say "reported at 17 vertical levels from the surface to 0.1 hPa", and the README in the v2 folders is still the 2023-05-09 v1 text. The pattern matches a joint HDO+H2O state vector (17 + 17) used to size every retrieval-level array. `l2/tools/survey/tropess_v2_levels.py` checks every v2 file. Confirmed on every 10th day of both instruments, all three types (51 files; l2/TESTING.md finding 17). | decided (user, 2026-10-28): store levels 0-16 only. The build and the verifier fail on any value in 17-33, except declared copies (`pressure_ret`, `air_density`) that must equal 0-16; Full `air_density` slots 34-66 must be fill |
+| R43 | **v2 Standard `altitude` belongs to other targets** (probes 2026-10-28). Flattened to (2n, 17), its first n rows are exactly the altitudes of targets 0..n-1 (Summary's, which equal Full's at the retrieval pressures), on every row of AIRS and CrIS 2026-06-01. So Standard row i holds target 2i's altitude in levels 0-16 and target 2i+1's in 17-33, and rows n/2 .. n-1 are zeros. It looks like an (n, 17) array written into an (n, 34) one through the flat buffer. Only row 0's levels 0-16 are its own. This explains the R37 copies whose `altitude` differs: each file's shift is different. Summary and Full `altitude` are physically consistent (hypsometric layer temperatures 255-313 K). Confirmed on every 10th day (l2/TESTING.md finding 17). | decided (user, 2026-10-28): `altitude` from Full, read at the 17 retrieval pressures (equal to Summary's); Standard's is never read |
 | R44 | **v2 Full `species` is the HDO mole fraction** on 67 levels, roughly `x` x `x_h2o` (ratio p50 1.0036, 0.98-1.15), though its `standard_name` is `molar_ratio_of_hdo_to_h2o` and units `mol mol-1`. `constraint_vector` is exactly `xa` x `h2o_constraint_vector`. | open: only if a Full store uses them |
 | R45 | **v2's ratio kernel has a square block of fill at its lowest levels** on some `quality` 0 rows (audit 2026-10-28): 898 AIRS rows (30 days) and 113 CrIS rows (137 days), up to 6x6 values where `pressure_ret` is written. The four joint blocks are complete on those rows. | record only; stored as published (NaN) |
 | R46 | **AIRS v2 Full has two layouts** (audit 2026-10-28): from 2026-06-03 the files carry a dimension-scale dataset `l1b_source_file` (an upstream `ncrename` of the `l1b_source` dimension). No stored source changes. | record only |

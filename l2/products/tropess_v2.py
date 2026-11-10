@@ -1,7 +1,7 @@
 """Reader for the NASA TROPESS (MUSES) HDO Level 2 v2 Full products: AIRS and CrIS-JPSS1.
 
 v2 (collection ``VersionID`` 2, algorithm R1p25) continues the v1 Forward
-Stream from 2026-06-01 (``docs/products/tropess.md``, "v2: answers" and the v2
+Stream from 2026-06-01 (``../docs/products/tropess.md``, "v2: answers" and the v2
 production subset V1-V9, approved 2026-10-28). It is built from the **Full**
 files only (user decision 2026-10-28), one file per day:
 

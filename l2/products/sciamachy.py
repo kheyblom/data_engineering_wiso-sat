@@ -9,7 +9,7 @@ One granule is one orbit file, filed by the month its orbit starts in:
 The format is SRON's, as TROPOMI's (same groups, ``nobs``, broken-down time,
 no ``_FillValue``), so the time decoding, attribute reading and open probe are
 TROPOMI's own functions. What differs, measured by the audit of every file on
-2026-10-22 (``docs/products/sciamachy.md``; TESTING.md finding 13):
+2026-10-22 (``../docs/products/sciamachy.md``; TESTING.md finding 13):
 
 - **Filed by month, no date in the name.** Granules are ordered by orbit
   number, never by folder: 65 orbits hold times outside their folder's

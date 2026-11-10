@@ -33,7 +33,7 @@ Chosen deliberately (see config/tropomi/config_zarr_fixture.yaml):
 Only the variables the pipeline reads are copied: every source in the key, the
 coordinate sources, and ``scanline``/``ground_pixel`` for the layout check.
 
-Run from the repo root (reads ~0.4 GB, light enough for a login node):
+Run from l2/ (reads ~0.4 GB, light enough for a login node):
 
     uv run python validation/stage_tropomi.py
 

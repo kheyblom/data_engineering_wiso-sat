@@ -7,7 +7,7 @@ bench builds and verifies a declared row block at production scale. The
 production config's raw root is the source, and the bench config's is the
 target, so the two cannot drift.
 
-Run from the repo root (3 symlinks; reads nothing):
+Run from l2/ (3 symlinks; reads nothing):
 
     uv run python validation/stage_bench_sciamachy.py
 """

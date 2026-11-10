@@ -70,7 +70,7 @@ superseded_files:
 # files is stored once, the newest algorithm's copy, then the latest produced.
 # The listing applies it and fails unless it leaves out exactly this many; the
 # verifier works it out again from raw. An approved exception to keeping every
-# observation, for CrIS only (docs/cris-repeats-r37.md)
+# observation, for CrIS only (../docs/cris-repeats-r37.md)
 repeated_footprints:
   keep: newest_algorithm_then_latest_production
   look_back: 2

@@ -1,6 +1,6 @@
 # SCIAMACHY (SRON SICOR L2 H2O/HDO, file version 0110)
 
-**Production finalized 2026-10-22**: 22 stores, 78,666,297 obs, tag `v8.1-verified-20261022`, in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/` (TESTING.md, SCIAMACHY run log). First measured 2026-10-14 from header reads and one file's values.
+**Production finalized 2026-10-22**: 22 stores, 78,666,297 obs, tag `v8.1-verified-20261022`, in `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/` (l2/TESTING.md, SCIAMACHY run log). First measured 2026-10-14 from header reads and one file's values.
 
 ## Raw data
 
@@ -87,7 +87,7 @@ Reviewed by the user in place and approved in full, 2026-10-22 (P3a-c in a
 second round). The 6 new rows are drafted in style_guides for review before
 commit.
 
-Facts behind it, from the audit of every file on 2026-10-22 (S2; TESTING.md
+Facts behind it, from the audit of every file on 2026-10-22 (S2; l2/TESTING.md
 finding 13), a fill-by-flag pass over the 756 files with fill, and one-file
 probes:
 - All 41,616 files open, are version 8.1 and share one layout: 78,666,953
@@ -308,7 +308,7 @@ verifier check that rows 312-935 equal rows 0-311 in every source but
   out have exactly the time, lat and lon of 45263's rows 0-31, and that 45262
   then ends before 45263 begins.
 - **The record:** the store metadata (`known_data_gaps`), this doc,
-  STATE.md's decisions and the config all name the exception, the rows and
+  l2/STATE.md's decisions and the config all name the exception, the rows and
   the reason. The other 253 rows of 45262 are kept as published, with their
   odd spectral setup recorded (record only).
 
@@ -324,7 +324,7 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | # | issue | status |
 | --- | --- | --- |
 | S1 | **`raw/SCIAMACHY/H2O` and `raw/SCIAMACHY/HDO` hold ESA MIPAS files**, a different Envisat instrument that is not in WISO-SAT. | handled: excluded |
-| S2 | **Same SRON format as TROPOMI**, so TROPOMI's T1-T17 (`tropomi.md`) might apply. Audit of every file, 2026-10-22 (TESTING.md finding 13): no shells, partial, unreadable or wrong-version files, and no row without time, lat or lon. The netCDF default fills occur, undeclared, on 421,648 flagged rows (see the Proposal). | handled: fills to declare in `source_fill_values`, as TROPOMI's |
+| S2 | **Same SRON format as TROPOMI**, so TROPOMI's T1-T17 (`tropomi.md`) might apply. Audit of every file, 2026-10-22 (l2/TESTING.md finding 13): no shells, partial, unreadable or wrong-version files, and no row without time, lat or lon. The netCDF default fills occur, undeclared, on 421,648 flagged rows (see the Proposal). | handled: fills to declare in `source_fill_values`, as TROPOMI's |
 | S3 | **Negative retrieved columns** (e.g. `hdo_column` -9.3e16) are real retrieval output, not fill. | record only |
 | S4 | **No δD is published**; WISO-SAT derives it. SRON: "may be computed a posteriori ... but is not a primary product" (Schneider et al., 2018). | handled: left out (user decision 2026-10-22, P2); the definition is in the filtering guidance |
 | S5 | **Hidden transfer leftovers in the raw tree** (found 2026-10-22): 22 `.ArchiveServiceTemp.sb-*` folders (one empty) held 3,350 files whose names all also exist in the month folders. 3,339 have the same size as the month-folder copy; 11 are truncated (0 B or a whole number of MiB). 201 names occur more than once among them. Also one `.DS_Store`. The month folders hold 41,616 files, 173 GB, with no repeated name. | handled: only `YYYYMM` folders are listed. **Deleted 2026-10-22** with the user's approval (13 GB); the `.DS_Store` is left |

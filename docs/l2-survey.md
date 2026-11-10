@@ -9,7 +9,7 @@ precedent it follows) are in this file's history at `7a0af0a`, when it was
 
 Per-product facts a reader needs (paths, dims, time and fill encodings,
 quirks) are in `docs/products/`. The scripts that produced this evidence are
-in `tools/survey/`.
+in `l2/tools/survey/`.
 
 ## Units across the L2 sensors
 

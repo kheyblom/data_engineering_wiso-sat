@@ -4,8 +4,17 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-10-28)
 
+**Moved into `l2/` on 2026-11-10** (root TASKS.md task 8): run everything
+from this folder, with its own `.venv`; the clean-tree check covers `l2/`
+only. No store changed: `finalize --status` reports every store of every
+config finalized from `l2/`. The fixture test after the move: 446 cases, 3
+TROPOMI failures on the first run (clean build `RepositoryNotFoundError`,
+then a leftover `fixture` tag: the test's `rmtree(ignore_errors=True)`
+seems to have left part of the 2026-10-28 fixture store), not reproduced
+on a TROPOMI-only re-run (38 cases, 0 failures).
+
 **Current task: TES (user, 2026-10-28).** Nothing is running; no batch job
-is queued. Decisions T1-T12 are laid out in `docs/products/tes.md`
+is queued. Decisions T1-T12 are laid out in `../docs/products/tes.md`
 ("Decisions for the user"), from probes of three files and the upstream
 listing; waiting on the user's answers. Found: v006 (on disk) is retired
 from CMR, and V007 lacks 2005-01 .. 2008-11 upstream (T1, E7); time is
@@ -16,7 +25,7 @@ first).
 
 **Finished products** (every store finalized: `--attrs` and a tag, each
 `--apply` signed off by the user). Facts, decisions and issues are in each
-`docs/products/<product>.md`; audits, benches and run logs in TESTING.md.
+`../docs/products/<product>.md`; audits, benches and run logs in TESTING.md.
 
 | product | stores | tag | zarr folder under `.../data/wisosat/zarr/` | obs |
 | --- | --- | --- | --- | --- |
@@ -54,7 +63,7 @@ first).
 - **The fixture test passes 445 cases over 11 fixtures** (~15 min, login
   node, 2026-10-28).
 - **Tasks 1-5 and the cross-product naming pass (task 7) are done**
-  (`docs/model-comparison-naming.md`, N1-N18).
+  (`../docs/model-comparison-naming.md`, N1-N18).
 - **Compute used:** TROPOMI ~380 core-hours for the 19 stores and ~835 for
   the 6 model-comparison stores (the overrun approved by the user); GOSAT
   ~0.5; GOSAT-2 ~0.2; SCIAMACHY ~8; AIRS v1 ~6.6; CrIS v1 ~5.3; TROPESS v2
@@ -107,7 +116,7 @@ when it is time (2026-10-22).
   transaction logs and ~3,870 `overwritten/` entries that `--gc` does not
   delete. Harmless; worth a look before moving to the data lake.
 - **Open issues from the naming pass**, to settle when each reader is built
-  (full lists in each `docs/products/<product>.md`, Known data issues):
+  (full lists in each `../docs/products/<product>.md`, Known data issues):
   - **IASI I7 (blocks the store names):** the processor version changes in
     2019, 030201 to 030300, and MetOp-C joins (AB to ABC). Decide the store
     version with the user.
@@ -149,7 +158,7 @@ when it is time (2026-10-22).
 - **Edits to style_guides** are shown to the user before commit; they review
   in place with `#@CLAUDE` comments.
 - **Proposals for the user** go in a repo doc reviewed in place with
-  `#@CLAUDE` comments (example: `docs/model-comparison-naming.md` up to
+  `#@CLAUDE` comments (example: `../docs/model-comparison-naming.md` up to
   `e87a8e1`).
 - **Claude runs finalize, one action per call; the user signs off on each
   `--apply`** (CLAUDE.md). Order: `--attrs`, `--tag`, `--expire` (sharded
@@ -215,7 +224,7 @@ when it is time (2026-10-22).
   (2022) Table 1 filters, `scanline_index` and `ground_pixel_index`, the
   pixel corners (in geolocation), and the 6 model-comparison stores. Others
   only when asked (`tropomi.md`, Variable inventory).
-- **Model-comparison naming** (2026-10-19; `docs/model-comparison-naming.md`):
+- **Model-comparison naming** (2026-10-19; `../docs/model-comparison-naming.md`):
   - grammar `<quantity>[_<vertical form>]_<species>[_<basis>][_<role>]`;
     species always explicit, no `profile` token, `partial_column` per layer;
   - **`pressure` is a variable store of its own, in Pa, with a nomenclature
@@ -265,7 +274,7 @@ when it is time (2026-10-22).
   the SC Australian fires left out; R36 `land_flag` masked on the 324
   defective files, declared; R38 `sunlit_binary_mask` declared; **R37 each
   repeated footprint stored once, newest algorithm then latest
-  `ProductionDateTime`** (an approved exception, `docs/cris-repeats-r37.md`).
+  `ProductionDateTime`** (an approved exception, `../docs/cris-repeats-r37.md`).
 - **TROPESS v2 (2026-10-28; `tropess.md` v2 answers and V1-V9):** Full
   only, a separate `v_2.fs` product per platform; 17 levels kept, the rest
   checked; `altitude` from Full; v1's 19 stores plus the quality flag, air

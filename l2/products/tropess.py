@@ -3,7 +3,7 @@
 The raw tree holds one folder per collection, as downloaded: the first
 downloads flat (``<ShortName>_<version>-<stamp>/``), the later ones by year
 (``<ShortName>.<version>/<YYYY>/``). One stream, product type and collection
-version can span both (``docs/products/tropess.md``, Collections):
+version can span both (``../docs/products/tropess.md``, Collections):
 
 ```
 <raw>/TRPSDL2HDOAIRSORS.1/<YYYY>/TROPESS_AIRS-Aqua_L2_Standard_HDO_<YYYYMMDD>_MUSES_R1p6_RS_F0p8_J0.nc
@@ -37,7 +37,7 @@ same order, with identical values (TESTING.md finding 15), so:
   Summary-only (``granule_types: [Summary]``), and its obs axis is the
   Summary rows.
 
-**Declared, never detected** (``docs/products/tropess.md``):
+**Declared, never detected** (``../docs/products/tropess.md``):
 - **R22, the first ``x`` of every Standard file**, is ``x_test``, the kernel
   applied to the true profile. The config declares it
   (``declared_masked_values``, ``where: first_row_of_standard_file``), and the

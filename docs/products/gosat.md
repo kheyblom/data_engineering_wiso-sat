@@ -1,16 +1,16 @@
 # GOSAT and GOSAT-2 (IUP FOCAL v3.0.1)
 
 **GOSAT reader built at fixture level, 2026-10-14** (design condition 1, the
-second reader): `products/gosat.py`, `nomenclature-key_gosat.md`,
-`config/gosat/`, `validation/stage_gosat.py`. The fixture passes the
+second reader): `l2/products/gosat.py`, `l2/nomenclature-key_gosat.md`,
+`l2/config/gosat/`, `l2/validation/stage_gosat.py`. The fixture passes the
 end-to-end test. The model-comparison stores joined it on 2026-10-19 (below).
 **GOSAT-2 production finalized 2026-10-22**, tag `v3.0.1-verified-20261022`:
-12 stores, 1,010 days, 1,620,006 obs (TESTING.md, GOSAT-2 run log).
-`config/gosat2/`, read
+12 stores, 1,010 days, 1,620,006 obs (l2/TESTING.md, GOSAT-2 run log).
+`l2/config/gosat2/`, read
 with the GOSAT reader and key (`source: gosat`) and named `gosat2`. Each
 file's root `platform` attribute (`GOSAT` / `GOSAT2`) is checked against the
 config's `platform` in the build and the verifier. Its fixture is staged by
-`validation/stage_gosat.py` (2019-02-18, -19, -21, -22; 2019-02-20 is a gap).
+`l2/validation/stage_gosat.py` (2019-02-18, -19, -21, -22; 2019-02-20 is a gap).
 In our variables the two formats differ in nothing but `platform`: only the
 gain variables (`gain_s`/`gain_p` against `gain_1s`..`gain_3p`) differ, and
 they are not in the subset.

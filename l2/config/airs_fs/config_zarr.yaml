@@ -1,7 +1,7 @@
 # Production config for the AIRS Forward Stream (FS) stores: TROPESS
 # AIRS-Aqua HDO Level 2, collection version 1, Standard and Summary merged.
 #
-# docs/products/tropess.md holds every decision this encodes (Product scheme,
+# ../docs/products/tropess.md holds every decision this encodes (Product scheme,
 # the AIRS v1 production subset P1-P8, issues R1-R32). In short:
 # - one product per stream and collection version, named
 #   wisosat.airs.v_1.fs... (version + version_product);
