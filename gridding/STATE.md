@@ -4,11 +4,15 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-11-11)
 
-- **TROPOMI 0.25° daily spatial stores built and verified** (2026-11-11;
-  TESTING.md Tier 3): 2,945 days, 17 stores, 134 GiB under
-  `/glade/derecho/scratch/kheyblom/data/wisosat/grid/tropomi/spatial/`;
-  verify 629 checks, 0 failures. Not yet finalized; then the rechunk
-  (`temporal.block_rows: 720`, one read per store) and the temporal verify.
+- **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
+  days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
+  GiB each layout, under `/glade/derecho/scratch/kheyblom/data/wisosat/grid/tropomi/`;
+  tag **`v8.1-verified-20261111`** on all 34. Verify spatial 629 checks,
+  temporal 1,513, 0 failures; `--gc` found nothing to collect. Rechunk
+  float64 stores ran at the 64 GB memory request (TESTING.md): halve
+  `block_rows` or ask for more memory for a longer record or finer grid.
+- The bench root (`/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`,
+  ~2.7 GiB) is throwaway: ask the user before deleting it.
 - **Bench passed end to end** (July 2020, TESTING.md Tier 2), after two
   fixes: the verifier compares thresholds at the stored precision, and
   TROPOMI's cloudy row is optical thickness >= 0.3 (user decision, T24).
@@ -32,10 +36,10 @@ Read this first in a new session. Update it whenever work lands.
 
 1. **TROPOMI first: 0.25° at day** (user decision 2026-11-10); the other
    sensors' decisions come after TROPOMI is built.
-2. ~~Bench~~ (done) and production build and spatial verify (done).
-3. Finalize spatial (user signs off each `--apply`), set
-   `temporal.source_tag` to the tag, rechunk, verify temporal, finalize
-   temporal.
+2. ~~Bench, production build, verify, finalize, rechunk, temporal finalize~~
+   (done 2026-11-11).
+3. Further TROPOMI grids or frequencies (EASE M25km, month, n-day) only on
+   the user's request: each is a config entry and a build.
 4. **Other sensors** need their gridding inputs decided by the user before
    any config (survey 2026-11-10, from the product docs). What each lacks
    against the method's five inputs (time, footprint polygon, column δD,

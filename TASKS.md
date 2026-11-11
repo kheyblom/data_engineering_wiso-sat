@@ -134,8 +134,9 @@ the pipeline reproduces the drafting code on a full production day.
 
 - **User-facing method doc:** `docs/technical/gridding-method.md`, updated as
   decisions land. Its store table (Section 10) is written.
-- **Next:** choose TROPOMI's production grids and frequencies, then the bench
-  (`gridding/TESTING.md` Tier 2), then production.
+- **TROPOMI 0.25° daily finalized 2026-11-11**, tag `v8.1-verified-20261111`
+  on all 17 spatial and 17 temporal stores (`gridding/TESTING.md` Tier 3).
+  Other TROPOMI grids or frequencies are added on request.
 - **Other sensors:** each needs its gridding inputs decided first (footprint
   model, δD, σ, weight, selection); what each lacks is in `gridding/STATE.md`.
 

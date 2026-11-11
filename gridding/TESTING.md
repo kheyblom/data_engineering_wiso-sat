@@ -126,3 +126,25 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
 - **The first sample was empty:** 2017-11-08 has no griddable observation
   (TROPOMI T25), so 11 days carried the check. The last day, 2025-11-30, is
   partial in L2 (557,280 rows; 21,378 cells).
+- **Finalize spatial** (login node, user sign-off): `--attrs`, then `--tag
+  v8.1-verified-20261111` on all 17 stores; `temporal.source_tag` set to it
+  (`5a19e08`).
+- **Rechunk** (job 8153237, develop, 2 cpus, 64 GB, `block_rows: 720`, so
+  one block per store): 2 h 26 min, 4.1 cpu-hours, exit 0. The float32
+  stores took ~150 s each (int32 count 74 s); the float64 sums 7-20 min
+  each (420-1,188 s, erratic). Peak memory was reported at 64 GiB, the
+  job's whole request: a float64 block is 24.4 GB (720 x 1,440 x 2,945 x 8
+  B) before the read and encode buffers (not measured separately), so the
+  sums ran at the limit, which likely explains their spread. Not a failure, but for a
+  longer record or a finer grid, halve `block_rows` for the float64 stores or
+  ask for more memory. Temporal stores: 134 GiB in all (as spatial), 11 GiB
+  per float64 store, 2,599 chunk files each (36 x 72 = 2,592 tiles plus 7
+  coordinate chunks), 3 snapshots.
+- **Verify temporal** (job 8153238, afterany the rechunk, develop, 2 cpus):
+  **1,513 checks, 0 failures**, 1 min 27 s, 2.1 GB; 8 tiles x 8 periods per
+  store equal bit for bit to the tagged spatial store.
+- **Finalize temporal** (login node, user sign-off): `--attrs`, then `--tag
+  v8.1-verified-20261111` on all 17 stores; `--status` shows every store
+  tagged with no attribute missing. `--gc` dry runs on both layouts: 0
+  chunks, manifests or snapshots to collect, so no `--gc --apply`.
+  **TROPOMI 0.25° daily is finalized.**
