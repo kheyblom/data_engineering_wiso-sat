@@ -9,7 +9,12 @@ Read this first in a new session. Update it whenever work lands.
   GiB each layout, under `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`
   (`spatial/`, `temporal/`, beside `l2/`; moved from `wisosat/grid/tropomi/`
   2026-11-11, user decision, root CLAUDE.md "Store layout");
-  tag **`v8.1-verified-20261111`** on all 34. Verify spatial 629 checks,
+  tag **`v8.1-verified-20261111`** on all 34. After the move,
+  `finalize_grid_wisosat.py --relocate --apply` (signed off by the user)
+  rewrote `related_store`, `source_l2_stores` and `rechunked_from` on all
+  34 and appended the move to `history`, in one commit after the tag. The
+  tag stays on the snapshot before the move, with the old paths; the
+  values are the same. No new tag (user decision 2026-11-11). Verify spatial 629 checks,
   temporal 1,513, 0 failures; `--gc` found nothing to collect. Rechunk
   float64 stores ran at the 64 GB memory request (TESTING.md): halve
   `block_rows` or ask for more memory for a longer record or finer grid.
@@ -33,12 +38,6 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Next
 
-0. **After the 2026-11-11 move:** `finalize_grid_wisosat.py --relocate`
-   (new; it rewrites `related_store`, `source_l2_stores` and
-   `rechunked_from`, and appends the move to `history`) was dry run on both
-   layouts: 17 + 17 stores. `--apply` waits for the user's sign-off. The
-   tag `v8.1-verified-20261111` stays on the snapshot before the move, with
-   the old paths; whether to add a new tag is the user's call.
 1. **TROPOMI first: 0.25° at day** (user decision 2026-11-10); the other
    sensors' decisions come after TROPOMI is built.
 2. ~~Bench, production build, verify, finalize, rechunk, temporal finalize~~
