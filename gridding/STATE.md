@@ -11,9 +11,6 @@ Read this first in a new session. Update it whenever work lands.
   temporal 1,513, 0 failures; `--gc` found nothing to collect. Rechunk
   float64 stores ran at the 64 GB memory request (TESTING.md): halve
   `block_rows` or ask for more memory for a longer record or finer grid.
-- The bench root (`/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`,
-  ~2.7 GiB) is throwaway: ask the user before deleting it.
-- **Bench passed end to end** (July 2020, TESTING.md Tier 2), after two
   fixes: the verifier compares thresholds at the stored precision, and
   TROPOMI's cloudy row is optical thickness >= 0.3 (user decision, T24).
 - **Pipeline** (2026-11-10): build, verify, finalize, rechunk, submit

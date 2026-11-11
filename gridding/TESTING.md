@@ -147,4 +147,5 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   v8.1-verified-20261111` on all 17 stores; `--status` shows every store
   tagged with no attribute missing. `--gc` dry runs on both layouts: 0
   chunks, manifests or snapshots to collect, so no `--gc --apply`.
-  **TROPOMI 0.25° daily is finalized.**
+  **TROPOMI 0.25° daily is finalized.** The bench root was deleted
+  2026-11-11 (user decision).
