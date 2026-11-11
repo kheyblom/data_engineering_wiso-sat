@@ -13,7 +13,7 @@ attributes would name a store that does not describe itself; ``--tag``
 refuses a store without them.
 
 ``--relocate`` is for stores moved on disk after their build (2026-11-11:
-``grid/<product>/`` to ``zarr/<product>/``, user decision). Three root
+``grid/<product>/`` to ``zarr/<product>/l3/``, user decision). Three root
 attributes hold absolute paths: ``related_store``, ``source_l2_stores`` and,
 on temporal stores, ``rechunked_from``. It rewrites them from the config as
 the build would now write them and, on a finalized store, appends the move

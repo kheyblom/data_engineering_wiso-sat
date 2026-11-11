@@ -56,7 +56,8 @@ task list for both halves.
 
 **Store layout** (user decision 2026-11-11): every store is under
 `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/<product>/`, with L2 in
-`l2/` and the gridded stores in `spatial/` and `temporal/`. `<product>` is
+`l2/` and the gridded stores in `l3/spatial/` and `l3/temporal/` (`l3/`
+added the same day, to match `l2/`). `<product>` is
 the L2 folder (`airs`, `cris_snpp`, `cris_jpss1`, `gosat`, ...), shared by
 that sensor's streams and versions. Gridded stores used to be in
 `wisosat/grid/`, and L2 stores directly in `zarr/<product>/`.

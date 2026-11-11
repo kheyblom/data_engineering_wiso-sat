@@ -16,7 +16,7 @@ l2:
   tag: fixture-20261110
 
 directories:
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/tropomi
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/tropomi/l3
   logs: ./logs
 output_conventions:
   # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, under

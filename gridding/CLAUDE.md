@@ -74,8 +74,8 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   same boundaries for every sensor and year); n-month blocks start in
   January, n divides 12. A period's sums are its days' sums.
 - **Names:** `<layout>/wisosat.<product>.<version>.<frequency>.<grid_name>.<variable>.zarr`
-  under `directories.zarr` = `.../data/wisosat/zarr/<product>/`, beside the
-  product's L2 stores in `l2/` (user decision 2026-11-11; the root
+  under `directories.zarr` = `.../data/wisosat/zarr/<product>/l3/`, beside
+  the product's L2 stores in `l2/` (user decision 2026-11-11; the root
   CLAUDE.md, "Store layout"),
   grid tokens `latlon_0p25x0p25` and `ease2_m25km` (NSIDC's name, lower
   case), layout `spatial/` or `temporal/` (GLEAM/MSWEP's exception,

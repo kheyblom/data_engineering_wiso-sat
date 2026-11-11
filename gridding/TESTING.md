@@ -12,7 +12,7 @@ bench, then production (root CLAUDE.md: the allocation is finite).
   `fixture-20261110`, under
   `/glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/l2/tropomi`
   (since 2026-11-11 `.../fixture/gridding/zarr/tropomi/l2`, beside the
-  fixture's `spatial/` and `temporal/`).
+  fixture's `l3/spatial/` and `l3/temporal/`).
   12 s.
 - **Config:** `config/tropomi/config_grid_fixture.yaml`: 1° and EASE 25 km,
   day / 3day / month (6 targets, 102 stores per layout), one period per
@@ -61,7 +61,7 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
 - **Config:** `config/tropomi/config_grid_bench.yaml`: production limited to
   July 2020 (31 days), bench root
   `/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`
-  (`.../bench/zarr/tropomi` in the config since 2026-11-11),
+  (`.../bench/zarr/tropomi/l3` in the config since 2026-11-11),
   `num_workers: 16`, 5 verify sample days.
 - **Jobs** (develop queue, shared node, billed per cpu):
   1. build: `NCPUS=18 MEM=64GB WALLTIME=01:00:00`;

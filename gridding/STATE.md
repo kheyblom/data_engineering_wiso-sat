@@ -6,15 +6,17 @@ Read this first in a new session. Update it whenever work lands.
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
-  GiB each layout, under `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/`
-  (`spatial/`, `temporal/`, beside `l2/`; moved from `wisosat/grid/tropomi/`
-  2026-11-11, user decision, root CLAUDE.md "Store layout");
-  tag **`v8.1-verified-20261111`** on all 34. After the move,
+  GiB each layout, under `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l3/`
+  (`spatial/`, `temporal/`; `l2/` beside `l3/`; moved from
+  `wisosat/grid/tropomi/` to `zarr/tropomi/` on 2026-11-11, then into
+  `l3/` the same day; user decision, root CLAUDE.md "Store layout");
+  tag **`v8.1-verified-20261111`** on all 34. After each move,
   `finalize_grid_wisosat.py --relocate --apply` (signed off by the user)
-  rewrote `related_store`, `source_l2_stores` and `rechunked_from` on all
-  34 and appended the move to `history`, in one commit after the tag. The
-  tag stays on the snapshot before the move, with the old paths; the
-  values are the same. No new tag (user decision 2026-11-11). Verify spatial 629 checks,
+  rewrote the path attributes (`related_store`, `source_l2_stores`,
+  `rechunked_from`) on all 34 and appended the move to `history`: two
+  commits after the tag. The tag stays on the snapshot before the moves,
+  with the old paths; the values are the same. No new tag (user decision
+  2026-11-11). Verify spatial 629 checks,
   temporal 1,513, 0 failures; `--gc` found nothing to collect. Rechunk
   float64 stores ran at the 64 GB memory request (TESTING.md): halve
   `block_rows` or ask for more memory for a longer record or finer grid.

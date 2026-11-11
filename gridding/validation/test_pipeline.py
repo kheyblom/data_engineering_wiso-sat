@@ -158,7 +158,7 @@ def test_config_guard():
 
 @case('build from nothing')
 def test_build():
-    # only the layouts: the root also holds the fixture's L2 stores (<root>/l2/)
+    # only the layouts, never the root: it is <product>/l3/, whose parent holds the fixture's L2 stores
     for layout in config.LAYOUTS:
         shutil.rmtree(os.path.join(settings()['directories']['zarr'], layout), ignore_errors=True)
     output = script('grid_wisosat.py')
