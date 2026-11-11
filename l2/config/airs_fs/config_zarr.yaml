@@ -12,7 +12,7 @@ product: airs
 source: tropess
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/AIRS
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/l2
   logs: ./logs
 output_conventions:
   filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'

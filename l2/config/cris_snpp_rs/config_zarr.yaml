@@ -17,7 +17,7 @@ product: cris_snpp
 source: tropess
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/CRIS
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_snpp
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/cris_snpp/l2
   logs: ./logs
 output_conventions:
   filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'

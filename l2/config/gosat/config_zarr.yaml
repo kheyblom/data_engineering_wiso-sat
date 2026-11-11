@@ -7,7 +7,7 @@
 product: gosat
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/GOSAT
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/gosat/l2
   logs: ./logs
 output_conventions:
   filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'

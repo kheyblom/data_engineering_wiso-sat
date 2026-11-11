@@ -18,6 +18,8 @@ Cases, in order (each depends on the ones before):
  6. verify spatial passes; a build it did not make fails it
  7. finalize spatial: --tag refused before --attrs; --attrs, --tag, --gc
  8. rechunk to temporal; again is a no-op; verify temporal; finalize temporal
+ 9. relocate: the stores moved to another root, --relocate rewrites their
+    path attributes (tags and values kept, a second run a no-op), then back
 """
 import hashlib
 import os
@@ -156,8 +158,9 @@ def test_config_guard():
 
 @case('build from nothing')
 def test_build():
-    root = settings()['directories']['zarr']
-    shutil.rmtree(root, ignore_errors=True)
+    # only the layouts: the root also holds the fixture's L2 stores (<root>/l2/)
+    for layout in config.LAYOUTS:
+        shutil.rmtree(os.path.join(settings()['directories']['zarr'], layout), ignore_errors=True)
     output = script('grid_wisosat.py')
     assert 'build complete' in output
     for grid_name in ('latlon_1p0x1p0', 'ease2_m25km'):
@@ -232,11 +235,60 @@ def test_temporal():
     script(*base, '--tag', 'fixture-temporal', '--apply')
 
 
+@case('relocate: a moved root gets its path attributes rewritten, values and tags kept')
+def test_relocate():
+    root = settings()['directories']['zarr']
+    spatial = target_paths('spatial', 'latlon_1p0x1p0', 'day')
+    before = digest(spatial)
+    with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+        moved = os.path.join(directory, 'moved')
+        os.makedirs(moved)
+        for layout in config.LAYOUTS:
+            shutil.move(os.path.join(root, layout), os.path.join(moved, layout))
+        try:
+            data = yaml.safe_load(FIXTURE.read_text())
+            elsewhere = derived_config(directory, directories={**data['directories'], 'zarr': moved},
+                                       log_file='grid_tropomi_fixture_relocate.log')
+            name = os.path.basename(spatial[0])
+            for layout in config.LAYOUTS:
+                base = ('finalize_grid_wisosat.py', '--layout', layout)
+                assert 'stale paths none' not in script(*base, '--status', config_path=elsewhere)
+                assert 'APPLY' not in script(*base, '--relocate', config_path=elsewhere)
+                script(*base, '--relocate', '--apply', config_path=elsewhere)
+                output = script(*base, '--relocate', config_path=elsewhere)
+                assert 'APPLY' not in output and 'nothing to do' in output
+                assert 'stale paths none' in script(*base, '--status', config_path=elsewhere)
+            moved_spatial = os.path.join(moved, 'spatial', name)
+            repository = stores.open_repository(moved_spatial)
+            attrs = zarr.open_group(repository.readonly_session(branch='main').store, mode='r').attrs
+            assert attrs['related_store'] == os.path.join(moved, 'temporal', name), attrs['related_store']
+            assert attrs['source_l2_stores'] == settings()['l2']['directory']
+            assert f'moved from {root}/spatial/ to {moved}/spatial/' in attrs['history'], attrs['history']
+            # the tag still names the build's snapshot, with the old paths
+            tagged = zarr.open_group(repository.readonly_session(tag='fixture-spatial').store, mode='r').attrs
+            assert tagged['related_store'] == os.path.join(root, 'temporal', name)
+            temporal = zarr.open_group(stores.open_repository(os.path.join(moved, 'temporal', name))
+                                       .readonly_session(branch='main').store, mode='r').attrs
+            assert temporal['rechunked_from'].startswith(f'{moved_spatial} at tag fixture-spatial, by ')
+            assert temporal['related_store'] == moved_spatial
+            output = script('verify_grid_wisosat.py', '--layout', 'spatial', '--phases', 'structure',
+                            config_path=elsewhere)
+            assert 'stores verified' in output and ', 0 failures' in output
+        finally:
+            for layout in config.LAYOUTS:
+                shutil.move(os.path.join(moved, layout), os.path.join(root, layout))
+    # moved back: the fixture config's paths again
+    for layout in config.LAYOUTS:
+        script('finalize_grid_wisosat.py', '--layout', layout, '--relocate', '--apply')
+        assert 'stale paths none' in script('finalize_grid_wisosat.py', '--layout', layout, '--status')
+    assert digest(spatial) == before
+
+
 def main():
     if not os.path.isdir(settings()['l2']['directory']):
         sys.exit('stage the fixture first: uv run python validation/stage_fixture.py')
     for test in (test_units, test_config_guard, test_build, test_noop, test_resume, test_verify_spatial,
-                 test_finalize_spatial, test_temporal):
+                 test_finalize_spatial, test_temporal, test_relocate):
         test()
     print(f'{len(RESULTS)} cases passed')
 

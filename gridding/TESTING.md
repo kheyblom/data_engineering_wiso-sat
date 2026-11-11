@@ -10,12 +10,14 @@ bench, then production (root CLAUDE.md: the allocation is finite).
   crosses midnight, so a day edge and a month edge) out of the finalized L2
   stores at `v8.1-verified-20261018` into 14 small L2 stores tagged
   `fixture-20261110`, under
-  `/glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/l2/tropomi`.
+  `/glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/l2/tropomi`
+  (since 2026-11-11 `.../fixture/gridding/zarr/tropomi/l2`, beside the
+  fixture's `spatial/` and `temporal/`).
   12 s.
 - **Config:** `config/tropomi/config_grid_fixture.yaml`: 1° and EASE 25 km,
   day / 3day / month (6 targets, 102 stores per layout), one period per
   commit so two days make two append commits, 60-row rechunk blocks.
-- **Test:** `validation/test_pipeline.py`, 8 cases (see its docstring).
+- **Test:** `validation/test_pipeline.py`, 9 cases (see its docstring).
   The verifier is watched failing: the same stores checked under a stricter
   H2O threshold must fail.
 
@@ -24,6 +26,13 @@ bench, then production (root CLAUDE.md: the allocation is finite).
 - **2026-11-10: 8 cases passed, 5.0 min** (login node). Build 26 s; spatial
   verify 1.8 min (2,822 checks: 10 sampled periods, every cell); rechunk
   1.1 min; temporal verify 5 s (4,012 checks).
+- **2026-11-11: 9 cases passed** (login node), with case 9 `--relocate`
+  added for the move to `zarr/<product>/{l2,spatial,temporal}/`. The fixture
+  was moved by `mv` to that layout first. Case 9 moves both layouts to
+  another root: `--status` reports stale paths; `--relocate` rewrites them;
+  a second run does nothing; the tag keeps the old paths; values are
+  unchanged; verify structure passes at the new root; then the layouts are
+  moved back and relocated.
 - **2026-11-10, method carried over intact:** the pipeline's 1° grid of the
   full UTC day 2020-07-01 from the production L2 stores, against the
   decided drafting code (`notebooks/drafting/tropomi_tools.py`
@@ -51,7 +60,8 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   `verify.max_pairs`).
 - **Config:** `config/tropomi/config_grid_bench.yaml`: production limited to
   July 2020 (31 days), bench root
-  `/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`,
+  `/glade/derecho/scratch/kheyblom/data/wisosat/bench/grid/tropomi`
+  (`.../bench/zarr/tropomi` in the config since 2026-11-11),
   `num_workers: 16`, 5 verify sample days.
 - **Jobs** (develop queue, shared node, billed per cpu):
   1. build: `NCPUS=18 MEM=64GB WALLTIME=01:00:00`;

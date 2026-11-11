@@ -26,11 +26,11 @@ from utils.l2 import L2
 
 PRODUCTION = {
     'product': 'tropomi', 'version': '8.1',
-    'l2': {'directory': '/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi',
+    'l2': {'directory': '/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l2',
            'filename': 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr',
            'tag': 'v8.1-verified-20261018'},
 }
-FIXTURE_L2 = '/glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/l2/tropomi'
+FIXTURE_L2 = '/glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/tropomi/l2'
 FIXTURE_TAG = 'fixture-20261110'
 ORBITS = ('14067', '14068', '14069')
 CHUNK = 262_144

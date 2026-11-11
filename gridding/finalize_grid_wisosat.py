@@ -4,12 +4,22 @@
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --attrs [--apply]
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --tag NAME [--apply]
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --gc [--apply]
+    uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --relocate [--apply]
 
 One action per invocation; nothing is written without ``--apply`` (dry run
 first). The order is load-bearing, as in GLEAM and l2/: ``--attrs``, then
 ``--tag``, then ``--gc``. Tags are immutable, so a tag made before the
 attributes would name a store that does not describe itself; ``--tag``
 refuses a store without them.
+
+``--relocate`` is for stores moved on disk after their build (2026-11-11:
+``grid/<product>/`` to ``zarr/<product>/``, user decision). Three root
+attributes hold absolute paths: ``related_store``, ``source_l2_stores`` and,
+on temporal stores, ``rechunked_from``. It rewrites them from the config as
+the build would now write them and, on a finalized store, appends the move
+to ``history``. Values, verification and tags are untouched, so a tag made
+before the move still names the old paths; a store already matching is
+left alone.
 
 ``--attrs`` writes ``history``, ``date_created``, ``verification`` and the
 time coverage, and only for stores a passing verify run of this layout
@@ -24,6 +34,7 @@ is a reasonable form; the name is the caller's.
 import argparse
 import datetime
 import logging
+import os
 import re
 import sys
 
@@ -36,6 +47,7 @@ from utils.grids import from_spec
 
 LOG = logging.getLogger('finalize_grid_wisosat')
 ATTRS_MESSAGE = 'add provenance and discovery attributes'
+RELOCATE_MESSAGE = 'rewrite path attributes after a move'
 FINAL_ATTRS = ('history', 'date_created', 'verification', 'time_coverage_start', 'time_coverage_end')
 LINE_RE = re.compile(r'^(?P<stamp>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \w+ verify_grid_wisosat: (?P<text>.*)$')
 STORES_RE = re.compile(r'^layout: (?P<layout>\w+); phases: \[(?P<phases>[^\]]*)\]; stores: \[(?P<stores>[^\]]*)\]$')
@@ -53,18 +65,49 @@ def parse_args():
     action.add_argument('--attrs', action='store_true')
     action.add_argument('--tag')
     action.add_argument('--gc', action='store_true')
+    action.add_argument('--relocate', action='store_true')
     parser.add_argument('--apply', action='store_true', help='write; without it, report only')
     return parser.parse_args()
 
 
 def store_paths(settings, layout):
+    """(grid, frequency, variable, path) of every store of this layout."""
     paths = []
     for spec in settings['grids']:
         grid = from_spec(spec)
         for frequency in settings['frequencies']:
-            paths += [(grid, frequency, config.store_path(settings, layout, frequency, grid.name, row['canonical_name']))
+            paths += [(grid, frequency, row['canonical_name'],
+                       config.store_path(settings, layout, frequency, grid.name, row['canonical_name']))
                       for row in nomenclature.quantities().values()]
     return paths
+
+
+def relocated_attrs(settings, layout, grid, frequency, variable, group):
+    """The path attributes that differ from where the config now puts things, rewritten.
+
+    Built as grid_wisosat.py and rechunk_wisosat.py build them, so a moved
+    store reads as if it had been built in place.
+
+    Returns:
+        dict: Attribute -> new value; empty when the store already matches.
+    """
+    other = 'temporal' if layout == 'spatial' else 'spatial'
+    wanted = {'related_store': config.store_path(settings, other, frequency, grid.name, variable),
+              'source_l2_stores': settings['l2']['directory']}
+    if layout == 'temporal':
+        # '<spatial path> at tag <tag>, by ...': only the path moved
+        old = group.attrs['rechunked_from']
+        wanted['rechunked_from'] = wanted['related_store'] + old[old.index(' at tag '):]
+    changed = {key: value for key, value in wanted.items() if group.attrs.get(key) != value}
+    if changed and group.attrs.get('history'):
+        # related_store is <root>/<other layout>/<name>, so its grandparent is the old root
+        old_root = os.path.dirname(os.path.dirname(group.attrs['related_store']))
+        new_root = settings['directories']['zarr']
+        moved = f'from {old_root}/{layout}/ to {new_root}/{layout}/' if old_root != new_root else 'L2 stores moved'
+        changed['history'] = (f'{group.attrs["history"]} {datetime.date.today().isoformat()}: moved {moved}; '
+                              f'path attributes ({", ".join(sorted(changed))}) rewritten by '
+                              f'finalize_grid_wisosat.py --relocate, values unchanged.')
+    return changed
 
 
 def verification_evidence(settings, layout):
@@ -101,7 +144,7 @@ def verification_evidence(settings, layout):
 def build_commits(repository):
     """The build's commits on main, oldest first (skeleton, appends and blocks; not this script's)."""
     commits = [snapshot for snapshot in repository.ancestry(branch=stores.BRANCH)
-               if snapshot.message not in ('Repository initialized', ATTRS_MESSAGE)]
+               if snapshot.message not in ('Repository initialized', ATTRS_MESSAGE, RELOCATE_MESSAGE)]
     return commits[::-1]
 
 
@@ -144,7 +187,7 @@ def main():
     evidence = verification_evidence(settings, args.layout)
     mode = 'APPLY' if args.apply else 'dry run'
     problems = 0
-    for grid, frequency, path in store_paths(settings, args.layout):
+    for grid, frequency, variable, path in store_paths(settings, args.layout):
         name = path.rsplit('/', 1)[-1]
         try:
             repository = stores.open_repository(path)
@@ -156,8 +199,20 @@ def main():
         missing = [key for key in FINAL_ATTRS if key not in group.attrs]
         tags = sorted(repository.list_tags())
         if args.status:
+            stale = sorted(set(relocated_attrs(settings, args.layout, grid, frequency, variable, group)) - {'history'})
             LOG.info(f'{name}: tags {tags or "none"}; missing attrs {missing or "none"}; '
-                     f'verified {evidence[name]["date"] if name in evidence else "no"}')
+                     f'verified {evidence[name]["date"] if name in evidence else "no"}; '
+                     f'stale paths {stale or "none"}')
+        elif args.relocate:
+            attrs = relocated_attrs(settings, args.layout, grid, frequency, variable, group)
+            if not attrs:
+                LOG.info(f'{name}: paths match the config; nothing to do')
+                continue
+            LOG.info(f'{mode} {name}: ' + '; '.join(f'{key}={value!r}' for key, value in attrs.items()))
+            if args.apply:
+                session = repository.writable_session(stores.BRANCH)
+                zarr.open_group(session.store, mode='r+').update_attributes(attrs)
+                session.commit(RELOCATE_MESSAGE)
         elif args.attrs:
             if name not in evidence:
                 LOG.error(f'{name}: no passing verify run of the {args.layout} layout covers it')

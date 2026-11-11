@@ -22,7 +22,8 @@ halves share; this file holds what is particular to gridding.
 grid_wisosat.py              # build: one pass over the UTC days writes every grid x frequency (spatial stores)
 rechunk_wisosat.py           # spatial (at temporal.source_tag) -> temporal stores, region writes
 verify_grid_wisosat.py       # read-only; --layout spatial|temporal; sampled (see below)
-finalize_grid_wisosat.py     # --layout ...; --status, then --attrs, --tag, --gc (dry run without --apply)
+finalize_grid_wisosat.py     # --layout ...; --status, then --attrs, --tag, --gc (dry run without --apply);
+                             # --relocate after a move rewrites the path attributes
 submit_grid_wisosat.sh       # CONFIG=... [VERIFY=1 LAYOUT=...|RECHUNK=1] ./submit_grid_wisosat.sh; show the user first
 nomenclature-key_grid.md     # machine read: quantity -> canonical name, units, kind, dtype; input units; frequencies
 products/<source>.py         # per product: quality levels (selection_stores, select), FOOTPRINT_MODELS
@@ -72,7 +73,10 @@ each `--apply`** (as l2/, user decision 2026-10-19).
 - **Periods** are blocks counted from 1900-01-01 (n-day exactly n days,
   same boundaries for every sensor and year); n-month blocks start in
   January, n divides 12. A period's sums are its days' sums.
-- **Names:** `<layout>/wisosat.<product>.<version>.<frequency>.<grid_name>.<variable>.zarr`,
+- **Names:** `<layout>/wisosat.<product>.<version>.<frequency>.<grid_name>.<variable>.zarr`
+  under `directories.zarr` = `.../data/wisosat/zarr/<product>/`, beside the
+  product's L2 stores in `l2/` (user decision 2026-11-11; the root
+  CLAUDE.md, "Store layout"),
   grid tokens `latlon_0p25x0p25` and `ease2_m25km` (NSIDC's name, lower
   case), layout `spatial/` or `temporal/` (GLEAM/MSWEP's exception,
   approved for the WISO-SAT grids). The version is the L2 version token.
@@ -117,7 +121,7 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   `gridding/`: `uv run python validation/stage_fixture.py` once (it refuses
   to restage over an existing fixture), then
   `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`
-  (8 cases, ~5 min, login node).
+  (9 cases, ~5 min, login node).
 - **A store's last period can be partial** (the record ends inside it;
   `time_coverage_end` says where). A build does not reopen a written
   period, so extending the L2 record later needs that period's stores

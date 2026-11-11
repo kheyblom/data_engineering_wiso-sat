@@ -11,12 +11,12 @@ version: '8.1'
 # The finalized L2 stores, read only at one tag (gridding/CLAUDE.md). The 19
 # core stores carry v8.1-verified-20261018; gridding reads only core stores.
 l2:
-  directory: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/l2/tropomi
+  directory: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/tropomi/l2
   filename: 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr'
   tag: fixture-20261110
 
 directories:
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/grid/tropomi
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/tropomi
   logs: ./logs
 output_conventions:
   # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, under

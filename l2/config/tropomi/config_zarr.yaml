@@ -6,7 +6,7 @@
 product: tropomi
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/TROPOMI/tropomi.grid.surfsara.nl/hdo
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l2
   logs: ./logs
 output_conventions:
   # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, with the

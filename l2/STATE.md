@@ -27,15 +27,15 @@ first).
 `--apply` signed off by the user). Facts, decisions and issues are in each
 `../docs/products/<product>.md`; audits, benches and run logs in TESTING.md.
 
-| product | stores | tag | zarr folder under `.../data/wisosat/zarr/` | obs |
+| product | stores | tag | store folder under `.../data/wisosat/zarr/` (each `<product>/l2/`) | obs |
 | --- | --- | --- | --- | --- |
-| TROPOMI | 19 + 6 model-comparison | `v8.1-verified-20261018`, `v8.1-verified-20261022` | `tropomi/` (~21 TiB) | 32,657,526,234 |
-| GOSAT | 12 | `v3.0.1-verified-20261019` | `gosat/` | 8,856,028 |
-| GOSAT-2 | 12 | `v3.0.1-verified-20261022` | `gosat2/` | 1,620,006 |
-| SCIAMACHY | 22 | `v8.1-verified-20261022` | `sciamachy/` (87.5 GiB) | 78,666,297 |
-| AIRS v1 RS, FS | 19 + 19 | `v1-verified-20261023` | `airs/` | 17,109,546; 47,882,856 |
-| CrIS v1 SNPP RS, SNPP FS, JPSS1 FS | 12 + 19 + 19 | `v1-verified-20261026` | `cris_snpp/`, `cris_jpss1/` | 2,597,674; 2,858,343; 47,391,889 |
-| AIRS v2, CrIS-JPSS1 v2 (Full) | 22 + 22 | `v2-verified-20261028` | `airs/`, `cris_jpss1/` (4.1 GB, 22 GB) | 1,028,658; 4,676,513 |
+| TROPOMI | 19 + 6 model-comparison | `v8.1-verified-20261018`, `v8.1-verified-20261022` | `tropomi/l2/` (~21 TiB) | 32,657,526,234 |
+| GOSAT | 12 | `v3.0.1-verified-20261019` | `gosat/l2/` | 8,856,028 |
+| GOSAT-2 | 12 | `v3.0.1-verified-20261022` | `gosat2/l2/` | 1,620,006 |
+| SCIAMACHY | 22 | `v8.1-verified-20261022` | `sciamachy/l2/` (87.5 GiB) | 78,666,297 |
+| AIRS v1 RS, FS | 19 + 19 | `v1-verified-20261023` | `airs/l2/` | 17,109,546; 47,882,856 |
+| CrIS v1 SNPP RS, SNPP FS, JPSS1 FS | 12 + 19 + 19 | `v1-verified-20261026` | `cris_snpp/l2/`, `cris_jpss1/l2/` | 2,597,674; 2,858,343; 47,391,889 |
+| AIRS v2, CrIS-JPSS1 v2 (Full) | 22 + 22 | `v2-verified-20261028` | `airs/l2/`, `cris_jpss1/l2/` (4.1 GB, 22 GB) | 1,028,658; 4,676,513 |
 
 - **TROPESS v2, finished 2026-10-28** (`tropess.md`: "v2: answers" and the
   "v2 production subset" V1-V9; issues R41-R46; TESTING.md findings 17-18,

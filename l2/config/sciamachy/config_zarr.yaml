@@ -8,7 +8,7 @@
 product: sciamachy
 directories:
   raw: /glade/derecho/scratch/kheyblom/data/wisosat/raw/SCIAMACHY/HDO_SICORv10
-  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/sciamachy/l2
   logs: ./logs
 output_conventions:
   # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, with the
