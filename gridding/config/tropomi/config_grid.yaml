@@ -91,7 +91,8 @@ verify:
 
 # rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
 temporal:
-  source_tag: null
+  # the finalized spatial stores (2026-11-11)
+  source_tag: v8.1-verified-20261111
   # the whole grid in one block: each block reads the whole spatial store, so
   # one block per store is one read (~25 GB float64, ~12 GB float32 buffer)
   # rather than four (TESTING.md, production)
