@@ -108,6 +108,21 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   ~300 for each time coordinate in the spatial layout (over the ~2,000-3,000
   guidance); 36 x 72 = 2,592 tiles in the temporal layout.
 
-## Tier 3: production (not yet run)
+## Tier 3: production
 
-0.25° at day (user decision 2026-11-10); scale settings from the bench.
+0.25° at day (user decision 2026-11-10), 4-day spatial chunks.
+
+- **Build** (job 8144353, develop, 18 cpus, 64 GB, `0ebec61`): 2,945 days
+  (2017-11-08 to 2025-11-30) in 281.9 min (walltime 4 h 42 min), 94.3
+  cpu-hours, 43 GB peak, exit 0: ~85 core-hours billed, as the bench
+  predicted. The safety job (8144354) found every store complete and did
+  nothing (25 s). 134 GiB for the 17 spatial stores; per store 736 chunk
+  files, 743 manifests, 247 snapshots and 247 transactions.
+- **Verify spatial** (job 8144355, develop, 2 cpus): **629 checks, 0
+  failures**, 28 min, 13.3 GB; 12 days recomputed in every cell (2017-11-08,
+  2018-05-19, 2018-12-31, 2019-08-24, 2022-01-29, 2022-02-22, 2022-11-20,
+  2022-12-27, 2023-07-24, 2024-01-20, 2024-06-24, 2025-11-30), ~2.5-3 min
+  each.
+- **The first sample was empty:** 2017-11-08 has no griddable observation
+  (TROPOMI T25), so 11 days carried the check. The last day, 2025-11-30, is
+  partial in L2 (557,280 rows; 21,378 cells).

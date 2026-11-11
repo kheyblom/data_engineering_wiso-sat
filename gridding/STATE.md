@@ -2,12 +2,18 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-11-10)
+## Where we are (2026-11-11)
 
-- **Pipeline built and passing its fixture** (2026-11-10): build, verify,
-  finalize, rechunk, submit wrapper and the fixture test; layout and
-  decisions in `CLAUDE.md`, results in `TESTING.md`. Nothing has run on
-  the production record or a compute node yet.
+- **TROPOMI 0.25° daily spatial stores built and verified** (2026-11-11;
+  TESTING.md Tier 3): 2,945 days, 17 stores, 134 GiB under
+  `/glade/derecho/scratch/kheyblom/data/wisosat/grid/tropomi/spatial/`;
+  verify 629 checks, 0 failures. Not yet finalized; then the rechunk
+  (`temporal.block_rows: 720`, one read per store) and the temporal verify.
+- **Bench passed end to end** (July 2020, TESTING.md Tier 2), after two
+  fixes: the verifier compares thresholds at the stored precision, and
+  TROPOMI's cloudy row is optical thickness >= 0.3 (user decision, T24).
+- **Pipeline** (2026-11-10): build, verify, finalize, rechunk, submit
+  wrapper and the fixture test; layout and decisions in `CLAUDE.md`.
 - **Design decisions** (user, 2026-11-10; recorded in `CLAUDE.md`,
   "Decisions"): common engine with per-product inputs, TROPOMI first;
   grid type, resolution and frequency (`day`, `<n>day`, `month`,
@@ -26,9 +32,10 @@ Read this first in a new session. Update it whenever work lands.
 
 1. **TROPOMI first: 0.25° at day** (user decision 2026-11-10); the other
    sensors' decisions come after TROPOMI is built.
-2. **Bench** (TESTING.md Tier 2): July 2020 on the develop queue; jobs
-   shown to the user before submitting.
-3. Production, verify, finalize, rechunk, verify, finalize.
+2. ~~Bench~~ (done) and production build and spatial verify (done).
+3. Finalize spatial (user signs off each `--apply`), set
+   `temporal.source_tag` to the tag, rechunk, verify temporal, finalize
+   temporal.
 4. **Other sensors** need their gridding inputs decided by the user before
    any config (survey 2026-11-10, from the product docs). What each lacks
    against the method's five inputs (time, footprint polygon, column δD,
