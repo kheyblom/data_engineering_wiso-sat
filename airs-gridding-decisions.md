@@ -39,6 +39,7 @@ and an H2O column in mol m-2. The issue IDs (R1, Q2b, ...) refer to
 | D6 | Grid and frequency | 1° lat/lon, `day` only; other grids and frequencies on request | **completed 2026-11-13** |
 | D7 | Day and night in RS | C: an all-overpass set and a daytime set (`v_1.rs.daytime`, `v_1.fs.daytime`), as separate stores | **completed 2026-11-13** |
 | D8 | Products, and when to grid v2 | One gridded product per L2 product (RS, FS v1), each also as a daytime set (D7); v2 deferred | **completed 2026-11-13** (v1); v2 deferred |
+| D9 | Gridded stores and names | 32 stores per set and layout: 14 column, 12 per level (with four sums beyond 2.7), 6 surface statistics | **open: your review** |
 
 ## D1. Footprint model [COMPLETED 2026-11-13]
 
@@ -228,13 +229,25 @@ substantially:
 
 | # | question | decision | why |
 | --- | --- | --- | --- |
-| 2.1 | Interpolation for the column integral | q and R linear in ln p between levels; layers cut exactly at 850 hPa, 250 hPa and the surface | Standard for mixing-ratio profiles. Exact cuts make D2b independent of where the levels fall. |
+| 2.1 | Interpolation for the column integral | q (H2O) and R·q (HDO) each linear in ln p between levels (wording corrected 2026-11-13, below); layers cut exactly at 850 hPa, 250 hPa and the surface | Standard for mixing-ratio profiles. Exact cuts make D2b independent of where the levels fall. |
 | 2.2 | Ratio to δD | δD = 1000 (R / 3.11e-4 − 1), TROPESS's constant | Matches TROPESS's own δD fields. VSMOW gives 3.1152e-4, which shifts δD by ~1.2 ‰. |
 | 2.3 | D2b's name | `water_vapor_column_delta_d_850_250hpa`, a new row | The existing `water_vapor_delta_d_850_250hpa` means the unweighted mean (Q2b). D2b is a column average, so the grammar's `column` applies. |
 | 2.4 | Where D2b is computed | in gridding, from the L2 stores, with the verifier recomputing it independently | The L2 stores stay as published, and nothing in L2 is rebuilt. |
 | 2.5 | The surface level in D2a | the fixed levels gridded by level; the surface value gridded as its own field, with its pressure | One gridded level never mixes pressures. |
 | 2.6 | Contents of D2a | per level: δD, H2O, count, the a priori δD and the kernel diagonal | Shows where the profile is retrieval and where it is prior. |
 | 2.7 | D2a's sums | per level Σ w·δ, Σ w, Σ w·δ² and N, with w each footprint's H2O partial column in that level's layer (mol m-2) | The sums add over days, cells and levels, so a layer built from them is H2O-weighted. It matches D2b only where its edges fall on layer edges, and D2b is stored exactly anyway. |
+
+**2.1, wording corrected (user decision 2026-11-13).** The row first read
+"q and R linear in ln p", but the script behind the table below
+(`gridding/tools/survey/airs_column_lnp.py`) interpolates q and R·q: the
+H2O and HDO mole fractions, each linear in ln p. The user confirmed that
+scheme. Read literally, "q and R" gives a column δD lower by a median
+2.1-2.4 ‰ (p95 3.7-5.7 ‰, max 12-16 ‰; RS 2010-06-15, FS 2022-06-01). With q
+and HDO, each layer's integral is exact and a column is a weighted sum of
+the level values, so every level has a share of the H2O column and the
+shares add to the column exactly (2.7's weights). The engine's operator is
+`gridding/utils/columns.py`; it agrees with a 20,000-step integration to
+1e-5 ‰.
 
 **2.1, measured after approval.** The approved scheme (ln p interpolation,
 exact cuts) against half-way thicknesses, on the same three files and every
@@ -512,6 +525,101 @@ options B and C below are kept for then.**
 
 **Your decision:** A, v1 only (RS and FS v1 as separate gridded products);
 v2 deferred (2026-11-13).
+
+## D9. Gridded stores and names [OPEN: your review]
+
+*Added 2026-11-13.* D2 and D4 fix what is gridded; this section turns it
+into stores, names and nomenclature rows. Nothing here is built or added to
+style_guides until you approve it. Each store set (`v_1.rs`,
+`v_1.rs.daytime`, `v_1.fs`, `v_1.fs.daytime`) gets the same stores, at
+`day` on `latlon_1p0x1p0`, in `spatial/` and `temporal/`.
+
+**Three groups of stores**
+
+| group | what | dimensions |
+| --- | --- | --- |
+| column | the 850-250 hPa partial column (D2b) | (time, lat, lon) |
+| levels | the 16 fixed pressure levels (D2a) | (time, level, lat, lon), `level` in Pa, surface first: 1000 to 0.1 hPa |
+| surface | each retrieval's surface level, its lowest valid one (2.5) | (time, lat, lon) |
+
+A fixed level counts for a retrieval only where it lies above that
+retrieval's surface level, so the per-level count falls towards the
+ground. The weight w is the overlap area times the H2O partial column of
+the group's layer, in mol: 850-250 hPa for the column, the level's share of
+the whole column for a level or the surface (`gridding/utils/columns.py`).
+
+**Column group: 14 stores** (TROPOMI's 17 less the three σ stores)
+
+| quantity | proposed store variable | units | row |
+| --- | --- | --- | --- |
+| δD, Σwδ / Σw | `water_vapor_column_delta_d_850_250hpa` | 1e-3 | new (2.3) |
+| spread | `water_vapor_column_delta_d_850_250hpa_standard_deviation` | 1e-3 | new |
+| mean H2O partial column, Σw / Σa | `water_vapor_column_h2o_850_250hpa` | mol m-2 | new (D4) |
+| effective number | `observation_count_effective` | unitless | existing |
+| count | `observation_count` | unitless | existing |
+| coverage | `footprint_coverage` | unitless | existing |
+| mean footprint area | `footprint_area` | km2 | existing |
+| Σa | `footprint_overlap_area_sum` | km2 | existing |
+| Σw, Σwδ, Σwδ², Σw², ΣwA, ΣwW | `gridding_weight_850_250hpa_sum`, `..._850_250hpa_delta_d_sum`, `..._850_250hpa_delta_d_squared_sum`, `..._850_250hpa_squared_sum`, `..._850_250hpa_footprint_area_sum`, `..._850_250hpa_footprint_weight_sum` | as TROPOMI's | 6 new |
+
+The existing `gridding_weight_*` rows say "times its total column of water
+vapor (H2O)", which is not this weight, so the sums need rows of their own.
+
+**Levels group, per level** (2.6 lists the statistics, 2.7 the sums)
+
+| quantity | proposed store variable | units | row | in 2.6 / 2.7 |
+| --- | --- | --- | --- | --- |
+| δD, Σwδ / Σw | `water_vapor_delta_d` | 1e-3 | new | 2.6 |
+| a priori δD, Σwδa / Σw | `water_vapor_delta_d_apriori` | 1e-3 | existing | 2.6 |
+| kernel diagonal, ΣwK / Σw | `water_vapor_hdo_h2o_ratio_averaging_kernel_log_diagonal` | unitless | new | 2.6 |
+| H2O mole fraction, Σaq / Σa | `water_vapor_h2o_mole_fraction_dry_air` | 1e-6 | existing | 2.6, D4 |
+| count | `observation_count_level` | unitless | new | 2.6, 2.7 |
+| Σw | `gridding_weight_level_sum` | mol | new | 2.7 |
+| Σwδ | `gridding_weight_level_delta_d_sum` | mol 1e-3 | new | 2.7 |
+| Σwδ² | `gridding_weight_level_delta_d_squared_sum` | mol 1e-6 | new | 2.7 |
+| Σwδa | `gridding_weight_level_delta_d_apriori_sum` | mol 1e-3 | new | **not in 2.7** |
+| ΣwK | `gridding_weight_level_averaging_kernel_diagonal_sum` | mol | new | **not in 2.7** |
+| Σa | `footprint_overlap_area_level_sum` | km2 | new | **not in 2.7** |
+| Σaq | `footprint_overlap_area_h2o_mole_fraction_sum` | km2 1e-6 | new | **not in 2.7** |
+
+**Question 9.1: the four sums 2.7 does not list.** 2.6's a priori δD,
+kernel diagonal and H2O statistics cannot be formed again over a longer
+period or a coarser grid without their own sums (Σwδa, ΣwK, Σa, Σaq).
+
+| option | level stores | trade-off |
+| --- | --- | --- |
+| A. Add the four sums (recommended) | 12 | Every statistic follows from stored sums, as for TROPOMI (method Section 8). |
+| B. 2.7 as written | 8 | A month's a priori, kernel diagonal and H2O must be regridded from L2, or approximated from the daily statistics. |
+
+**Surface group.** The same quantities at each retrieval's surface level,
+plus the mean surface pressure (Σw p_s / Σw).
+
+**Question 9.2: how much of the surface group to store.**
+
+| option | surface stores | trade-off |
+| --- | --- | --- |
+| A. Statistics only (recommended) | 6: δD, a priori δD, kernel diagonal, H2O mole fraction, count, surface pressure | The surface level's pressure differs between retrievals, so its sums add less cleanly than a fixed level's; the DOF there is low. Names take `_surface` (e.g. `water_vapor_delta_d_surface`, `pressure_surface`). |
+| B. With every sum, as the levels | 14 | Re-aggregable like the levels; 8 more stores per set and layout. |
+| C. None for now | 0 | 2.5 asked for the surface as its own field; this defers it. |
+
+**Totals** per store set and layout, and over the 4 sets x 2 layouts:
+
+| 9.1 | 9.2 | per set and layout | in all |
+| --- | --- | --- | --- |
+| A | A | 14 + 12 + 6 = 32 | 256 |
+| B | A | 14 + 8 + 6 = 28 | 224 |
+| A | B | 14 + 12 + 14 = 40 | 320 |
+
+For scale: a level store is 16 x 180 x 360 cells a day, 6,372 days in RS
+and 1,832 in FS, mostly empty cells (a day fills 4-14% of the 1° cells).
+
+**Question 9.3: the counts' names.** The three groups share a directory,
+so each count needs its own name. Proposed: `observation_count` for the
+column group (footprints with an 850-250 hPa column, as TROPOMI's),
+`observation_count_level` for the levels (footprints whose surface lies
+below the level) and `observation_count_surface` for the surface group.
+
+**Your decision:** (9.1, 9.2, 9.3, and any name you want changed)
 
 ## After the decisions
 

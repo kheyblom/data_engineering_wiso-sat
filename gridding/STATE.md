@@ -78,7 +78,7 @@ sensor without the user's approval.
 - **δD (D2):** computed here from the 17-level profiles, never TROPESS's
   `dd_col_p`: per level (a level dimension, the surface level its own field)
   and as the H2O-weighted 850-250 hPa partial column
-  (`water_vapor_column_delta_d_850_250hpa`, a new row); q and R linear in ln p,
+  (`water_vapor_column_delta_d_850_250hpa`, a new row); q and HDO (R·q) linear in ln p,
   exact cuts at 850, 250 hPa and the surface; δD with 3.11e-4.
 - **No σ (D3):** no standard error and no σ sums (`CLAUDE.md`; method
   Section 7).
