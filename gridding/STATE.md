@@ -4,17 +4,26 @@ Read this first in a new session. Update it whenever work lands.
 
 ## Where we are (2026-11-13)
 
-- **AIRS v1: every gridding decision made, nothing built** (2026-11-13,
-  with the user). The decisions, evidence and order of work are in
-  [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md) (D1-D8,
-  all completed); the result is in `../docs/products/tropess.md`, "Gridding
-  inputs, AIRS v1" (and R47); summary in "AIRS v1 decisions" below. The
-  method doc gained "Sensors without a standard error" (Section 7), and
-  `CLAUDE.md` the two rules from this work that hold for every sensor
-  (derived inputs computed here; no valid σ, no standard error). The
-  scripts behind the numbers are in `tools/survey/` (`airs_*.py`,
-  `tropess_column_air.py`). That file replaced a Claude Docs doc
-  ("AIRS gridding: decisions"), which is superseded.
+- **AIRS v1: the engine grids it end to end on a fixture; no production
+  store yet** (2026-11-13, with the user). Decisions D1-D9 and their
+  evidence: [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md);
+  the result for users: `../docs/products/tropess.md` ("Gridding inputs,
+  AIRS v1", "Gridded stores", "Footprint model") and the method doc
+  (profile sensors: Sections 2, 5, 6, 10). Done the same day:
+  - the footprint model prototyped and validated against AIRS L1B (D1;
+    height from the orbit phase, a revision the user approved);
+  - L2: four footprint stores per stream built, verified, finalized
+    (`../l2/TESTING.md`), tag `v1-verified-20261113` on those only;
+  - the engine's second method, `profile` (`CLAUDE.md`, "Two methods"):
+    column operator, level and surface groups, `airs_fov`, a key per
+    config, store sets, L2 tags per store, the verifier's own profile
+    method; TROPOMI unchanged;
+  - an AIRS fixture and five test cases (`TESTING.md`): 14 cases pass.
+  **Open with the user: the 25 new store names** (D9, 9.3), written to
+  `style_guides/nomenclature_data.md` and left uncommitted for review. The
+  key `nomenclature-key_grid_tropess.md` uses them; a renamed row means the
+  same edit there, in `tropess.md` ("Gridded stores") and the method doc's
+  Section 10 example.
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
@@ -50,7 +59,7 @@ Read this first in a new session. Update it whenever work lands.
   1e-9 (TESTING.md).
 - **The method doc** has its store table (Section 10) and the weight in mol.
 
-## AIRS v1 decisions (user, 2026-11-13; not built yet)
+## AIRS v1 decisions (user, 2026-11-13; engine built, production not)
 
 Kept here while AIRS is in progress; once built, what users need goes
 into the docs (`tropess.md`, the method doc) and this section is cut.
@@ -80,6 +89,8 @@ sensor without the user's approval.
   and as the H2O-weighted 850-250 hPa partial column
   (`water_vapor_column_delta_d_850_250hpa`, a new row); q and HDO (R·q) linear in ln p,
   exact cuts at 850, 250 hPa and the surface; δD with 3.11e-4.
+- **Stores (D9):** 32 per set, grid, frequency and layout: 14 column, 12
+  level (the four sums beyond 2.7 added), 6 surface statistics.
 - **No σ (D3):** no standard error and no σ sums (`CLAUDE.md`; method
   Section 7).
 - **Weight (D4):** overlap area × the layer's H2O partial column (mol),
@@ -125,22 +136,35 @@ sensor without the user's approval.
         `v1-verified-20261023` (user decision): the engine must read L2 at
         a tag per store** (`l2.tag` plus per-store overrides; today
         `utils/l2.py` takes one tag).
-     3. **Waiting on the user: D9** in `../airs-gridding-decisions.md`
-        (the gridded store set and names: 9.1 the four sums beyond 2.7,
-        9.2 the surface group, 9.3 the counts' names). Then the
-        nomenclature rows (shown before the style_guides commit), the
-        method doc (vertical product, column operator, per-level sums,
-        `airs_fov` footprint), the engine changes (the table in the
-        decisions file), the AIRS fixture, bench, production.
-        **Engine pieces already written and checked, not yet called by
-        the pipeline:** `utils/columns.py` (the column operator; q and HDO
-        linear in ln p, user decision 2026-11-13; exact to 1e-5 ‰ against
-        a fine-grid integral) and `utils/airs_fov.py` (the footprint
-        model; reproduces the validated prototype to 1e-12°). Still to
-        settle in the port: what an AIRS day with too few targets for a
-        phase fit does (RS has 4 days under 50 obs: 2014-12-13 has 10);
-        proposed: take the phase from the nearest fitted day, scans being
-        continuous across days (`airs_fov.phase(days_ahead=...)`).
+     3. ~~D9, the method doc, the engine changes, the AIRS fixture.~~ Done
+        2026-11-13 (see "Where we are").
+     4. **Next, in order:**
+        - the user's review of the 25 names, then the style_guides commit;
+        - production configs for the four store sets (`v_1.rs`,
+          `v_1.rs.daytime`, `v_1.fs`, `v_1.fs.daytime`; D7): `l2.tag`
+          `v1-verified-20261023` with `store_tags` `v1-verified-20261113`
+          for the four footprint stores, `verify.sum_rtol: 1.0e-7`, the
+          attribute texts (user-facing: title, summary, comments per
+          quantity). One config per set: the two sets of a stream read the
+          same L2 days, so they could share a pass only with an engine
+          change (not planned);
+        - a one-month bench each for RS and FS (job shown to the user
+          first). It settles the chunks: at 1° a 2-D period is 0.26 MB
+          (float32), so TROPOMI's 4 periods per chunk would make ~1,600
+          files per RS store; to try: spatial `{time: 8, level: -1}`
+          (~800 files, 66 MB raw per float64 level chunk) and temporal
+          `{time: -1, level: 1, rows: 36, cols: 36}` (800 chunks per level
+          store). `block_rows` must follow the temporal tile (36) and the
+          memory of a level buffer (RS: 6,372 x 16 x rows x 360 x 8 B);
+        - production, verify, finalize (`--attrs`, `--tag`, `--gc`),
+          rechunk and the temporal finalize, each `--apply` signed off.
+        **To watch in the bench and production logs:** days counted as
+        "missing an input" beyond the one R22 row a day; a build stopping
+        on a level slot that holds another pressure (`utils/profiles.py`)
+        or on an AIRS day with no sound orbit-phase fit within 30 days
+        (`utils/airs_fov.py`); and D5's check by date that the DOF-only
+        rows (RS 1,939, FS 54,510) are the Standard-only days. Each worker
+        fits the orbit phase of the AIRS days it touches (~0.3 s a day).
    - **CrIS (TROPESS):** as AIRS, once AIRS is built; SNPP RS and FS
      overlap 2021-02..05 (R26), so gridding both double counts.
    - **IASI, TES:** not built in L2 yet.

@@ -45,6 +45,53 @@ bench, then production (root CLAUDE.md: the allocation is finite).
   polar ones). Grid of one day at 1° on a login node: 42 s including the
   read.
 
+- **2026-11-13: 14 cases passed** (login node, ~7 min), with the AIRS
+  fixture and cases 10-14 added (below). The nine TROPOMI cases passed
+  unchanged after each engine change of the day (three runs).
+
+### AIRS fixture (the profile method, 2026-11-13)
+
+- **Data:** the same script stages AIRS v1 RS 2014-04-04 .. 04-08 (5,605
+  rows) out of the finalized L2 stores into 13 small stores under
+  `.../fixture/gridding/zarr/airs/l2`: tagged `fixture-20261113`, the four
+  footprint stores `fixture-20261113-footprint` (a tag per store, as in
+  production). 04-05 and 04-06 hold 12 and 13 retrievals: too few for the
+  footprint model's orbit-phase fit.
+- **Config:** `config/airs_rs/config_grid_fixture.yaml`: 1°, day / 3day (2
+  targets, 64 stores per layout), key `nomenclature-key_grid_tropess.md`.
+- **Cases 10-14:** units (column operator against a 200,000-step
+  integral, the Summary boundary at DOF exactly 1.1, store-set names, tags
+  per store); build (level dimension, counts by level, 3-day sums equal to
+  their days', the carried phases); verify, and the daytime selection made
+  to fail it; finalize, rechunk, temporal verify; the daytime store set
+  built beside the full one and verified.
+- **Results:** build 13 s (7 days, 32 + 32 stores); spatial verify 15 s
+  (1,848 checks: every cell of 4 day and 3 three-day periods); temporal
+  verify 3,928 checks.
+
+### Findings (2026-11-13)
+
+1. **The independent recomputation of AIRS agrees with the build to 1e-8
+   on sums, not 1e-9.** The footprints depend on a fitted orbit phase; the
+   build fits it by Gauss-Newton on spherical trigonometry, the verifier by
+   scipy on unit vectors, and the two stop ~1e-9° apart. Sums pass at
+   `sum_rtol` 1e-8 and fail at 1e-9 (the column method's default, kept for
+   TROPOMI). AIRS configs set `verify.sum_rtol: 1.0e-7`. Counts and
+   occupied cells matched exactly.
+2. **A day's own phase fit can be badly wrong where it has few targets**
+   (`../docs/products/tropess.md`, "Footprint model"): RS 2014-12-13 (10
+   retrievals within 134 scans) fits a phase rate 0.5% off, which is 25 km
+   in orbit height. The rule (sound fit, or the nearest sound day's
+   carried over) came from this; case 11 pins it on the fixture's two tiny
+   days.
+3. **The approved wording of the column interpolation did not match its
+   evidence** (D2, 2.1): "q and R linear in ln p" against a script that
+   interpolated q and R·q. They differ by a median 2 ‰. Put to the user;
+   q and HDO it is (`../airs-gridding-decisions.md`).
+4. **The nominal 705.3 km height did not hold** (D1, 1.4): L1B shows
+   692-720 km over the record. Put to the user; the height now comes from
+   the orbit phase.
+
 ## Tier 2: bench (planned 2026-11-10)
 
 The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).

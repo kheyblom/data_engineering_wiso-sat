@@ -22,12 +22,15 @@ halves share; this file holds what is particular to gridding.
 grid_wisosat.py              # build: one pass over the UTC days writes every grid x frequency (spatial stores)
 rechunk_wisosat.py           # spatial (at temporal.source_tag) -> temporal stores, region writes
 verify_grid_wisosat.py       # read-only; --layout spatial|temporal; sampled (see below)
+verify_profile.py            # the verifier's own profile method (columns, orbit phase, polygons, sums)
 finalize_grid_wisosat.py     # --layout ...; --status, then --attrs, --tag, --gc (dry run without --apply);
                              # --relocate after a move rewrites the path attributes
 submit_grid_wisosat.sh       # CONFIG=... [VERIFY=1 LAYOUT=...|RECHUNK=1] ./submit_grid_wisosat.sh; show the user first
 nomenclature-key_grid.md     # machine read: quantity -> canonical name, units, kind, dtype; input units; frequencies
+nomenclature-key_grid_tropess.md  # the same for the profile method (AIRS v1): 32 quantities in three groups
 products/<source>.py         # per product: quality levels (selection_stores, select), FOOTPRINT_MODELS
-utils/                       # config, nomenclature, periods, grids, footprints, sums, l2 (reader), stores
+utils/                       # config, nomenclature, periods, grids, footprints, sums, l2 (readers), stores,
+                             # columns + profiles (the profile method's derived inputs), airs_fov (AIRS footprints)
 config/<product>/config_grid*.yaml
 validation/stage_fixture.py, validation/test_pipeline.py
 tools/survey/                # one-off evidence scripts behind decisions (each docstring: what, and how to run)
@@ -38,6 +41,38 @@ The order for a product: build -> verify spatial -> finalize spatial
 rechunk -> verify temporal -> finalize temporal. Finalize is one action per
 invocation from a login node; **Claude runs the steps, the user signs off on
 each `--apply`** (as l2/, user decision 2026-10-19).
+
+## Two methods (2026-11-13)
+
+A config's `method` picks how the inputs are made; everything after the
+(footprint, cell) overlaps is shared.
+
+- **`column`** (default; TROPOMI): δD, σ and the H2O column are L2
+  variables, and the footprint is the L2 corners. Key
+  `nomenclature-key_grid.md`, 17 stores per (grid, frequency, layout).
+- **`profile`** (AIRS v1; `../docs/products/tropess.md`, "Gridding inputs,
+  AIRS v1"): everything gridded is derived here from L2 profiles
+  (`utils/columns.py`, `utils/profiles.py`), in three groups: the column
+  between `profile.column`'s pressures, each fixed level of
+  `profile.levels` (a `level` dimension), and the surface level. The
+  footprint is drawn by `airs_fov` from the L2 fields the config's
+  `footprint` block names. Key `nomenclature-key_grid_tropess.md` (config
+  `quantity_key`), 32 stores; no σ, so no standard error.
+- **A config names its key** (`quantity_key`), and `config.load_config`
+  makes it the key in use: one config, one key, per process. A key without
+  the standard error builds no σ sums.
+- **`store_set`** adds a token after the version in the gridded names only
+  (`v_1.rs.daytime`): an approved exception for the AIRS v1 gridded stores
+  (D7); never set it for another product without the user's approval.
+- **`l2.store_tags`** reads a store at its own tag (AIRS v1's four
+  footprint stores carry `v1-verified-20261113`, the rest
+  `v1-verified-20261023`; user decision 2026-11-13).
+- **The verifier recomputes the profile method on its own**
+  (`verify_profile.py`), sharing only the footprint model's constants. Its
+  orbit-phase fit and the build's stop ~1e-9° apart, so AIRS configs set
+  `verify.sum_rtol: 1.0e-7` (TESTING.md finding 1).
+- **Using the profile method, its key or `airs_fov` for another product or
+  collection (CrIS, AIRS v2) needs the user's approval first.**
 
 ## Inputs: the L2 stores only
 
@@ -65,8 +100,9 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   `delta_d_uncertainty`, `weight`) and the footprint model; the product
   module holds its quality levels. Only TROPOMI has all five inputs today
   (corners, column δD, noise σ, H2O column); every other sensor needs its
-  gridding inputs decided first (STATE.md lists what each lacks). Only the
-  `corners` footprint model exists: add another when a sensor needs it.
+  gridding inputs decided first (STATE.md lists what each lacks). Footprint
+  models: `corners` (TROPOMI) and `airs_fov` (AIRS, 2026-11-13); add another
+  when a sensor needs it.
 - **Configurable** grid type (`latlon` resolution Δ dividing 180, or an
   NSIDC EASE-Grid 2.0 global grid by name), resolution, and frequency
   (`day`, `<n>day`, `month`, `<n>month`). Each grid is made from L2, never
@@ -129,7 +165,8 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   `gridding/`: `uv run python validation/stage_fixture.py` once (it refuses
   to restage over an existing fixture), then
   `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`
-  (9 cases, ~5 min, login node).
+  (14 cases over the TROPOMI and AIRS fixtures, ~7 min, login node; the
+  stager adds a missing fixture and leaves a staged one alone).
 - **A store's last period can be partial** (the record ends inside it;
   `time_coverage_end` says where). A build does not reopen a written
   period, so extending the L2 record later needs that period's stores

@@ -1728,6 +1728,38 @@ with the user on 2026-11-13; the evidence and options are in
   mol m-2) and, per level, the mean H2O mole fraction (1e-6), with new
   nomenclature rows (e.g. `water_vapor_column_h2o_850_250hpa`).
 
+### Gridded stores (user decisions 2026-11-13, D9)
+
+32 stores per store set, grid and frequency, in each layout (14 column, 12
+level, 6 surface; the gridding key `gridding/nomenclature-key_grid_tropess.md`
+is the machine-read list). **The names are proposed, not yet approved:**
+their 25 new rows are in style_guides, uncommitted, for the user's review.
+
+| group | store variables |
+| --- | --- |
+| column, 850-250 hPa | `water_vapor_column_delta_d_850_250hpa`, `..._standard_deviation`, `water_vapor_column_h2o_850_250hpa`, `observation_count`, `observation_count_effective`, `footprint_coverage`, `footprint_area`, `footprint_overlap_area_sum`, and six sums `gridding_weight_850_250hpa_*_sum` |
+| level, (time, level, lat, lon), 16 levels from 1000 to 0.1 hPa | `water_vapor_delta_d`, `water_vapor_delta_d_apriori`, `water_vapor_hdo_h2o_ratio_averaging_kernel_log_diagonal`, `water_vapor_h2o_mole_fraction_dry_air`, `observation_count_level`, five sums `gridding_weight_level_*_sum`, `footprint_overlap_area_level_sum`, `footprint_overlap_area_h2o_mole_fraction_sum` |
+| surface (statistics only) | `water_vapor_delta_d_surface`, `water_vapor_delta_d_surface_apriori`, `water_vapor_hdo_h2o_ratio_surface_averaging_kernel_log_diagonal`, `water_vapor_h2o_mole_fraction_dry_air_surface`, `observation_count_surface`, `pressure_surface` |
+
+- **The level axis:** L2 has 17 level slots. Slot 0 is only ever a surface
+  level; slots 1-16 are the fixed pressures 1000, 908.51, 825.4, 749.89,
+  681.29, 618.97, 510.9, 421.7, 348.07, 287.3, 237.14, 177.83, 133.35,
+  74.99, 28.73 and 0.1 hPa, except that each retrieval's lowest valid slot
+  holds its surface pressure instead (R10). A fixed level counts for a
+  retrieval only where its slot lies above the surface slot; the build
+  fails if such a slot holds another pressure.
+- **What is gridded of a kept retrieval:** it needs a δD and an H2O partial
+  column between 850 and 250 hPa, or it enters no group. The one row a day
+  whose ratio profile is masked (R22) is dropped this way (the build log's
+  "missing an input"). A level or the surface counts where its ratio, H2O,
+  a priori and kernel diagonal are all written.
+- **Sums of the surface group** are not stored (D9, 9.2): its statistics
+  cannot be re-formed over a longer period from the stores; a longer
+  period is a new build.
+- **Interpolation (D2, 2.1; wording corrected 2026-11-13):** the H2O and
+  HDO mole fractions each linear in ln p; "q and R linear" would lower the
+  column δD by a median 2.1-2.4 ‰.
+
 ### Footprint model (user decisions 2026-11-13, D1)
 
 TROPESS publishes no footprint corners. Each retrieval is one AIRS
@@ -1747,6 +1779,17 @@ cone's edge, from L2 fields alone:
   satellite, with a = 7082.8 km × (k0 / k)^(2/3) and e = 0.0014 (set on
   L1B; the nominal 705.3 km is not used: the height runs 705-720 km to
   2022 and 692-700 km in 2026).
+
+- **Days with too few retrievals to fit the phase** (found 2026-11-13): a
+  day's own fit is used only if its targets span at least half the day's
+  scans, number at least 50 and lie within 1° of the fitted orbit.
+  Otherwise the phase rate, and with it the height, is badly set: RS
+  2014-12-13 has 10 retrievals within 134 scans, and its own fit puts the
+  orbit 25 km low. Such a day takes the fit of the nearest sound day (at
+  most 30 days away; the earlier on a tie), carried over by the scan count,
+  which runs on unbroken across days. On sound days the phase carried from
+  the day before agrees with the day's own to 0.03° (from five days
+  before, 0.15°). RS has 9 days under 200 retrievals; FS none under 9,000.
 
 Validated once against AIRS L1B (AIRIBRAD.005) on eight granules of
 2010-06-15, 2022-06-01 and 2026-05-15, 2,548 targets: indices and side

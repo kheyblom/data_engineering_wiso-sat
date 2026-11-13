@@ -1,6 +1,6 @@
 # Gridding Level 2 water-isotope retrievals
 
-*Last edited: 2026-11-13*
+*Last edited: 2026-11-13 (profile sensors: Sections 2, 5, 6 and 10)*
 
 This document describes how WISO-SAT Level 2 retrievals are averaged onto regular grids, by day or over
 longer periods, and what each gridded quantity means. The method is the same for every sensor. What
@@ -61,6 +61,47 @@ product's quality level plus any product-specific thresholds. Each
 product's selection, and the Level 2 variable behind each input, are in its
 product document. The selection applied to a grid is recorded in its
 attributes.
+
+### Sensors that retrieve profiles
+
+Some sensors publish HDO/H2O and H2O on vertical levels and no column δD
+suited to an H2O-weighted mean. For them the inputs are computed from the
+profiles when gridding (the Level 2 stores hold only published values).
+Each retrieval gives three groups of inputs:
+
+| group | δ_f | *H*_f |
+| --- | --- | --- |
+| column | δD of the HDO and H2O partial columns between two pressures | the H2O partial column between them, mol m-2 |
+| level | δD at a fixed pressure level | the H2O partial column of that level's layer |
+| surface | δD at the retrieval's surface level | the H2O partial column of that level's layer |
+
+**Partial columns.** Between adjacent levels the H2O and HDO mole
+fractions are each taken linear in ln *p*. A partial column is the integral
+of the mole fraction over pressure between two pressures, divided by
+*g* *M*: hydrostatic balance, with standard gravity (9.80665 m s⁻²) and the
+molar mass of dry air (28.9644 g mol⁻¹). Each layer's integral is exact, and
+the limits are exact too: a column from 850 to 250 hPa starts at 850 hPa
+wherever the levels fall, or at the surface where the surface is higher.
+*g* and *M* cancel in δD; they set only the H2O column itself.
+
+**A level's layer.** The column integral is a weighted sum of the level
+values. Each level's term in the integral of H2O over the whole profile is
+the H2O partial column of that level's layer. These terms add up to the
+whole column exactly, so the per-level sums of
+[Section 6](#6-cell-values) combine over levels as they do over days.
+
+**Fixed levels and the surface.** A retrieval's lowest level is its
+surface, whose pressure differs from one retrieval to the next. It is
+gridded as a group of its own, with its pressure. A fixed level is used for
+a retrieval only where it lies above that retrieval's surface level, so one
+gridded level never mixes pressures, and the count at a level falls towards
+the ground.
+
+A retrieval with no column between the two pressures is not gridded in any
+group, so the three groups describe the same retrievals. Which sensors are
+gridded this way, with their pressures and levels, is in the product
+documents (AIRS v1: [`tropess.md`](../products/tropess.md), "Gridding
+inputs, AIRS v1").
 
 ## 3. Grids
 
@@ -186,6 +227,12 @@ antimeridian. It is moved to one side of it, and the cells it covers past
 90° of longitude after this encloses a pole and is not gridded. Nor is a
 footprint with a missing corner.
 
+A sensor that publishes no corners has its polygon drawn by a model of the
+instrument's field of view, from published viewing geometry. The polygon
+may then have many vertices (32 for AIRS); everything below applies
+unchanged. The model, and what it was checked against, is in the product
+document.
+
 ### Overlap with each cell
 
 The polygon is clipped to every cell of its bounding box
@@ -261,6 +308,18 @@ Writing *w* for *w*_fc:
 
 Only cells with at least one contribution have values. All others are
 missing.
+
+**Levels.** For a sensor gridded from profiles
+([Section 2](#sensors-that-retrieve-profiles)), the column group keeps the
+sums above with δ and *H* the column's. Each fixed level keeps its own
+sums, over the footprints that have that level, with *w* = *a* · *H* for
+the level's layer: *N*, Σ *a*, Σ *w*, Σ *w* δ, Σ *w* δ², and one sum for
+each further quantity averaged at the level (Σ *w* δa for the a priori δD,
+Σ *w* *K* for the averaging kernel's diagonal, Σ *a* *q* for the H2O mole
+fraction). A statistic at a level is its sum over Σ *w* (the H2O mole
+fraction: Σ *a* *q* / Σ *a*, an area-weighted mean). Adding a level's Σ *w* δ
+and Σ *w* over several levels gives the H2O-weighted δD of the layer they
+span.
 
 ### Statistics
 
@@ -447,6 +506,22 @@ chunk of a small tile of cells).
 
 A sensor without a valid σ has no standard error and no σ sums
 ([Section 7](#7-uncertainty)).
+
+A sensor gridded from profiles ([Section 2](#sensors-that-retrieve-profiles))
+has three groups of stores. Its column group is the table above, with the
+column's pressures in the variable names and the weight's (for AIRS,
+`water_vapor_column_delta_d_850_250hpa`, `gridding_weight_850_250hpa_sum`).
+Its level stores have a `level` dimension after time, holding the fixed
+pressures in Pa, surface first. Its surface stores are statistics only.
+For AIRS v1:
+
+| group | statistics | sums |
+| --- | --- | --- |
+| column (850-250 hPa) | δD, spread, effective number, count, mean H2O partial column, coverage, mean footprint area | Σ *a*, Σ *w*, Σ *w* δ, Σ *w* δ², Σ *w*², Σ *w* *A*, Σ *w* *W* |
+| level (16 levels) | δD, a priori δD, kernel diagonal, H2O mole fraction, count | Σ *a*, Σ *w*, Σ *w* δ, Σ *w* δ², Σ *w* δa, Σ *w* *K*, Σ *a* *q* |
+| surface | δD, a priori δD, kernel diagonal, H2O mole fraction, count, pressure | none stored |
+
+The store variables are listed in the product document.
 
 Every sum of [Section 6](#6-cell-values) is stored, in float64, so
 [Section 8](#8-combining-cells-and-days) can be applied directly to the
