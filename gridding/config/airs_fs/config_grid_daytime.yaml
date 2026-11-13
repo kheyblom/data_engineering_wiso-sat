@@ -1,0 +1,240 @@
+# Production config for the AIRS gridded stores, store set v_1.fs.daytime (TROPESS AIRS-Aqua HDO
+# L2, collection 1, forward stream; daytime retrievals only).
+#
+# One build (grid_wisosat.py) writes the spatial stores in one pass over the UTC days;
+# rechunk_wisosat.py then makes the temporal stores from the tagged spatial ones. Every
+# decision this encodes (D1-D9, user, 2026-11-13) is in docs/products/tropess.md,
+# "Gridding inputs, AIRS v1". Scale settings are placeholders until the bench.
+product: airs
+# products/<source>.py: the quality levels and the footprint models
+source: tropess
+# the collection version and the stream, as the L2 stores name them (v_1.fs)
+version: '1'
+version_product: fs
+# the daytime selection as a store set of its own beside the full one: the token goes after
+# the version in the gridded names (v_1.fs.daytime). An approved style-guide exception for
+# the AIRS v1 gridded stores only (user decision 2026-11-13, D7)
+store_set: daytime
+# delta D, H2O and the weights are derived here from the L2 profiles
+# (gridding/CLAUDE.md, "Two methods"); the key lists the 32 stores
+method: profile
+quantity_key: nomenclature-key_grid_tropess.md
+
+# The finalized L2 stores, read only at a tag. The four footprint stores were
+# added on 2026-11-13 and carry their own tag (user decision; l2/TESTING.md).
+l2:
+  directory: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/l2
+  filename: 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr'
+  tag: v1-verified-20261023
+  store_tags:
+    granule_number_level_1b: v1-verified-20261113
+    scanline_index: v1-verified-20261113
+    ground_pixel_index: v1-verified-20261113
+    sensor_view_angle: v1-verified-20261113
+
+directories:
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/l3
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, under
+  # spatial/ or temporal/ (user decision 2026-11-10)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+nomenclature_data: /glade/u/home/kheyblom/work/style_guides/nomenclature_data.md
+log_file: grid_airs_fs_daytime.log
+
+# The L2 profiles everything gridded is derived from (docs/products/tropess.md,
+# "Gridding inputs, AIRS v1"). Units are checked against the gridding key.
+inputs:
+  # TROPESS's bias-corrected HDO/H2O ratio and H2O dry-air mole fraction
+  ratio: water_vapor_hdo_h2o_ratio
+  h2o: water_vapor_h2o_mole_fraction_dry_air
+  pressure: pressure
+  apriori: water_vapor_hdo_h2o_ratio_apriori
+  # only its diagonal is read
+  kernel: water_vapor_hdo_h2o_ratio_averaging_kernel_log
+  # the 1.1 degree AIRS field of view drawn from the fields below
+  # (utils/airs_fov.py; validated against AIRS L1B, user decisions D1)
+  footprint: airs_fov
+footprint:
+  granule: granule_number_level_1b
+  scanline: scanline_index
+  pixel: ground_pixel_index
+  view_angle: sensor_view_angle
+profile:
+  # TROPESS's standard ratio (D2, 2.2); VSMOW's 3.1152e-4 would shift delta D by ~1.2 per mil
+  ratio_standard: 3.11e-4
+  # the column group's layer, Pa (D2b): 850 to 250 hPa
+  column: {bottom: 85000.0, top: 25000.0}
+  # the 16 fixed pressure levels of the retrieval grid, Pa, surface first;
+  # L2 slot 0 is only ever a surface level (R10)
+  levels: [100000.0, 90851.0, 82540.0, 74989.0, 68129.0, 61897.0, 51090.0, 42170.0,
+           34807.0, 28730.0, 23714.0, 17783.0, 13335.0, 7499.0, 2873.0, 10.0]
+
+selection:
+  # TROPESS's Summary rule and the published day/night flag (user decisions 2026-11-13, D5, D7)
+  quality_level: summary_daytime
+  description: >-
+    A retrieval is kept if its degrees of freedom for signal exceed 1.1 (compared at the stored
+    float32), TROPESS's Summary rule, or if they are missing and the Summary product's 850-250
+    hPa delta D is written (the days upstream has no Standard file for). No cloud limit. A kept
+    retrieval without a column between 850 and 250 hPa is not gridded. Daytime set: only
+    retrievals whose published day/night flag is 1 (TROPESS's sunlit_binary_mask); the flag marks
+    sunlight, not the overpass, and rows with its fill are left out.
+
+# 1 degree, daily (user decision 2026-11-13, D6); other grids and frequencies on request
+grids:
+  - {type: latlon, resolution: 1.0}
+frequencies: [day]
+
+chunks:
+  # PLACEHOLDERS until the bench (gridding/STATE.md). At 1 degree a period is
+  # 0.26 MiB (float32): 8 days per chunk keeps a store near 800 files over
+  # the RS record; a level store's chunk holds all 16 levels (66 MiB raw in
+  # float64, mostly empty cells)
+  spatial: {time: 8, level: -1, rows: -1, cols: -1, time_coordinate: 365}
+  # the whole record per tile of 36 x 36 cells, one level per chunk
+  temporal: {time: -1, level: 1, rows: 36, cols: 36}
+
+# Scale settings (per product, never in code): placeholders until the bench.
+# a multiple of the spatial time chunk (8), so each commit writes whole chunks
+periods_per_commit: 40
+num_workers: 8
+# (footprint, cell) pairs clipped at once; bounds a worker's memory
+max_pairs: 500000
+
+# verify_grid_wisosat.py: sampled by decision (user, 2026-11-10). Besides the
+# first and last period, `samples` more are drawn with `seed` and every cell
+# recomputed from L2 by verify_profile.py.
+verify:
+  seed: 20261113
+  samples: {day: 10}
+  tiles: 6
+  times: 6
+  # the verifier fits the orbit phase on its own, so sums agree to ~1e-8, not
+  # to the column method's 1e-9 (TESTING.md finding 1)
+  sum_rtol: 1.0e-7
+
+# rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
+temporal:
+  source_tag: null
+  # a multiple of the temporal tile (36 rows); a block's buffer for a level
+  # store is record x 16 x block_rows x 360 x 8 B
+  block_rows: 36
+
+attrs:
+  title: >-
+    WISO-SAT AIRS HDO (TROPESS forward stream, daytime), gridded {frequency_long_name} on {grid_name}: {variable}
+  summary: >-
+    {long_name}, from the NASA TROPESS AIRS-Aqua HDO/H2O retrievals of the
+    forward stream (collection {version_label}) as distributed for
+    WISO-SAT, gridded by footprint overlap: each retrieval's footprint
+    contributes to every cell it overlaps with weight w = overlap area x H2O
+    partial column, and every retrieval whose UTC time falls in the period is
+    averaged. This is the daytime set: only retrievals in sunlight (day_night_flag 1); the set without
+    "daytime" in its name holds every overpass. Delta D and the H2O partial columns are computed in gridding
+    from the retrieved profiles; the method is in gridding_method.
+  Conventions: ACDD-1.3
+  source: >-
+    The finalized WISO-SAT AIRS Level 2 stores (source_l2_stores) at the tags
+    in source_l2_tag
+  institution: University of Michigan
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Sarkar, M., et al. (2026), WISO-SAT: A global database of stable hydrogen
+    isotopes in water vapor from eight satellite missions, Scientific Data,
+    doi:10.1038/s41597-026-08218-8;
+    Worden, J. R., et al. (2019), Characterization and evaluation of AIRS-based
+    estimates of the deuterium content of water vapor, Atmos. Meas. Tech., 12,
+    2331-2339, doi:10.5194/amt-12-2331-2019
+  stream: >-
+    Forward stream (FS): 2021-02-01 to 2026-05-31, processed as the data arrived with MUSES v1.11 to v1.24, ~26,000 targets a day between about 67S and 85N, almost all on the ~13:30 overpass. It continues the reanalysis stream (v_1.rs, 2002-08-30 to 2020-03-31), which samples 6 to 10 times fewer targets on both overpasses; there is no AIRS data 2020-04 to 2021-01. Treat a trend across the seam with care.
+  store_groups: >-
+    Three groups of stores share this grid and time axis. Column: the partial
+    column between 850 and 250 hPa (or from the surface where it is higher),
+    (time, lat, lon). Level: each of the 16 fixed pressure levels of the
+    retrieval grid, (time, level, lat, lon); a retrieval counts at a level
+    only where the level lies above its surface level, so counts fall towards
+    the ground. Surface: each retrieval's surface level, whose pressure
+    varies (pressure_surface), statistics only. A retrieval with no 850-250
+    hPa column is in none of them.
+  vertical_resolution: >-
+    The retrieval has about 1 to 2 degrees of freedom for signal, so its
+    levels are not independent and some are mostly the a priori: compare
+    water_vapor_delta_d with water_vapor_delta_d_apriori and read the
+    averaging kernel diagonal before using a level on its own.
+  no_standard_error: >-
+    These grids carry no standard error. AIRS v1 publishes no valid
+    noise-only error for the delta D gridded here (its observation error
+    covariance has negative variances), and a standard error is never built
+    from an error that is missing on some retrievals. The spread is the
+    variability of the retrievals in a cell, not the noise of their mean.
+  footprint_model: >-
+    TROPESS publishes no footprint corners. Each retrieval is one AIRS
+    footprint, drawn as the instrument's 1.1 degree circular field of view
+    projected from the satellite onto WGS84 (32 vertices), from the published
+    L1B granule, scan line, cross-track index and scan angle; the satellite's
+    place and height come from an orbit model fitted to each day's
+    retrievals. Checked against AIRS L1B on eight granules: areas within
+    about 1%. The model leaves out the beam's true shape, terrain height and
+    the satellite's motion during a scan line.
+  column_convention: >-
+    H2O partial columns are the integral of the dry-air mole fraction over
+    pressure with g = 9.80665 m s-2 and a dry-air molar mass of 28.9644 g
+    mol-1, the H2O and HDO mole fractions each linear in ln p between
+    retrieval levels; TROPESS documents neither constant. They cancel in
+    delta D, which is 1000 (R / 3.11e-4 - 1) with TROPESS's standard ratio.
+
+# Per quantity (the key's names), merged over the nomenclature's long_name and units.
+variable_attrs:
+  delta_d:
+    comment: >-
+      The delta D of the cell's summed HDO and H2O partial columns between
+      850 and 250 hPa: each retrieval's partial-column delta D weighted by
+      its overlap area times its H2O partial column. Not TROPESS's dd_col_p,
+      which is an unweighted mean of the level ratios and lies about 60 per
+      mil lower.
+  spread:
+    comment: >-
+      Weighted standard deviation of the retrievals' 850-250 hPa delta D about
+      the cell mean; 0 where one retrieval contributes, as in most cells of a
+      day.
+  h2o:
+    comment: >-
+      Area-weighted mean H2O partial column between 850 and 250 hPa (see
+      column_convention).
+  coverage:
+    comment: >-
+      Adds up footprint areas, so it is not the fraction of the cell observed.
+      AIRS footprints are 13.5 to 41 km across: a day's retrievals cover about
+      1% of a 1 degree cell they fall in.
+  footprint_area:
+    comment: >-
+      Divide by cell_area for the footprint-to-cell ratio.
+  level_delta_d:
+    comment: >-
+      H2O-weighted mean delta D at the level: each retrieval weighted by its
+      overlap area times the H2O partial column of the level's layer. Adding
+      gridding_weight_level_delta_d_sum and gridding_weight_level_sum over
+      several levels gives the H2O-weighted delta D of the layer they span.
+  level_delta_d_apriori:
+    comment: >-
+      The a priori delta D at the level, averaged with the same weights as
+      water_vapor_delta_d.
+  level_kernel_diagonal:
+    comment: >-
+      Diagonal of the averaging kernel of the ln HDO/H2O ratio at the level,
+      averaged with the same weights as water_vapor_delta_d: near 0, the
+      level's delta D is mostly its a priori.
+  level_h2o:
+    comment: >-
+      Area-weighted mean H2O dry-air mole fraction at the level.
+  level_count:
+    comment: >-
+      Retrievals contributing at the level: those whose footprint overlaps
+      the cell and whose surface level lies below the level.
+  surface_pressure:
+    comment: >-
+      Mean pressure of the retrievals' surface levels, with the weights of
+      water_vapor_delta_d_surface. The surface level is each retrieval's
+      lowest valid level; its pressure differs between retrievals.
