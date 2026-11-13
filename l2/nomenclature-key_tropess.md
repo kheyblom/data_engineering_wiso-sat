@@ -40,10 +40,18 @@ and the position are root variables.
 | `observation_ops/observation_error_h2o` | `1` | `water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log` | `unitless` | 1-sigma observation error of the ln dry-air mole fraction of water vapor (H2O) | none | Standard; ln space, never scaled (R8); NaN and -999 fill (R15) |
 | `pressure` | `hPa` | `pressure` | `Pa` | air pressure at each vertical level of a retrieval | x 100 | both files; its own store (N3); the lowest valid level is the surface (R10) |
 | `altitude` | `m` | `altitude` | `m` | altitude at each vertical level of a retrieval | none | both files |
+| `geolocation/airs_granule` | `1` | `granule_number_level_1b` | `unitless` | one-based number, within its day, of the Level 1B granule that holds the observation | none | both files; AIRS only: the six-minute AIRS L1B granule, 1-240; int32/int16 by version, stored int32 |
+| `geolocation/airs_atrack` | `1` | `scanline_index` | `unitless` | zero-based along-track scanline index | none | both files; AIRS only: the scan line within its L1B granule, 0-134; int32/int16 by version, stored int32 |
+| `geolocation/airs_xtrack` | `1` | `ground_pixel_index` | `unitless` | zero-based across-track ground pixel index | none | both files; AIRS only: the footprint within its scan line, 0-89; int32/int16 by version, stored int32 |
+| `geolocation/airs_view_ang` | `degree` | `sensor_view_angle` | `degree` | angle at the sensor between its line of sight to the observation and nadir | none | both files; AIRS only: unsigned, the absolute value of AIRS L1B `scanang`; the source standard_name retained |
 
 - **Units:** `1` is respelled `unitless`, and the TROPESS units string for a
   flag is empty. Only `x_h2o` (x 1e6) and the two pressures (x 100) change
   value.
+- **The AIRS footprint fields** (`geolocation/airs_*`, added 2026-11-13 for
+  gridding; `docs/products/tropess.md`, "Footprint model"): which AIRS L1B
+  footprint each retrieval is, as published. Gridding draws the footprint
+  polygon from them; nothing derived is stored here.
 - **Bias correction:** `x` and `x_h2o` are TROPESS's bias-corrected
   profiles. The configs state it on both stores (`variable_attrs`); the
   uncorrected `retrieval/x_raw` and `x_h2o_raw` are not stored (Q4).

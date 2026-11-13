@@ -1325,7 +1325,16 @@ They are cheap (one value per obs), and `day_night_flag` documents R13.
 - Always out:
   - `observation_error` (R11) and `x_test` (R21);
   - `airs_atrack`, `airs_xtrack`, `airs_granule`, `airs_view_ang` (no rows
-    are left out, so the granule index gives each obs's source row);
+    are left out, so the granule index gives each obs's source row).
+    **Added 2026-11-13** (user decision, gridding D1 1.7): gridding draws
+    each footprint from them ("Footprint model"), so they are stored as
+    published, one store each: `granule_number_level_1b`, `scanline_index`,
+    `ground_pixel_index` and `sensor_view_angle` (rows approved 2026-11-13;
+    the first and last new in style_guides). 23 stores per AIRS v1 product.
+    The 2026-10-23 audit found them in every file of both types and never
+    fill; the three indices are int32 or int16 by version (R16), stored
+    int32; `airs_view_ang` keeps its source `standard_name`
+    (`sensor_view_angle`);
   - `year_fraction`, the microwindow variables;
   - `datetime_utc`, which is used only to check `time` (P4).
 

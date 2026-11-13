@@ -49,6 +49,12 @@ variables:
   - water_vapor_h2o_mole_fraction_dry_air_observation_standard_error_log
   - pressure
   - altitude
+  # which AIRS L1B footprint each retrieval is (added 2026-11-13 for the
+  # gridding footprint model, tropess.md "Footprint model"); as published
+  - granule_number_level_1b
+  - scanline_index
+  - ground_pixel_index
+  - sensor_view_angle
 
 # days upstream has only one of the two files (R23; Q1: every row kept).
 # The listing fails on any other one-sided day
@@ -82,6 +88,9 @@ source_fill_values:
 source_dtypes:
   geophysical/land_flag: int32
   geophysical/day_night_flag: int32
+  geolocation/airs_granule: int32
+  geolocation/airs_atrack: int32
+  geolocation/airs_xtrack: int32
 
 # R22, decided by the user 2026-10-23: masked as a declared defect. The reader
 # and the verifier each confirm, from raw, that the value equals x_test
@@ -233,3 +242,29 @@ variable_attrs:
       vapor content for water vapor volume mixing ratio of 0.004". It does not
       reproduce by interpolating the stored profiles; TROPESS computes it on
       its own grid.
+  granule_number_level_1b:
+    comment: >-
+      AIRS Level 1B granule (AIRIBRAD, six minutes of data, 240 a day) holding
+      the footprint this retrieval used, numbered 1 to 240 from about 00:05:26
+      UTC on the day in granule_id; as published (geolocation/airs_granule).
+      With scanline_index and ground_pixel_index it names one AIRS footprint:
+      the three address the L1B arrays of that granule (checked against L1B
+      on eight granules, 2026-11-13; docs/products/tropess.md, Footprint
+      model).
+  scanline_index:
+    comment: >-
+      Scan line of the footprint within its AIRS Level 1B granule
+      (granule_number_level_1b), 0 to 134, as published
+      (geolocation/airs_atrack); L1B's own documentation counts from 1.
+  ground_pixel_index:
+    comment: >-
+      Footprint within its scan line, 0 to 89, as published
+      (geolocation/airs_xtrack); 0 to 44 lie to the left of the flight
+      direction and 45 to 89 to the right (checked against AIRS L1B scanang,
+      2026-11-13). L1B's own documentation counts from 1.
+  sensor_view_angle:
+    comment: >-
+      Scan angle of the footprint from nadir at the instrument, unsigned, as
+      published (geolocation/airs_view_ang): the absolute value of AIRS L1B
+      scanang (checked on eight granules, 2026-11-13). The side is given by
+      ground_pixel_index. Not the zenith angle at the ground, which is larger.
