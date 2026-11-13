@@ -31,7 +31,7 @@ and an H2O column in mol m-2. The issue IDs (R1, Q2b, ...) refer to
 
 | # | Decision | Recommendation | Status |
 | --- | --- | --- | --- |
-| D1 | Footprint model | C2: 1.1° FOV polygons (32 vertices) from the raw L2 geometry fields, validated once against L1B | **completed 2026-11-13** |
+| D1 | Footprint model | C2: 1.1° FOV polygons (32 vertices) from the raw L2 geometry fields, validated once against L1B | **completed 2026-11-13**; validated against L1B the same day (1.4 revised: height from the orbit phase) |
 | D2 | δD input | D + E: a vertical product, and an H2O-weighted 850-250 hPa δD from the profiles | **completed 2026-11-13** |
 | D3 | σ input | None: no standard error and no σ sums | **completed 2026-11-13** |
 | D4 | Weight | overlap area × H2O partial column of the gridded layer (mol), plus companion H2O statistics | **completed 2026-11-13** |
@@ -153,6 +153,26 @@ alone, with no L1B download for production.
 | 1.5 | Polygon vertices | 32 points on the projected cone edge | A 32-gon misses 0.6% of the area (a 16-gon 2.6%, an 8-gon 10%). The engine's `MAX_VERTICES` (8, sized for quadrilaterals) becomes the vertex count + 4. AIRS is small (~30 M selected rows), so the cost is minor. |
 | 1.6 | Validation | download a handful of AIRS L1B granules (an RS day and an FS day) and compare our polygons with polygons built from L1B's `satheight`, `sat_lat`/`sat_lon`, `satazi` and `scanang` | It confirms the orientation (1.2), the side (1.3) and the altitude (1.4) before production. It is a one-off check; production stays on L2 alone. The download is shown to you first. |
 | 1.7 | Where the polygons are computed | L2 gains the four published geometry fields (`airs_granule`, `airs_atrack`, `airs_xtrack`, `airs_view_ang`) as new stores on the existing obs axis, as published; gridding computes the polygons (a footprint model `airs_fov`), and the verifier recomputes them independently | The same split as D2 (2.4): L2 keeps only published values, and derived ones are made in gridding. Storing derived polygons in L2 would be an exception to "as published". The four stores need nomenclature rows. |
+
+**1.6 result: the prototype against L1B (2026-11-13).** Eight AIRIBRAD.005
+granules (RS 2010-06-15: 126, 182, 235; FS 2022-06-01: 053, 115, 180; FS
+2026-05-15: 193, 232), every target TROPESS retrieved in them (2,548).
+Scripts `gridding/tools/survey/airs_fov_polygon.py` (the model and its
+L2-only self-checks), `airs_l1b_fetch.sh` and `airs_fov_l1b.py`; output in
+`gridding/logs/airs_fov_{polygon,l1b}_20261113.log`; granules in
+`/glade/derecho/scratch/kheyblom/data/wisosat_validation/airs_l1b/`.
+
+| sub-decision | result |
+| --- | --- |
+| 1.2 scan plane | **The orbit model, in the inertial frame.** One phase fit per file: u = u0 + k (n - n_mid), n = 135 (`airs_granule` - 1) + `airs_atrack`, fitted to the targets' latitudes for a circular orbit at 98.2° (residual at most 0.3°). The scan plane is perpendicular to the orbit's inertial heading: the bearing from each target to nadir is within 2.1° of L1B's `satazi` (p50 0.1-1.6° by granule). Perpendicular to the ground track it is off by up to 5.0°. The per-granule fit is off by up to 32° at high latitudes (and common area down to 0.68): not kept. L1B's roll, pitch and yaw are under 0.01°. `time` is not used: RS stores it in 64 s steps. |
+| 1.3 side and indices | **Confirmed on all 2,548.** `airs_atrack` and `airs_xtrack` address L1B's arrays 0-based as they are (centres agree to 1e-5°; shifted by one they miss by 0.1-1.8°). `airs_view_ang` equals \|`scanang`\| exactly, and `scanang` is negative for `airs_xtrack` ≤ 44: the left of the flight direction. |
+| 1.4 height | **Revised (user decision 2026-11-13): the height from the orbit phase**, not the nominal 705.3 km. L1B's `satheight` runs 705-720 km in 2010 and 2022 (higher in the south: a frozen orbit over an oblate Earth) and 692-700 km in 2026 (Aqua has descended ~15 km since its manoeuvres stopped). With 705.3 km, footprint areas are 0.950-1.048 of those drawn from L1B's satellite position (5% small in the southern mid-latitudes in 2022, 2-5% large in 2026). The height is now a (1 - e sin u) less the ellipsoid's radius under the satellite, with a = 7082.8 km × (k0 / k)^(2/3) (Kepler's third law on the fitted phase rate; k / k0 was 1.00001, 1.00012 and 1.00343 on the three days) and e = 0.0014, both constants read off the 2010 L1B granules and stated in the metadata. |
+| polygons | **Chosen model against polygons drawn the same way from L1B's satellite position:** area 0.997-1.011 of L1B's (p50 1.000-1.001 per day), common area (intersection over union) at least 0.987, p50 0.997-0.998. |
+
+Also measured from L2 alone (FS 2022-06-01, 8,032 scans holding two or more
+targets): targets of one scan give the same sub-satellite point to a median
+3.4 km (the satellite moves ~13 km while the mirror sweeps one scan line,
+which the model leaves out: a 0.5° skew of the scan line).
 
 **Knock-on effects:** with polygons, the area statistics come back
 (coverage, footprint area, the footprint-to-cell ratio), and D4's weight is
@@ -515,8 +535,9 @@ RS/FS overlap (R26).
 **Order of work**
 
 1. ~~Settle D1-D8 here (v1 only).~~ Done 2026-11-13.
-2. D1 prototype and validation: the polygon code against a handful of L1B
-   granules (1.6), the download shown to you first.
+2. ~~D1 prototype and validation: the polygon code against a handful of L1B
+   granules (1.6), the download shown to you first.~~ Done 2026-11-13 (the
+   1.6 result in D1; 1.4 revised to the height from the orbit phase).
 3. In `l2/`: the four AIRS geometry stores (1.7) for RS and FS v1, with
    their nomenclature rows, verified, and a new tag.
 4. ~~Write "Gridding inputs" in `docs/products/tropess.md`~~ (done

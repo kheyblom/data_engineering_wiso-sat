@@ -61,12 +61,20 @@ D1-D8 in [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md)
 sensor without the user's approval.
 
 - **Scope:** v1 only (RS and FS as separate products); v2 later.
-- **Footprint (D1):** the 1.1° FOV projected from 705.3 km onto WGS84 as a
-  32-vertex polygon, built here (model `airs_fov`) from four published
-  geometry fields added to L2 (`airs_granule`, `airs_atrack`,
-  `airs_xtrack`, `airs_view_ang`); validated once against a few L1B
-  granules (download shown to the user first). `MAX_VERTICES` follows the
-  vertex count.
+- **Footprint (D1):** the 1.1° FOV projected onto WGS84 as a 32-vertex
+  polygon, built here (model `airs_fov`) from four published geometry
+  fields added to L2 (`airs_granule`, `airs_atrack`, `airs_xtrack`,
+  `airs_view_ang`). `MAX_VERTICES` follows the vertex count. **Prototyped
+  and validated against L1B 2026-11-13** (`tools/survey/airs_fov_polygon.py`
+  is the model to port; `airs_fov_l1b.py`; logs
+  `logs/airs_fov_*_20261113.log`; `tropess.md`, "Footprint model"): orbit
+  model with one phase fit per file, scan plane perpendicular to the
+  inertial heading, side from `airs_xtrack` (≤ 44 left), indices 0-based.
+  **Height from the orbit phase, not 705.3 km (user decision 2026-11-13,
+  revising 1.4):** the height runs 692-720 km over the record. Areas within
+  about 1% of L1B's, common area ≥ 0.987. The eight L1B granules are in
+  `/glade/derecho/scratch/kheyblom/data/wisosat_validation/airs_l1b/`
+  (458 MB; delete only with the user's say).
 - **δD (D2):** computed here from the 17-level profiles, never TROPESS's
   `dd_col_p`: per level (a level dimension, the surface level its own field)
   and as the H2O-weighted 850-250 hPa partial column
@@ -104,18 +112,11 @@ sensor without the user's approval.
      absent on ~56% of δD soundings (G1) and sometimes negative (G8).
    - **AIRS v1: decided 2026-11-13; next is the order of work** at the end
      of `../airs-gridding-decisions.md`:
-     1. **D1 prototype and L1B validation (1.2-1.6).** Write the polygon
-        code (1.1° cone, WGS84, 705.3 km, 32 vertices) with both ways of
-        finding the cross-track direction (per-granule fit; orbit model)
-        and the side from `airs_xtrack`. Compare with polygons from L1B
-        geometry (`satheight`, `sat_lat`/`sat_lon`, `satazi`, `scanang`)
-        on a handful of granules, e.g. from RS 2010-06-15 and FS
-        2022-06-01. The raw files give each target's granule, scan and
-        cross-track indices (0-based; L1B's are 1-based: check), and v2
-        names its `l1b_filename`. TROPESS used AIRS L1B `AIRIBRAD`
-        (ATBD Table 2). **Show the user the download before running it**
-        (Earthdata; the `access_tropess` codebase did the TROPESS
-        downloads).
+     1. ~~D1 prototype and L1B validation (1.2-1.6).~~ Done 2026-11-13
+        (see "Footprint (D1)" above). For the engine port: the phase fit
+        needs each row's AIRS day (the L2 granule = file, from the granule
+        index), since a UTC day holds rows of two files; decide what a file
+        with too few targets for a fit does.
      2. **`l2/`: the four geometry stores** for RS and FS v1 (nomenclature
         rows first, user review), verified, new tag. An `l2/` task: read
         `../l2/STATE.md` and `../l2/CLAUDE.md` first.

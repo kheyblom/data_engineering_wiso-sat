@@ -1670,7 +1670,7 @@ with the user on 2026-11-13; the evidence and options are in
 | input | from the L2 stores |
 | --- | --- |
 | time | geolocation `time` |
-| footprint | the 1.1° AIRS field of view projected onto the ground, as a 32-vertex polygon, from `airs_granule`, `airs_atrack`, `airs_xtrack` and `airs_view_ang` (to be added to L2 as published; D1) |
+| footprint | the 1.1° AIRS field of view projected onto the ground, as a 32-vertex polygon, from `airs_granule`, `airs_atrack`, `airs_xtrack` and `airs_view_ang` (to be added to L2 as published; D1; "Footprint model" below) |
 | δD | computed in gridding from `water_vapor_hdo_h2o_ratio`, `water_vapor_h2o_mole_fraction_dry_air` and `pressure`: per level (D2a), and as the H2O-weighted 850-250 hPa partial column (D2b) |
 | δD uncertainty (random) | **none** (below) |
 | H2O column | computed in gridding: the H2O partial column of each gridded layer (850-250 hPa for D2b; each level's layer for D2a), ∫ q dp / (g·M_air) with the same ln p interpolation and cuts as the δD (D4) |
@@ -1718,6 +1718,36 @@ with the user on 2026-11-13; the evidence and options are in
 - **Companion statistics (D4):** the mean H2O partial column (850-250 hPa,
   mol m-2) and, per level, the mean H2O mole fraction (1e-6), with new
   nomenclature rows (e.g. `water_vapor_column_h2o_850_250hpa`).
+
+### Footprint model (user decisions 2026-11-13, D1)
+
+TROPESS publishes no footprint corners. Each retrieval is one AIRS
+footprint, and gridding (model `airs_fov`) draws it as the 1.1° circular
+field of view projected from the satellite onto WGS84, 32 vertices on the
+cone's edge, from L2 fields alone:
+
+- **Scan angle:** `airs_view_ang` is L1B's \|`scanang`\|; it is negative
+  (left of the flight direction) for `airs_xtrack` ≤ 44. The indices are
+  L1B's, 0-based.
+- **Orbit phase:** one fit per file (AIRS day) of u = u0 + k (n - n_mid) to
+  the targets' latitudes, n = 135 (`airs_granule` - 1) + `airs_atrack`, for
+  a circular orbit at 98.2°. `time` is not used (64 s steps in RS).
+- **Scan plane:** through the satellite's nadir, perpendicular to the
+  orbit's inertial heading at phase u.
+- **Height:** a (1 - e sin u) less the ellipsoid's radius under the
+  satellite, with a = 7082.8 km × (k0 / k)^(2/3) and e = 0.0014 (set on
+  L1B; the nominal 705.3 km is not used: the height runs 705-720 km to
+  2022 and 692-700 km in 2026).
+
+Validated once against AIRS L1B (AIRIBRAD.005) on eight granules of
+2010-06-15, 2022-06-01 and 2026-05-15, 2,548 targets: indices and side
+exact on every target; bearing to nadir within 2.1° of `satazi`; polygon
+area 0.997-1.011 of the polygon drawn from L1B's own satellite position,
+and at least 0.987 of their area in common. Production reads no L1B. The
+model leaves out the beam's true shape (the field stop and the scan smear,
+which JPL gives only at nadir), terrain height, and the satellite's motion
+during a scan line (a 0.5° skew). Evidence: `airs-gridding-decisions.md`
+(D1, "1.6 result").
 
 ### No standard error (user decision 2026-11-13, D3)
 
