@@ -19,15 +19,17 @@ gridding-method.md Section 5):
 - a footprint's whole area is its shoelace area in the EASE-Grid 2.0 global
   plane, whatever grid is built, so it compares between grids.
 
-Only the ``corners`` footprint model exists so far: TROPOMI's. A sensor
-with centres only needs its own model and a user decision first (STATE.md).
+A footprint may have any number of vertices: TROPOMI's ``corners`` model
+has four, AIRS's ``airs_fov`` 32 (``utils/airs_fov.py``). The clip assumes a
+convex polygon, which gains at most one vertex per cell side. A sensor with
+centres only needs its own model and a user decision first (STATE.md).
 """
 import numpy as np
 
 from utils.grids import ease2_xy
 
-# a quadrilateral clipped by a cell's four sides keeps at most 8 vertices
-MAX_VERTICES = 8
+# a convex polygon clipped by a cell's four sides gains at most this many vertices
+CLIP_VERTICES = 4
 # a footprint spanning more than this after unwrapping encloses a pole
 MAX_LON_SPAN = 90.0
 
@@ -68,7 +70,8 @@ def _clip(x, y, n, along_x, bound, keep_above):
     """Clip polygons to one half-plane (one Sutherland-Hodgman pass, vectorized).
 
     Args:
-        x, y (numpy.ndarray): ``(pairs, MAX_VERTICES)``; only the first ``n``
+        x, y (numpy.ndarray): ``(pairs, width)``, ``width`` the footprints'
+            vertex count plus ``CLIP_VERTICES``; only the first ``n``
             vertices of each row are used.
         n (numpy.ndarray): Vertices per polygon.
         along_x (bool): Clip on x (else y).
@@ -78,7 +81,8 @@ def _clip(x, y, n, along_x, bound, keep_above):
     Returns:
         tuple: ``(x, y, n)`` of the clipped polygons.
     """
-    k = np.arange(MAX_VERTICES)
+    width = x.shape[1]
+    k = np.arange(width)
     valid = k < n[:, None]
     following = (k + 1) % np.maximum(n, 1)[:, None]
     x2 = np.take_along_axis(x, following, axis=1)
@@ -97,17 +101,17 @@ def _clip(x, y, n, along_x, bound, keep_above):
     # move each row's kept vertices to its front, in order
     pair, slot = np.nonzero(keep)
     position = np.cumsum(keep, axis=1)[pair, slot] - 1
-    fits = position < MAX_VERTICES
+    fits = position < width
     x_out = np.zeros_like(x)
     y_out = np.zeros_like(y)
     x_out[pair[fits], position[fits]] = out_x[pair[fits], slot[fits]]
     y_out[pair[fits], position[fits]] = out_y[pair[fits], slot[fits]]
-    return x_out, y_out, np.minimum(keep.sum(axis=1), MAX_VERTICES)
+    return x_out, y_out, np.minimum(keep.sum(axis=1), width)
 
 
 def _polygon_area(x, y, n):
     """Shoelace area of each polygon's first ``n`` vertices."""
-    k = np.arange(MAX_VERTICES)
+    k = np.arange(x.shape[1])
     following = (k + 1) % np.maximum(n, 1)[:, None]
     cross = x * np.take_along_axis(y, following, axis=1) - np.take_along_axis(x, following, axis=1) * y
     return 0.5 * np.abs(np.where(k < n[:, None], cross, 0.0).sum(axis=1))
@@ -129,8 +133,8 @@ def _clip_to_cells(u, v, row0, col0, rows, cols, grid):
     col = col0[footprint] + offset % cols[footprint]
     # relative to the cell's first corner, so the clip works on small numbers
     corners = u.shape[1]
-    x = np.zeros((footprint.size, MAX_VERTICES))
-    y = np.zeros((footprint.size, MAX_VERTICES))
+    x = np.zeros((footprint.size, corners + CLIP_VERTICES))
+    y = np.zeros((footprint.size, corners + CLIP_VERTICES))
     x[:, :corners] = u[footprint] - col[:, None] * size
     y[:, :corners] = v[footprint] - row[:, None] * size
     n = np.full(footprint.size, corners)
@@ -146,8 +150,8 @@ def overlaps(lat, lon, grid, max_pairs=500_000):
     """The area each footprint shares with every cell it touches, in km².
 
     Args:
-        lat, lon (numpy.ndarray): ``(n, 4)`` unwrapped corners of usable
-            footprints (``unwrap``).
+        lat, lon (numpy.ndarray): ``(n, vertices)`` unwrapped corners of
+            usable footprints (``unwrap``), in order round each footprint.
         grid (utils.grids.Grid): The grid.
         max_pairs (int): Pairs clipped at once; bounds memory (config
             ``max_pairs``).

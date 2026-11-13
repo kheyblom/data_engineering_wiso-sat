@@ -110,6 +110,20 @@ def store_path(settings, layout, frequency, grid_name, variable):
                         store_name(settings, frequency, grid_name, variable))
 
 
+def l2_tag_text(settings):
+    """The L2 tag(s) a config reads at, for the stores' ``source_l2_tag``: one tag, or the exceptions too."""
+    l2 = settings['l2']
+    others = l2.get('store_tags') or {}
+    if not others:
+        return l2['tag']
+    return f'{l2["tag"]}; ' + '; '.join(f'{store}: {tag}' for store, tag in sorted(others.items()))
+
+
+def l2_tag(settings, store):
+    """The tag one L2 store is read at (``l2.store_tags`` overrides ``l2.tag``)."""
+    return (settings['l2'].get('store_tags') or {}).get(store, settings['l2']['tag'])
+
+
 def l2_store_path(settings, store):
     """Where one L2 store lives (``geolocation`` or a canonical variable)."""
     l2 = settings['l2']

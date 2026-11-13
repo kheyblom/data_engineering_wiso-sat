@@ -39,7 +39,7 @@ and an H2O column in mol m-2. The issue IDs (R1, Q2b, ...) refer to
 | D6 | Grid and frequency | 1° lat/lon, `day` only; other grids and frequencies on request | **completed 2026-11-13** |
 | D7 | Day and night in RS | C: an all-overpass set and a daytime set (`v_1.rs.daytime`, `v_1.fs.daytime`), as separate stores | **completed 2026-11-13** |
 | D8 | Products, and when to grid v2 | One gridded product per L2 product (RS, FS v1), each also as a daytime set (D7); v2 deferred | **completed 2026-11-13** (v1); v2 deferred |
-| D9 | Gridded stores and names | 32 stores per set and layout: 14 column, 12 per level (with four sums beyond 2.7), 6 surface statistics | **open: your review** |
+| D9 | Gridded stores and names | 32 stores per set and layout: 14 column, 12 per level (with four sums beyond 2.7), 6 surface statistics | **store set decided 2026-11-13**; the 25 new names in review in style_guides |
 
 ## D1. Footprint model [COMPLETED 2026-11-13]
 
@@ -526,7 +526,7 @@ options B and C below are kept for then.**
 **Your decision:** A, v1 only (RS and FS v1 as separate gridded products);
 v2 deferred (2026-11-13).
 
-## D9. Gridded stores and names [OPEN: your review]
+## D9. Gridded stores and names [9.1, 9.2 decided 2026-11-13; names in review]
 
 *Added 2026-11-13.* D2 and D4 fix what is gridded; this section turns it
 into stores, names and nomenclature rows. Nothing here is built or added to
@@ -619,7 +619,16 @@ column group (footprints with an 850-250 hPa column, as TROPOMI's),
 `observation_count_level` for the levels (footprints whose surface lies
 below the level) and `observation_count_surface` for the surface group.
 
-**Your decision:** (9.1, 9.2, 9.3, and any name you want changed)
+**Your decision (2026-11-13):** 9.1 A (the four sums added: 12 level
+stores), 9.2 A (surface statistics only: 6 stores), so 32 stores per set
+and layout, 256 in all. 9.3: the names are reviewed in style_guides: the 25
+new rows were written there uncommitted on 2026-11-13
+(`nomenclature_data.md`, the last 25 data-variable rows), to be committed
+once you have edited or approved them. The surface names put `surface`
+before the role, as `water_vapor_delta_d_850_250hpa_standard_error` does:
+`water_vapor_delta_d_surface_apriori`,
+`water_vapor_hdo_h2o_ratio_surface_averaging_kernel_log_diagonal`,
+`water_vapor_h2o_mole_fraction_dry_air_surface`, `pressure_surface`.
 
 ## After the decisions
 

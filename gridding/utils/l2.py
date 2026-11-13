@@ -1,8 +1,10 @@
 """Read one UTC day of gridding inputs from a product's finalized L2 stores.
 
 Gridding talks to L2 only through its stores (user decision 2026-11-10):
-their ``obs`` axis, granule index and attributes, at one tag. Every store is
-opened read-only at ``l2.tag``, and the snapshot that tag names is recorded
+their ``obs`` axis, granule index and attributes, at a tag. Every store is
+opened read-only at ``l2.tag``, or at its own entry in ``l2.store_tags``
+where stores of one product were finalized at different times (AIRS v1's
+four footprint stores, 2026-11-13). The snapshot the tag names is recorded
 in every gridded store, so a grid says exactly which L2 state it was built
 from (``provenance``).
 
@@ -45,6 +47,11 @@ class L2:
     def __init__(self, settings):
         self.settings = settings
         self.tag = settings['l2']['tag']
+        self.store_tags = dict(settings['l2'].get('store_tags') or {})
+
+    def tag_of(self, store):
+        """The tag one store is read at."""
+        return self.store_tags.get(store, self.tag)
 
     @functools.cache
     def repository(self, store):
@@ -55,17 +62,18 @@ class L2:
     def group(self, store):
         """The store's root group at the tag (fails plainly if the tag is absent)."""
         repository = self.repository(store)
-        if self.tag not in repository.list_tags():
-            raise RuntimeError(f'L2 store {store!r} has no tag {self.tag!r} '
+        tag = self.tag_of(store)
+        if tag not in repository.list_tags():
+            raise RuntimeError(f'L2 store {store!r} has no tag {tag!r} '
                                f'({l2_store_path(self.settings, store)})')
-        return zarr.open_group(repository.readonly_session(tag=self.tag).store, mode='r')
+        return zarr.open_group(repository.readonly_session(tag=tag).store, mode='r')
 
     def array(self, store, name=None):
         return self.group(store)[name or store]
 
     def snapshot(self, store):
         """The snapshot id the tag names in one store."""
-        return self.repository(store).lookup_tag(self.tag)
+        return self.repository(store).lookup_tag(self.tag_of(store))
 
     def provenance(self, stores):
         """``store=snapshot`` for each store read, for the gridded stores' attributes."""

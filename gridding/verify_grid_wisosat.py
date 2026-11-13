@@ -134,14 +134,14 @@ class IndependentL2:
     def group(self, store):
         if store not in self.groups:
             repository = icechunk.Repository.open(icechunk.local_filesystem_storage(config.l2_store_path(self.settings, store)))
-            self.groups[store] = zarr.open_group(repository.readonly_session(tag=self.settings['l2']['tag']).store, mode='r')
+            self.groups[store] = zarr.open_group(repository.readonly_session(tag=config.l2_tag(self.settings, store)).store, mode='r')
         return self.groups[store]
 
     def snapshots(self, stores):
         out = []
         for store in stores:
             repository = icechunk.Repository.open(icechunk.local_filesystem_storage(config.l2_store_path(self.settings, store)))
-            out.append(f'{store}={repository.lookup_tag(self.settings["l2"]["tag"])}')
+            out.append(f'{store}={repository.lookup_tag(config.l2_tag(self.settings, store))}')
         return '; '.join(out)
 
     def day(self, day, stores, keep=None):

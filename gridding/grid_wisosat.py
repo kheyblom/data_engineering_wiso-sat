@@ -161,7 +161,7 @@ def global_attrs(settings, grid, frequency, layout, snapshots, quantity):
         'gridding_quantity': f'{quantity}: {row["formula"]} ({row["kind"]})',
         'empty_cells': ('statistics are NaN, sums are 0 and observation_count is 0 where no footprint '
                         'touched the cell'),
-        'source_l2_tag': settings['l2']['tag'],
+        'source_l2_tag': config.l2_tag_text(settings),
         ATTR_SOURCE_SNAPSHOTS: snapshots,
         'source_l2_stores': settings['l2']['directory'],
     })
