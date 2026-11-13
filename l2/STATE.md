@@ -15,17 +15,14 @@ under `TMPDIR`, so **never run two fixture tests at once**.
 
 **AIRS v1 gained four footprint stores (2026-11-13, for gridding;
 `../gridding/STATE.md`, `tropess.md` "Footprint model").** RS and FS each
-get `granule_number_level_1b`, `scanline_index`, `ground_pixel_index` and
+have `granule_number_level_1b`, `scanline_index`, `ground_pixel_index` and
 `sensor_view_angle` (TROPESS `geolocation/airs_*`, as published; names
-approved by the user, two new rows in style_guides): 23 stores per product.
-Config, key and fixtures done; the AIRS and CrIS fixtures pass (222 cases,
-0 failures; the six products that do not read the TROPESS key were not
-re-run, no shared code changed). Build and verify jobs approved by the user
-and submitted 2026-11-13 (develop, 8 cores, 32 GB; see the run log in
-TESTING.md once they finish). **Then:** `--phases structure,index` over
-every store, `finalize --attrs` on the four new stores, and `--tag
-v1-verified-20261113` on all 23 of each stream (gridding reads every L2
-store at one tag), each `--apply` signed off by the user.
+approved by the user, two new rows in style_guides `9fd51ca`): 23 stores per
+product, all finalized. Built, verified on every observation and finalized
+the same day (TESTING.md, "AIRS v1 footprint stores run log"). **The new
+tag `v1-verified-20261113` is on the 8 new stores only** (user decision):
+the 19 older stores of each stream keep `v1-verified-20261023`. Nothing is
+running; no batch job is queued.
 
 **Paused task: TES (user, 2026-10-28).** No TES job is queued. Decisions T1-T12 are laid out in `../docs/products/tes.md`
 ("Decisions for the user"), from probes of three files and the upstream
@@ -46,7 +43,7 @@ first).
 | GOSAT | 12 | `v3.0.1-verified-20261019` | `gosat/l2/` | 8,856,028 |
 | GOSAT-2 | 12 | `v3.0.1-verified-20261022` | `gosat2/l2/` | 1,620,006 |
 | SCIAMACHY | 22 | `v8.1-verified-20261022` | `sciamachy/l2/` (87.5 GiB) | 78,666,297 |
-| AIRS v1 RS, FS | 19 + 19 (+ 4 + 4 footprint stores, 2026-11-13, not yet finalized) | `v1-verified-20261023` | `airs/l2/` | 17,109,546; 47,882,856 |
+| AIRS v1 RS, FS | 19 + 19, and 4 + 4 footprint stores | `v1-verified-20261023` (the 19); `v1-verified-20261113` (the 4) | `airs/l2/` | 17,109,546; 47,882,856 |
 | CrIS v1 SNPP RS, SNPP FS, JPSS1 FS | 12 + 19 + 19 | `v1-verified-20261026` | `cris_snpp/l2/`, `cris_jpss1/l2/` | 2,597,674; 2,858,343; 47,391,889 |
 | AIRS v2, CrIS-JPSS1 v2 (Full) | 22 + 22 | `v2-verified-20261028` | `airs/l2/`, `cris_jpss1/l2/` (4.1 GB, 22 GB) | 1,028,658; 4,676,513 |
 

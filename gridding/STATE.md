@@ -117,12 +117,30 @@ sensor without the user's approval.
         needs each row's AIRS day (the L2 granule = file, from the granule
         index), since a UTC day holds rows of two files; decide what a file
         with too few targets for a fit does.
-     2. **`l2/`: the four geometry stores** for RS and FS v1 (nomenclature
-        rows first, user review), verified, new tag. An `l2/` task: read
-        `../l2/STATE.md` and `../l2/CLAUDE.md` first.
-     3. Method doc (vertical product, column operator, per-level sums,
-        `airs_fov` footprint), nomenclature rows, engine changes (the
-        table in the decisions file), AIRS fixture, bench, production.
+     2. ~~`l2/`: the four geometry stores for RS and FS v1.~~ Done
+        2026-11-13: `granule_number_level_1b`, `scanline_index`,
+        `ground_pixel_index`, `sensor_view_angle`, built, verified and
+        finalized (`../l2/TESTING.md`). **Their tag is
+        `v1-verified-20261113`; the other 19 stores of each stream keep
+        `v1-verified-20261023` (user decision): the engine must read L2 at
+        a tag per store** (`l2.tag` plus per-store overrides; today
+        `utils/l2.py` takes one tag).
+     3. **Waiting on the user: D9** in `../airs-gridding-decisions.md`
+        (the gridded store set and names: 9.1 the four sums beyond 2.7,
+        9.2 the surface group, 9.3 the counts' names). Then the
+        nomenclature rows (shown before the style_guides commit), the
+        method doc (vertical product, column operator, per-level sums,
+        `airs_fov` footprint), the engine changes (the table in the
+        decisions file), the AIRS fixture, bench, production.
+        **Engine pieces already written and checked, not yet called by
+        the pipeline:** `utils/columns.py` (the column operator; q and HDO
+        linear in ln p, user decision 2026-11-13; exact to 1e-5 ‰ against
+        a fine-grid integral) and `utils/airs_fov.py` (the footprint
+        model; reproduces the validated prototype to 1e-12°). Still to
+        settle in the port: what an AIRS day with too few targets for a
+        phase fit does (RS has 4 days under 50 obs: 2014-12-13 has 10);
+        proposed: take the phase from the nearest fitted day, scans being
+        continuous across days (`airs_fov.phase(days_ahead=...)`).
    - **CrIS (TROPESS):** as AIRS, once AIRS is built; SNPP RS and FS
      overlap 2021-02..05 (R26), so gridding both double counts.
    - **IASI, TES:** not built in L2 yet.

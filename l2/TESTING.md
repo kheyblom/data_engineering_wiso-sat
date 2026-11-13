@@ -1211,6 +1211,37 @@ estimated.
   `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/`. The kernel is
   ~75% of each.
 
+### AIRS v1 footprint stores run log (2026-11-13)
+
+Four stores added to each of RS and FS for the gridding footprint model
+(`tropess.md`, "Footprint model"): `granule_number_level_1b`,
+`scanline_index`, `ground_pixel_index`, `sensor_view_angle`
+(`geolocation/airs_*`, as published). The 19 existing stores of each
+stream were complete, so the build read only the new sources. Develop, 8
+cores, 32 GB, from `1b9a810`; ~1.4 core-hours in all, against ~2 estimated.
+
+| job | what | wall | result |
+| --- | --- | --- | --- |
+| 8180147 | RS build, 4 stores, 13 commits | 3 min 25 s | 6,363 days, 17,109,546 obs |
+| 8180148 | RS verify, `--stores` the four | ~3 min 40 s | **232 checks, 0 failures** |
+| 8180149 | FS build, 4 stores, 37 commits | 2 min 26 s | 1,820 days, 47,882,856 obs |
+| 8180150 | FS verify, `--stores` the four | 1 min 6 s | **232 checks, 0 failures** |
+
+- **No audit was run for them:** the 2026-10-23 audit already scanned every
+  dataset of every file: the four fields are in every layout of both file
+  types and never hold fill. The three indices are int32 or int16 by
+  version (R16), stored int32 (`source_dtypes`).
+- **Fixture test before the build:** the five fixtures that read the
+  TROPESS key (AIRS RS, FS; CrIS SNPP RS, SNPP FS, JPSS1 FS): 222 cases, 0
+  failures. The other six products were not re-run (no shared code changed).
+- **Finalized 2026-11-13** (each `--apply` signed off by the user):
+  `--attrs` on the 8 new stores, then `--tag v1-verified-20261113` **on
+  those 8 only** (user decision: the 19 existing stores of each stream keep
+  `v1-verified-20261023` alone, so gridding reads AIRS v1 at a tag per
+  store). `--gc` dry run: nothing to collect. `--phases structure,index`
+  over all 23 stores of each stream, before and after: 821 checks, 0
+  failures. Sizes: RS 93 MB, FS 490 MB for the four.
+
 ### CrIS v1 run log (2026-10-26)
 
 The three CrIS v1 products, each built and verified on develop (8 cores, 32

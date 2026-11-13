@@ -624,7 +624,7 @@ below the level) and `observation_count_surface` for the surface group.
 ## After the decisions
 
 **With D2 agreed and the other recommendations as they stand, the engine
-needs eight changes.** A rerun of the TROPOMI fixture must give the same
+needs nine changes.** A rerun of the TROPOMI fixture must give the same
 result as before, as the regression check. CrIS shares the TROPESS format,
 so it should then need only a config. Its one extra decision is the SNPP
 RS/FS overlap (R26).
@@ -639,6 +639,7 @@ RS/FS overlap (R26).
 | Gridded names taken from each quantity, and new rows: D2b, per-level δD and H2O, the a priori, the kernel diagonal, companion H2O | D2 (2.3), D4 | `nomenclature-key_grid.md`, `utils/nomenclature.py`, `nomenclature_data.md` (your review) |
 | TROPESS quality levels `summary` and `summary_daytime`; configs for the four store sets (`v_1.rs`, `v_1.rs.daytime`, `v_1.fs`, `v_1.fs.daytime`) | D5, D7 | `products/tropess.py`, the verifier's `SELECTIONS`, `config/airs_*/` |
 | An AIRS fixture in the test | all | `validation/stage_fixture.py`, `validation/test_pipeline.py` |
+| L2 read at a tag per store (the four footprint stores carry `v1-verified-20261113`, the rest `v1-verified-20261023`) | the L2 tag decision, 2026-11-13 | `utils/l2.py`, `utils/config.py`, the verifier |
 
 **Order of work**
 
@@ -646,8 +647,11 @@ RS/FS overlap (R26).
 2. ~~D1 prototype and validation: the polygon code against a handful of L1B
    granules (1.6), the download shown to you first.~~ Done 2026-11-13 (the
    1.6 result in D1; 1.4 revised to the height from the orbit phase).
-3. In `l2/`: the four AIRS geometry stores (1.7) for RS and FS v1, with
-   their nomenclature rows, verified, and a new tag.
+3. ~~In `l2/`: the four AIRS geometry stores (1.7) for RS and FS v1, with
+   their nomenclature rows, verified, and a new tag.~~ Done 2026-11-13:
+   `granule_number_level_1b`, `scanline_index`, `ground_pixel_index`,
+   `sensor_view_angle`; tag `v1-verified-20261113` on those four only (user
+   decision), so gridding reads L2 at a tag per store.
 4. ~~Write "Gridding inputs" in `docs/products/tropess.md`~~ (done
    2026-11-13). Add the vertical product, the column operator, the
    per-level sums and the `airs_fov` footprint to
