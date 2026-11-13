@@ -8,8 +8,10 @@ Read this first in a new session. Update it whenever work lands.
   with the user). The decisions, evidence and order of work are in
   [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md) (D1-D8,
   all completed); the result is in `../docs/products/tropess.md`, "Gridding
-  inputs, AIRS v1" (and R47), and in `CLAUDE.md`, "AIRS v1 decisions". The
-  method doc gained "Sensors without a standard error" (Section 7). The
+  inputs, AIRS v1" (and R47); summary in "AIRS v1 decisions" below. The
+  method doc gained "Sensors without a standard error" (Section 7), and
+  `CLAUDE.md` the two rules from this work that hold for every sensor
+  (derived inputs computed here; no valid σ, no standard error). The
   scripts behind the numbers are in `tools/survey/` (`airs_*.py`,
   `tropess_column_air.py`). That file replaced a Claude Docs doc
   ("AIRS gridding: decisions"), which is superseded.
@@ -47,6 +49,40 @@ Read this first in a new session. Update it whenever work lands.
   The pipeline reproduces the drafting code on a full production day to
   1e-9 (TESTING.md).
 - **The method doc** has its store table (Section 10) and the weight in mol.
+
+## AIRS v1 decisions (user, 2026-11-13; not built yet)
+
+Kept here while AIRS is in progress; once built, what users need goes
+into the docs (`tropess.md`, the method doc) and this section is cut.
+
+D1-D8 in [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md)
+(evidence, options, order of work); the result is in `../docs/products/tropess.md`,
+"Gridding inputs, AIRS v1". They extend the engine; none applies to another
+sensor without the user's approval.
+
+- **Scope:** v1 only (RS and FS as separate products); v2 later.
+- **Footprint (D1):** the 1.1° FOV projected from 705.3 km onto WGS84 as a
+  32-vertex polygon, built here (model `airs_fov`) from four published
+  geometry fields added to L2 (`airs_granule`, `airs_atrack`,
+  `airs_xtrack`, `airs_view_ang`); validated once against a few L1B
+  granules (download shown to the user first). `MAX_VERTICES` follows the
+  vertex count.
+- **δD (D2):** computed here from the 17-level profiles, never TROPESS's
+  `dd_col_p`: per level (a level dimension, the surface level its own field)
+  and as the H2O-weighted 850-250 hPa partial column
+  (`water_vapor_column_delta_d_850_250hpa`, a new row); q and R linear in ln p,
+  exact cuts at 850, 250 hPa and the surface; δD with 3.11e-4.
+- **No σ (D3):** no standard error and no σ sums (`CLAUDE.md`; method
+  Section 7).
+- **Weight (D4):** overlap area × the layer's H2O partial column (mol),
+  g = 9.80665 and dry-air M; companion H2O statistics.
+- **Selection (D5):** `summary`: DOF > 1.1 (strict, float32), or DOF missing
+  and `dd_col_p` written. No cloud limit.
+- **Grid (D6):** 1° lat/lon (`latlon_1p0x1p0`), `day`; more on request.
+- **Store sets (D7):** every overpass and daytime only (`day_night_flag ==
+  1`, quality level `summary_daytime`), for RS and FS. **Approved exception,
+  for the AIRS v1 gridded stores only:** the set goes in the version slot,
+  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`.
 
 ## Next
 

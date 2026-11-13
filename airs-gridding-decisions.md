@@ -8,7 +8,8 @@ Each section gives the facts, the options and a recommendation, and ends
 with a **Your decision** line. Edit that line, or add `#@CLAUDE` comments
 in place, and tell me in chat. Once a decision is agreed, it is recorded in
 `docs/products/tropess.md` (a new "Gridding inputs" section) and in
-`gridding/CLAUDE.md`.
+`gridding/STATE.md` ("AIRS v1 decisions"). Only rules that hold for every
+sensor go into `gridding/CLAUDE.md`.
 
 **Where things stand.** Three AIRS L2 products are finalized under
 `zarr/airs/l2/`:
@@ -518,10 +519,11 @@ RS/FS overlap (R26).
    granules (1.6), the download shown to you first.
 3. In `l2/`: the four AIRS geometry stores (1.7) for RS and FS v1, with
    their nomenclature rows, verified, and a new tag.
-4. Write "Gridding inputs" in `docs/products/tropess.md`. Add the vertical
-   product, the column operator and the per-level sums to
-   `docs/technical/gridding-method.md`. Record the user decisions in
-   `gridding/CLAUDE.md`.
+4. ~~Write "Gridding inputs" in `docs/products/tropess.md`~~ (done
+   2026-11-13). Add the vertical product, the column operator, the
+   per-level sums and the `airs_fov` footprint to
+   `docs/technical/gridding-method.md`. The AIRS decisions are in
+   `gridding/STATE.md`; cut them there once the docs carry them.
 5. Nomenclature rows in style_guides, shown to you before the commit.
 6. Engine changes and the fixture test, committed from a clean tree.
 7. A one-month bench each for RS and FS v1, with the job shown to you first.
