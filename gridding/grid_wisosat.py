@@ -10,8 +10,14 @@ every grid that still needs it; its sums go into the open period of each
 frequency, and a period's statistics are formed only when it closes
 (gridding-method.md, Section 8: sums add over days, statistics do not).
 
-Writes are append commits of ``periods_per_commit`` periods to each of the
-17 stores of a (grid, frequency), one icechunk repository per variable
+Two methods, by the config's ``method``: ``column`` (the default; δD, σ and
+the H2O column are L2 variables, the footprint the L2 corners: TROPOMI) and
+``profile`` (they are derived here from L2 profiles, per column, per level
+and at the surface, and the footprint is drawn by a model: AIRS). The
+config's gridding key (``quantity_key``) lists the stores each builds.
+
+Writes are append commits of ``periods_per_commit`` periods to each store
+of a (grid, frequency), one icechunk repository per variable
 (``utils/stores.py``). A build resumes: each store's stored ``time_bounds``
 must be a prefix of the periods the config implies, all 17 stores of a
 (grid, frequency) must agree, and the pass restarts at the earliest period
@@ -34,12 +40,15 @@ import time
 
 import numpy as np
 
-from utils import config, footprints, l2 as l2_utils, nomenclature, periods, stores, sums
+from utils import config, footprints, l2 as l2_utils, nomenclature, periods, profiles, stores, sums
 from utils.config import GEOLOCATION
 from utils.grids import from_spec
 
 LOG = logging.getLogger('grid_wisosat')
 ATTR_SOURCE_SNAPSHOTS = 'source_l2_snapshots'
+METHODS = ('column', 'profile')
+# the L2 fields each footprint model draws a polygon from (the config's ``footprint`` block)
+FOOTPRINT_FIELDS = {'corners': (), 'airs_fov': ('granule', 'scanline', 'pixel', 'view_angle')}
 
 
 def parse_args():
@@ -54,18 +63,34 @@ Target = collections.namedtuple('Target', 'grid frequency bounds paths')
 
 
 def l2_stores(settings, product):
-    """Every L2 store a build reads: geolocation, the inputs, the selection and the thresholds."""
+    """Every L2 store a build reads: geolocation, the inputs, the footprint fields, the selection, the thresholds."""
     inputs = [store for name, store in settings['inputs'].items() if name != 'footprint']
     selection = settings['selection']
-    names = [GEOLOCATION, *inputs, *product.selection_stores(selection), *(selection.get('thresholds') or {})]
+    names = [GEOLOCATION, *inputs, *l2_utils.footprint_stores(settings), *product.selection_stores(selection),
+             *(selection.get('thresholds') or {})]
     return list(dict.fromkeys(names))
 
 
 def check_inputs(settings, l2, product):
-    """The footprint model is one this product supports, and each input carries the key's units."""
+    """The method, key and footprint model agree, and each input carries the key's units."""
+    method = settings.get('method', 'column')
+    if method not in METHODS:
+        raise ValueError(f'method must be one of {METHODS}, got {method!r}')
+    if nomenclature.has_levels() != (method == 'profile'):
+        raise ValueError(f'method {method!r} does not match the gridding key {nomenclature.key_path().name}: '
+                         f'only the profile method grids a level group')
+    if method == 'profile':
+        missing = [key for key in ('ratio_standard', 'column', 'levels') if key not in (settings.get('profile') or {})]
+        if missing:
+            raise ValueError(f'the profile method needs profile.{missing}')
     model = settings['inputs'].get('footprint')
-    if model not in getattr(product, 'FOOTPRINT_MODELS', ()):
+    if model not in getattr(product, 'FOOTPRINT_MODELS', ()) or model not in FOOTPRINT_FIELDS:
         raise ValueError(f'footprint model {model!r} is not supported for {settings["product"]}')
+    if set(settings.get('footprint') or {}) != set(FOOTPRINT_FIELDS[model]):
+        raise ValueError(f'footprint model {model!r} needs the config\'s footprint block to name exactly '
+                         f'{FOOTPRINT_FIELDS[model]}')
+    if (method == 'profile') != (model == 'airs_fov'):
+        raise ValueError(f'method {method!r} with footprint model {model!r} is not built')
     for name, units in nomenclature.input_units().items():
         store = settings['inputs'].get(name)
         if store is None:
@@ -133,13 +158,14 @@ def global_attrs(settings, grid, frequency, layout, snapshots, quantity):
     """A store's global attributes at build time (finalize adds history, verification, coverage)."""
     row = nomenclature.quantities()[quantity]
     fields = {
-        'product': settings['product'], 'version': config.version_token(settings),
+        'product': settings['product'], 'version': config.gridded_version_token(settings),
         'version_label': str(settings['version']), 'frequency': frequency, 'grid_name': grid.name,
         'variable': row['canonical_name'], 'long_name': nomenclature.authority_attrs(settings, quantity)['long_name'],
         'frequency_long_name': nomenclature.frequency_long_name(settings, frequency),
     }
     attrs = {key: str(value).format(**fields).strip() for key, value in settings['attrs'].items()}
-    chunks = stores.layout_chunks(settings, grid, layout)
+    chunks = stores.store_chunks(settings, grid, quantity, layout)
+    chunk_dims = '(time, level, rows, cols)' if stores.has_level(quantity) else '(time, rows, cols)'
     other = 'temporal' if layout == 'spatial' else 'spatial'
     attrs.update({
         'cdm_data_type': 'Grid',
@@ -152,11 +178,11 @@ def global_attrs(settings, grid, frequency, layout, snapshots, quantity):
         'grid': _grid_description(grid),
         'geospatial_lat_min': float(grid.lat_edges.min()), 'geospatial_lat_max': float(grid.lat_edges.max()),
         'geospatial_lon_min': -180.0, 'geospatial_lon_max': 180.0,
-        'layout': (f'{layout}: chunks (time, rows, cols) = {chunks}' if layout == 'spatial' else
+        'layout': (f'{layout}: chunks {chunk_dims} = {chunks}' if layout == 'spatial' else
                    f'{layout}: the whole record in each chunk of a tile of cells'),
         'related_store': config.store_path(settings, other, frequency, grid.name, row['canonical_name']),
         'gridding_method': 'docs/technical/gridding-method.md (data_engineering_wiso-sat)',
-        'gridding_inputs': '; '.join(f'{name}: {value}' for name, value in settings['inputs'].items()),
+        'gridding_inputs': _inputs_text(settings),
         'gridding_selection': _selection_text(settings),
         'gridding_quantity': f'{quantity}: {row["formula"]} ({row["kind"]})',
         'empty_cells': ('statistics are NaN, sums are 0 and observation_count is 0 where no footprint '
@@ -166,6 +192,21 @@ def global_attrs(settings, grid, frequency, layout, snapshots, quantity):
         'source_l2_stores': settings['l2']['directory'],
     })
     return attrs
+
+
+def _inputs_text(settings):
+    """The inputs, and for the profile method what is derived from them and how."""
+    parts = [f'{name}: {value}' for name, value in settings['inputs'].items()]
+    parts += [f'footprint {name}: {store}' for name, store in (settings.get('footprint') or {}).items()]
+    text = '; '.join(parts)
+    spec = settings.get('profile')
+    if not spec:
+        return text
+    return (f'{text}. Derived in gridding from the profiles (L2 holds only published values): delta D against '
+            f'the standard ratio {spec["ratio_standard"]:g}; the column between {spec["column"]["bottom"]:g} and '
+            f'{spec["column"]["top"]:g} Pa (or the surface where it is higher) with H2O and HDO each linear in '
+            f'ln p and exact cuts; H2O partial columns as the integral of the dry-air mole fraction over pressure '
+            f'with g = 9.80665 m s-2 and a dry-air molar mass of 28.9644 g mol-1')
 
 
 def _grid_description(grid):
@@ -201,6 +242,8 @@ def _init_worker(config_path):
     settings = config.load_config(config_path)
     _WORKER.update(settings=settings, l2=l2_utils.L2(settings), product=config.source_module(settings),
                    grids={from_spec(spec).name: from_spec(spec) for spec in settings['grids']})
+    if settings['inputs'].get('footprint') == 'airs_fov':
+        _WORKER['phases'] = l2_utils.AirsPhases(_WORKER['l2'], settings['footprint'])
 
 
 def grid_day(day, grid_names):
@@ -208,9 +251,12 @@ def grid_day(day, grid_names):
 
     Returns:
         tuple: ``(day, results, counts)``; ``results`` maps grid name ->
-            ``(cells, count, sums)`` from ``sums.day_sums``.
+            ``(cells, count, sums)`` from ``sums.day_sums``, and for the
+            profile method ``sums.profile_sums`` as a fourth item.
     """
     settings, l2 = _WORKER['settings'], _WORKER['l2']
+    if settings.get('method', 'column') == 'profile':
+        return _grid_profile_day(day, grid_names)
     values, counts = l2_utils.read_day(l2, day, settings, _WORKER['product'])
     lat, lon, usable = footprints.unwrap(values['lat_corners'], values['lon_corners'])
     counts['not_griddable'] = int((~usable).sum())
@@ -227,6 +273,36 @@ def grid_day(day, grid_names):
     return day, results, counts
 
 
+def _grid_profile_day(day, grid_names):
+    """``grid_day`` for the profile method.
+
+    A retrieval is gridded only if it has the config's column (a δD and an
+    H2O partial column between the two pressures): one without is counted
+    as missing an input and enters no group, so the three groups describe
+    the same retrievals. Within a gridded retrieval, a level or the surface
+    counts where its own values are all written.
+    """
+    settings, l2 = _WORKER['settings'], _WORKER['l2']
+    values, counts = l2_utils.read_profile_day(l2, day, settings, _WORKER['product'], _WORKER['phases'])
+    derived = profiles.derive(values, settings['profile'])
+    has_column = np.isfinite(derived['delta_d']) & np.isfinite(derived['h2o'])
+    counts['missing_input'] = int((~has_column).sum())
+    lat, lon, usable = footprints.unwrap(values['lat_corners'], values['lon_corners'])
+    counts['not_griddable'] = int((has_column & ~usable).sum())
+    keep = has_column & usable
+    lat, lon = lat[keep], lon[keep]
+    derived = {name: array[keep] for name, array in derived.items()}
+    area = footprints.footprint_area_km2(lat, lon)
+    counts['gridded'] = int(keep.sum())
+    results = {}
+    for name in grid_names:
+        grid = _WORKER['grids'][name]
+        footprint, cell, km2 = footprints.overlaps(lat, lon, grid, int(settings.get('max_pairs', 500_000)))
+        column = sums.day_sums(footprint, cell, km2, derived['delta_d'], None, derived['h2o'], area)
+        results[name] = (*column, sums.profile_sums(footprint, cell, km2, derived, grid.n_cells))
+    return day, results, counts
+
+
 # ------------------------------------------------------------------ the pass
 
 class Writer:
@@ -235,7 +311,8 @@ class Writer:
     def __init__(self, settings, target, done, snapshots, revision):
         self.settings, self.target, self.revision = settings, target, revision
         self.k = done
-        self.accumulator = sums.Accumulator(target.grid.n_cells) if done < len(target.bounds) else None
+        n_levels = len(settings['profile']['levels']) if nomenclature.has_levels() else 0
+        self.accumulator = sums.Accumulator(target.grid.n_cells, n_levels) if done < len(target.bounds) else None
         self.buffer = []
         self.attrs = {quantity: global_attrs(settings, target.grid, target.frequency, 'spatial', snapshots, quantity)
                       for quantity in target.paths}
@@ -267,10 +344,9 @@ class Writer:
     def _close(self):
         acc = self.accumulator
         shape = self.target.grid.shape
-        stats = sums.statistics(acc.count, acc.sums, self.area)
-        fields = {name: values.reshape(shape) for name, values in zip(sums.sum_names(), acc.sums.copy())}
-        fields.update({name: values.reshape(shape).astype(nomenclature.quantities()[name]['dtype'])
-                       for name, values in stats.items()})
+        # (cells,) or (levels, cells) -> (..., rows, cols), in each store's dtype
+        fields = {name: values.reshape(*values.shape[:-1], *shape).astype(nomenclature.quantities()[name]['dtype'])
+                  for name, values in sums.fields(acc, self.area).items()}
         occupied = int((acc.count > 0).sum())
         start, end = self.target.bounds[self.k]
         LOG.info(f'{self.target.grid.name} {self.target.frequency} period {periods.day_date(start)}..'

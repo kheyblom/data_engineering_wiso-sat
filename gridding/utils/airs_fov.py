@@ -36,6 +36,17 @@ polygon areas 0.997-1.011 of those drawn from L1B's satellite position.
 Left out: the beam's true shape, terrain height, and the satellite's motion
 during one scan line (a 0.5 degree skew).
 
+**Days with too few targets.** A fit is sound only if the day's targets
+span at least half the day's scans (``MIN_SPAN``), number at least
+``MIN_TARGETS`` and lie within ``MAX_RESIDUAL`` of the fitted orbit.
+Otherwise the phase rate is poorly set and with it the height: RS
+2014-12-13 has 10 targets within 134 scans, and its own fit puts the orbit
+25 km too low. Such a day takes the fit of the nearest sound day, at most
+``MAX_CARRY_DAYS`` away, carried over by the scan count, which runs on
+without a break across days (``phase(days_ahead=...)``). Measured on RS
+(2026-11-13): a sound day's own phase and the one carried from the day
+before agree to 0.03 degrees, from five days before to 0.15.
+
 The verifier has its own version of this model (pyproj); the two share only
 the constants below.
 """
@@ -60,6 +71,13 @@ RADIUS_AT_K0 = 7082.8
 ECCENTRICITY = 0.0014
 # height (km) the phase is fitted at; the fit moves by under 0.01 degrees over the real range
 FIT_HEIGHT = 705.3
+# a day's own fit is used only if its targets span this many scans, number this many,
+# and lie within this many degrees of latitude of the fitted orbit
+MIN_SPAN = SCANS_PER_DAY // 2
+MIN_TARGETS = 50
+MAX_RESIDUAL = 1.0
+# how far (days) a fit may be carried to a day without a sound one
+MAX_CARRY_DAYS = 30
 
 
 def ecef(lat, lon, height=0.0):
@@ -160,6 +178,12 @@ def fit_phase(n, lat, scan):
     return {'u0': float(u0), 'k': float(k), 'n_mid': float(n_mid),
             'residual': float(np.degrees(np.abs(residual(u0, k)).max())), 'targets': int(n.size),
             'span': float(n.max() - n.min())}
+
+
+def is_sound(fit):
+    """Whether a day's own fit sets its phase and phase rate well enough to use."""
+    return (fit is not None and fit['targets'] >= MIN_TARGETS and fit['span'] >= MIN_SPAN
+            and fit['residual'] <= MAX_RESIDUAL)
 
 
 def phase(fit, n, days_ahead=0):

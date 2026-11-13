@@ -1,9 +1,13 @@
 """Parse the gridding key and check it against the authoritative nomenclature.
 
 Two markdown files, both machine read:
-- ``nomenclature-key_grid.md`` (this folder): each gridded quantity's
-  canonical name, units, kind (sum or statistic) and dtype; the units each
-  input must carry; and the frequency tokens;
+- the gridding key (this folder): each gridded quantity's canonical name,
+  units, kind (sum or statistic), dtype and, where a method grids more than
+  one group of stores, its group (``column``, ``level`` or ``surface``);
+  the units each input must carry; and the frequency tokens. A config names
+  its key (``quantity_key``); the default is ``nomenclature-key_grid.md``,
+  the column method's (TROPOMI). ``use(settings)`` selects it: one config,
+  one key, per process;
 - ``nomenclature_data.md`` (the style guide's key, path in config): the
   rows those names must match exactly.
 
@@ -15,7 +19,23 @@ from pathlib import Path
 
 from utils.config import GRIDDING_ROOT
 
-KEY_PATH = GRIDDING_ROOT / 'nomenclature-key_grid.md'
+DEFAULT_KEY = 'nomenclature-key_grid.md'
+_ACTIVE = {'path': GRIDDING_ROOT / DEFAULT_KEY}
+GROUPS = ('column', 'level', 'surface')
+
+
+def use(settings):
+    """Select the config's gridding key (``quantity_key``) for this process."""
+    path = GRIDDING_ROOT / settings.get('quantity_key', DEFAULT_KEY)
+    if path != _ACTIVE['path']:
+        _ACTIVE['path'] = path
+        quantities.cache_clear()
+        input_units.cache_clear()
+
+
+def key_path():
+    """The gridding key in use."""
+    return _ACTIVE['path']
 
 
 def _tables(path):
@@ -43,19 +63,32 @@ def _tables(path):
 
 @functools.cache
 def quantities():
-    """The Quantity Key: quantity -> dict (canonical_name, canonical_units, kind, dtype, formula), in key order."""
-    return {row['quantity']: row for row in _tables(KEY_PATH)['Quantity Key']}
+    """The Quantity Key: quantity -> dict (canonical_name, canonical_units, kind, dtype, group, formula), in key order.
+
+    ``group`` is 'column' where the key has no such column.
+    """
+    rows = {row['quantity']: {'group': 'column', **row} for row in _tables(key_path())['Quantity Key']}
+    unknown = sorted({row['group'] for row in rows.values()} - set(GROUPS))
+    if unknown:
+        raise ValueError(f'{key_path().name}: unknown group(s) {unknown}; expected {GROUPS}')
+    return rows
 
 
-def quantity_names(kind=None):
-    """Quantity names in key order, optionally only 'sum' or 'statistic'."""
-    return [name for name, row in quantities().items() if kind is None or row['kind'] == kind]
+def quantity_names(kind=None, group=None):
+    """Quantity names in key order, optionally only one kind ('sum', 'statistic') or group."""
+    return [name for name, row in quantities().items()
+            if (kind is None or row['kind'] == kind) and (group is None or row['group'] == group)]
+
+
+def has_levels():
+    """Whether the key holds quantities on a vertical level dimension."""
+    return bool(quantity_names(group='level'))
 
 
 @functools.cache
 def input_units():
     """The Input Key: input -> the units its L2 variable must carry."""
-    return {row['input']: row['canonical_units'] for row in _tables(KEY_PATH)['Input Key']}
+    return {row['input']: row['canonical_units'] for row in _tables(key_path())['Input Key']}
 
 
 @functools.cache
@@ -98,11 +131,11 @@ def check(settings, frequencies):
         elif entry['canonical_units'] != row['canonical_units']:
             problems.append(f'{name}: key units {row["canonical_units"]!r}, nomenclature '
                             f'{entry["canonical_units"]!r}')
-    key_frequencies = {row['frequency'] for row in _tables(KEY_PATH)['Temporal Frequency Key']}
+    key_frequencies = {row['frequency'] for row in _tables(key_path())['Temporal Frequency Key']}
     for frequency in frequencies:
         if frequency not in known:
             problems.append(f'frequency {frequency!r}: no row in the Temporal Frequency Key')
         if frequency not in key_frequencies:
-            problems.append(f'frequency {frequency!r}: not in nomenclature-key_grid.md')
+            problems.append(f'frequency {frequency!r}: not in {key_path().name}')
     if problems:
         raise ValueError('nomenclature check failed:\n  ' + '\n  '.join(problems))

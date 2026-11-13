@@ -15,7 +15,10 @@ Coordinates: ``time`` is each period's first day, int64 days since
 1900-01-01 (proleptic_gregorian), with ``time_bounds`` giving its end;
 rows run north to south. Lat/lon grids are (time, lat, lon); EASE grids are
 (time, y, x) in EPSG:6933 metres, with 1-D ``lat(y)`` and ``lon(x)``
-(separable). Both carry cell edges and ``cell_area`` (km², per row).
+(separable). Both carry cell edges and ``cell_area`` (km², per row). A
+quantity of the key's ``level`` group has a ``level`` dimension after time,
+(time, level, lat, lon), with the config's fixed pressures
+(``profile.levels``, Pa) as its coordinate.
 
 Empty cells: statistics are NaN, the sums are 0 (a sum over no footprints;
 it adds over days as it should) and ``observation_count`` is 0.
@@ -87,6 +90,25 @@ def _area_comment(grid):
     return 'on a sphere of radius 6371 km: R^2 * resolution (rad) * (sin(north) - sin(south))'
 
 
+def has_level(quantity):
+    """Whether a quantity's store has the ``level`` dimension."""
+    return nomenclature.quantities()[quantity]['group'] == 'level'
+
+
+def store_dims(grid, quantity):
+    """A store's dimension names, in order."""
+    return ('time', *(('level',) if has_level(quantity) else ()), *dims(grid))
+
+
+def level_coord(settings):
+    """The ``level`` coordinate: the config's fixed pressure levels, surface first."""
+    return xr.Variable('level', np.asarray(settings['profile']['levels'], dtype='float64'), {
+        'long_name': 'air pressure of the vertical level', 'units': 'Pa', 'positive': 'down',
+        'comment': ('the fixed pressure levels of the retrieval grid, surface first; a retrieval counts at a '
+                    'level only where the level lies above its surface level'),
+    })
+
+
 def time_variables(bounds):
     """``time`` (period start) and ``time_bounds`` (start, exclusive end) from day numbers."""
     start = periods.EPOCH + bounds[:, 0].astype('timedelta64[D]')
@@ -106,7 +128,8 @@ def dataset(settings, grid, quantity, data, bounds, attrs, static=True):
         settings (dict): The config.
         grid (utils.grids.Grid): The grid.
         quantity (str): The key's quantity ('delta_d').
-        data (numpy.ndarray): ``(periods, rows, cols)``.
+        data (numpy.ndarray): ``(periods, rows, cols)``, or ``(periods,
+            levels, rows, cols)`` for a quantity of the level group.
         bounds (numpy.ndarray): ``(periods, 2)`` day numbers.
         attrs (dict): The store's global attributes.
         static (bool): Include the non-time coordinates (first write only:
@@ -124,7 +147,9 @@ def dataset(settings, grid, quantity, data, bounds, attrs, static=True):
     coords = time_variables(bounds)
     if static:
         coords.update(grid_coords(grid))
-    data_vars = {name: xr.Variable(('time', *dims(grid)), data.astype(row['dtype']), variable_attrs)}
+        if has_level(quantity):
+            coords['level'] = level_coord(settings)
+    data_vars = {name: xr.Variable(store_dims(grid, quantity), data.astype(row['dtype']), variable_attrs)}
     if 'time_bounds' in coords:
         data_vars['time_bounds'] = coords.pop('time_bounds')
     return xr.Dataset(data_vars, coords=coords, attrs=attrs)
@@ -138,7 +163,7 @@ def encoding(settings, grid, quantity, layout, n_time=None):
         n_time (int | None): The full time length (temporal chunks hold it all).
     """
     row = nomenclature.quantities()[quantity]
-    chunks = layout_chunks(settings, grid, layout, n_time)
+    chunks = store_chunks(settings, grid, quantity, layout, n_time)
     fill = None if np.issubdtype(np.dtype(row['dtype']), np.integer) else np.nan
     # time and time_bounds: the whole axis in the temporal layout; in the spatial one, chunks
     # of chunks.spatial.time_coordinate periods (a year of days by default), so the
@@ -150,6 +175,23 @@ def encoding(settings, grid, quantity, layout, n_time=None):
         'time': {'units': TIME_UNITS, 'calendar': CALENDAR, 'dtype': 'int64', 'chunks': (time_chunk,)},
         'time_bounds': {'units': TIME_UNITS, 'calendar': CALENDAR, 'dtype': 'int64', 'chunks': (time_chunk, 2)},
     }
+
+
+def store_chunks(settings, grid, quantity, layout, n_time=None):
+    """A store's chunk shape: ``layout_chunks``, with the level chunk after time for the level group.
+
+    The level chunk is ``chunks.<layout>.level``: by default every level in
+    the spatial layout (a map of all levels per period) and one level in the
+    temporal one (a time series of one level per tile).
+    """
+    chunks = layout_chunks(settings, grid, layout, n_time)
+    if not has_level(quantity):
+        return chunks
+    n_levels = len(settings['profile']['levels'])
+    spec = {**(settings['chunks'].get(layout) or {}),
+            **((grid_spec(settings, grid).get('chunks') or {}).get(layout) or {})}
+    level = spec.get('level', -1 if layout == 'spatial' else 1)
+    return (chunks[0], n_levels if level == -1 else min(int(level), n_levels), *chunks[1:])
 
 
 def layout_chunks(settings, grid, layout, n_time=None):

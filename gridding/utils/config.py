@@ -52,6 +52,9 @@ def load_config(path):
     if missing:
         raise ValueError(f'{path}: missing config keys {missing}')
     settings['config_path'] = str(path)
+    # one config, one gridding key, per process (imported here: nomenclature imports this module)
+    from utils import nomenclature
+    nomenclature.use(settings)
     return settings
 
 
@@ -73,10 +76,23 @@ def format_version(version):
 
 
 def version_token(settings):
-    """The version slot of every store name, with any stream appended (``v_1.rs``)."""
+    """The version slot of the L2 store names, with any stream appended (``v_1.rs``)."""
     token = format_version(settings['version'])
     stream = settings.get('version_product')
     return f'{token}.{stream}' if stream else token
+
+
+def gridded_version_token(settings):
+    """The version slot of the gridded store names: the L2 token, then any ``store_set``.
+
+    ``store_set`` names a selection gridded as a set of its own beside the
+    full one (``v_1.rs.daytime``): an approved style-guide exception for the
+    AIRS v1 gridded stores only (user decision 2026-11-13, D7), so a config
+    sets it only with the user's approval.
+    """
+    token = version_token(settings)
+    store_set = settings.get('store_set')
+    return f'{token}.{store_set}' if store_set else token
 
 
 def source_module(settings):
@@ -87,7 +103,7 @@ def source_module(settings):
 def store_name(settings, frequency, grid_name, variable):
     """A store's basename, without its layout directory."""
     template = settings['output_conventions']['filename']
-    return template.format(product=settings['product'], version=version_token(settings),
+    return template.format(product=settings['product'], version=gridded_version_token(settings),
                            frequency=frequency, grid_name=grid_name, variable=variable)
 
 
