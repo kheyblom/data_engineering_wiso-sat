@@ -1660,6 +1660,93 @@ Named in the cross-product naming pass. The grammar and decisions are in
 - Sarkar et al. (2026), `docs/sarkar-2026-wiso-sat.md`: Methods (AIRS, CrIS;
   Product-specific quality control), Tables 2-3.
 
+## Gridding inputs, AIRS v1 (decided 2026-11-13)
+
+How the method in [docs/technical/gridding-method.md](../technical/gridding-method.md)
+applies to AIRS v1 (RS and FS; v2 deferred). Every decision (D1-D8) was made
+with the user on 2026-11-13; the evidence and options are in
+[`airs-gridding-decisions.md`](../../airs-gridding-decisions.md).
+
+| input | from the L2 stores |
+| --- | --- |
+| time | geolocation `time` |
+| footprint | the 1.1° AIRS field of view projected onto the ground, as a 32-vertex polygon, from `airs_granule`, `airs_atrack`, `airs_xtrack` and `airs_view_ang` (to be added to L2 as published; D1) |
+| δD | computed in gridding from `water_vapor_hdo_h2o_ratio`, `water_vapor_h2o_mole_fraction_dry_air` and `pressure`: per level (D2a), and as the H2O-weighted 850-250 hPa partial column (D2b) |
+| δD uncertainty (random) | **none** (below) |
+| H2O column | computed in gridding: the H2O partial column of each gridded layer (850-250 hPa for D2b; each level's layer for D2a), ∫ q dp / (g·M_air) with the same ln p interpolation and cuts as the δD (D4) |
+
+- **Products and store sets (D7, D8, user decisions 2026-11-13):** v1
+  only (v2 later). RS and FS are gridded as separate products, each as two
+  store sets: every overpass (`v_1.rs`, `v_1.fs`) and daytime only
+  (`v_1.rs.daytime`, `v_1.fs.daytime`), e.g.
+  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`. The
+  `daytime` token in the version slot is an approved style-guide exception
+  for these stores only. Daytime is `day_night_flag == 1` as published
+  (TROPESS's `sunlit_binary_mask`; quality level `summary_daytime` = D5's
+  `summary` and flag 1); flag -999 rows go only into the every-overpass set.
+  Of the selected rows, RS is 45.8% flag 1, 54.2% flag 0 and 5 rows -999;
+  FS is 96.3% flag 1, 3.5% flag 0 (13:30 passes in polar night) and 0.2%
+  -999. The flag marks sunlight, not the overpass: the RS every-overpass
+  set mixes the ~01:30 and ~13:30 passes (R13), the daytime sets do not.
+- **Grid and frequency (D6, user decision 2026-11-13):** 1° lat/lon,
+  `day`. Other grids and frequencies (e.g. `month`, 2°) on request.
+  Measured over the v1 record after the selection (centres, 2026-11-13): a
+  day fills a median 3.8% (RS) and 14% (FS) of the 1° cells in each
+  stream's latitude band, almost always with one retrieval per cell; a month
+  would fill 57% and 66%, with a median of 2 and 6 retrievals per filled
+  cell (`airs-gridding-decisions.md`, D6).
+- **Selection (D5, user decision 2026-11-13):** quality level `summary`,
+  TROPESS's Summary rule for RS and FS: keep a row if DOF > 1.1 (strict,
+  compared at float32; R31), or if DOF is missing and `dd_col_p` is written
+  (the Summary-only days, R23). No cloud limit. Checked on every v1 row
+  (2026-11-13): no row has `dd_col_p` written with DOF ≤ 1.1; the rule
+  keeps 11,065,071 RS and 19,126,176 FS rows. A rule on `dd_col_p` alone
+  would drop the 1,939 RS and 54,510 FS rows with DOF > 1.1 and no
+  `dd_col_p` (expected to be the Standard-only days; the build confirms by
+  date), and a rule on DOF alone the 55,043 Summary-only rows. `dd_col_p`
+  itself is not gridded.
+- **Weight (D4, user decision 2026-11-13):** w = overlap area × the layer's
+  H2O partial column, in mol, as for TROPOMI. With the partial-column δD,
+  the H2O-weighted cell mean is the δD of the cell's summed HDO and H2O
+  columns.
+- **Absolute-column convention (D4):** q is the dry-air mole fraction,
+  integrated over pressure with g = 9.80665 m s-2 and the dry-air molar
+  mass (28.9644 g mol-1), both stated in the stores' metadata; TROPESS
+  documents neither. MUSES's own `column_air` (v2) equals Δp / (g·M_air) to
+  0.3%. g and M cancel in δD; only the H2O column statistics depend on
+  them (a latitude-dependent g would change them by up to ~0.3%).
+- **Companion statistics (D4):** the mean H2O partial column (850-250 hPa,
+  mol m-2) and, per level, the mean H2O mole fraction (1e-6), with new
+  nomenclature rows (e.g. `water_vapor_column_h2o_850_250hpa`).
+
+### No standard error (user decision 2026-11-13, D3)
+
+The AIRS gridded products carry no standard error, and their two σ sums are
+not built. Spread and count are. The method needs a noise-only σ for each
+retrieval's gridded δD, and AIRS v1 has none that is valid:
+
+- **The gridded δD is computed from the profiles** (D2), so its σ would come
+  from propagating a profile error covariance through the column operator,
+  or from its diagonal for one level.
+- **The only covariance in v1 is `observation_error`**, and it is not a
+  valid covariance: negative variances on every row probed, and asymmetric
+  in FS (R11). It was left out of the L2 stores for that reason (N16).
+  v1 publishes no measurement-noise covariance.
+- **`dd_col_p_error` does not apply.** It is the error of TROPESS's
+  unweighted 850-250 hPa mean, which is not gridded (D2). It comes from the
+  same invalid covariance, and it is -9999 on 72% (RS) and 69% (FS) of the
+  rows where `dd_col_p` is written (R17).
+- **`observation_error_h2o`** is a log-space error of H2O alone, not of δD
+  (R8, R12).
+
+Using a σ on only some rows was not an option either: the gridding reader
+drops every row that is missing an input, so it would silently thin the
+grid. Spread is not a substitute: it measures the variability of the
+retrievals in a cell, not the retrieval noise of their mean. v2 Full
+publishes noise-only covariances
+(`characterization/{hdo_hdo,h2o_h2o,hdo_h2o}_measurement_error_covariance`),
+unchecked; a standard error for v2 is decided with v2 (R47).
+
 ## Known data issues
 
 Status: **handled** (the pipeline deals with it), **open** (settle before this product is built), **record only** (users should know; kept as published).
@@ -1711,4 +1798,5 @@ Status: **handled** (the pipeline deals with it), **open** (settle before this p
 | R44 | **v2 Full `species` is the HDO mole fraction** on 67 levels, roughly `x` x `x_h2o` (ratio p50 1.0036, 0.98-1.15), though its `standard_name` is `molar_ratio_of_hdo_to_h2o` and units `mol mol-1`. `constraint_vector` is exactly `xa` x `h2o_constraint_vector`. | open: only if a Full store uses them |
 | R45 | **v2's ratio kernel has a square block of fill at its lowest levels** on some `quality` 0 rows (audit 2026-10-28): 898 AIRS rows (30 days) and 113 CrIS rows (137 days), up to 6x6 values where `pressure_ret` is written. The four joint blocks are complete on those rows. | record only; stored as published (NaN) |
 | R46 | **AIRS v2 Full has two layouts** (audit 2026-10-28): from 2026-06-03 the files carry a dimension-scale dataset `l1b_source_file` (an upstream `ncrename` of the `l1b_source` dimension). No stored source changes. | record only |
+| R47 | **No valid noise-only δD error for AIRS v1 gridding** (2026-11-13, gridding). The gridded δD is computed from the profiles (D2), and the only profile error covariance in v1 is `observation_error`, which is invalid (R11); `dd_col_p_error` belongs to the unweighted mean that is not gridded and is mostly -9999 (R17). v2 Full has measurement-noise covariances, unchecked. | decided (user, 2026-11-13; gridding handles it): the AIRS v1 gridded products carry no standard error and no σ sums (Gridding inputs, AIRS v1). v2: decided with v2 |
 | R39 | **CrIS integer dtypes drift as AIRS's do (R16):** SNPP RS Summary has 4 layouts, differing only in `land_flag` and `day_night_flag` int16/int32/int64; JPSS1 has 11 Standard and 8 Summary layouts, from the same drift, the `cris_*` indices int32 to int16, and unstored variables (`target_id`, microwindows, `retrieval/x_raw`) coming and going. | handled as for AIRS: flags stored int32 |

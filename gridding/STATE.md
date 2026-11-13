@@ -2,7 +2,17 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-11-11)
+## Where we are (2026-11-13)
+
+- **AIRS v1: every gridding decision made, nothing built** (2026-11-13,
+  with the user). The decisions, evidence and order of work are in
+  [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md) (D1-D8,
+  all completed); the result is in `../docs/products/tropess.md`, "Gridding
+  inputs, AIRS v1" (and R47), and in `CLAUDE.md`, "AIRS v1 decisions". The
+  method doc gained "Sensors without a standard error" (Section 7). The
+  scripts behind the numbers are in `tools/survey/` (`airs_*.py`,
+  `tropess_column_air.py`). That file replaced a Claude Docs doc
+  ("AIRS gridding: decisions"), which is superseded.
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
@@ -56,11 +66,28 @@ Read this first in a new session. Update it whenever work lands.
    - **GOSAT, GOSAT-2:** centres only (~10 km circle, Sarkar et al.);
      column-averaged δD with a 1σ of undocumented kind; only XH2O (1e-6),
      absent on ~56% of δD soundings (G1) and sometimes negative (G8).
-   - **AIRS, CrIS (TROPESS):** centres only; δD is an 850-250 hPa level
-     mean, not a column (Q2b), so the H2O-weighted mean is not the δD of
-     summed columns; its σ is not noise-only and is missing on ~70% of v1
-     rows (R17); no H2O column; CrIS SNPP RS and FS overlap 2021-02..05
-     (R26), so gridding both double counts.
+   - **AIRS v1: decided 2026-11-13; next is the order of work** at the end
+     of `../airs-gridding-decisions.md`:
+     1. **D1 prototype and L1B validation (1.2-1.6).** Write the polygon
+        code (1.1° cone, WGS84, 705.3 km, 32 vertices) with both ways of
+        finding the cross-track direction (per-granule fit; orbit model)
+        and the side from `airs_xtrack`. Compare with polygons from L1B
+        geometry (`satheight`, `sat_lat`/`sat_lon`, `satazi`, `scanang`)
+        on a handful of granules, e.g. from RS 2010-06-15 and FS
+        2022-06-01. The raw files give each target's granule, scan and
+        cross-track indices (0-based; L1B's are 1-based: check), and v2
+        names its `l1b_filename`. TROPESS used AIRS L1B `AIRIBRAD`
+        (ATBD Table 2). **Show the user the download before running it**
+        (Earthdata; the `access_tropess` codebase did the TROPESS
+        downloads).
+     2. **`l2/`: the four geometry stores** for RS and FS v1 (nomenclature
+        rows first, user review), verified, new tag. An `l2/` task: read
+        `../l2/STATE.md` and `../l2/CLAUDE.md` first.
+     3. Method doc (vertical product, column operator, per-level sums,
+        `airs_fov` footprint), nomenclature rows, engine changes (the
+        table in the decisions file), AIRS fixture, bench, production.
+   - **CrIS (TROPESS):** as AIRS, once AIRS is built; SNPP RS and FS
+     overlap 2021-02..05 (R26), so gridding both double counts.
    - **IASI, TES:** not built in L2 yet.
    Each needs: a footprint model (e.g. a centred circle of a stated
    diameter), the δ, σ and weight variables (or a decision to weight by

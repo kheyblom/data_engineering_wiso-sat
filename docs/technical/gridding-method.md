@@ -1,6 +1,6 @@
 # Gridding Level 2 water-isotope retrievals
 
-*Last edited: 2026-11-10*
+*Last edited: 2026-11-13*
 
 This document describes how WISO-SAT Level 2 retrievals are averaged onto regular grids, by day or over
 longer periods, and what each gridded quantity means. The method is the same for every sensor. What
@@ -54,7 +54,9 @@ Every observation *f* supplies:
 | H2O column | *H*_f | the retrieved H2O column, in mol m-2 |
 
 An observation is used only if it passes the selection applied before
-gridding and all of these inputs hold values. The selection is the
+gridding and all of these inputs hold values. A sensor with no valid
+noise-only σ has no δD-uncertainty input at all: its grids carry no
+standard error ([Section 7](#7-uncertainty)). The selection is the
 product's quality level plus any product-specific thresholds. Each
 product's selection, and the Level 2 variable behind each input, are in its
 product document. The selection applied to a grid is recorded in its
@@ -309,6 +311,19 @@ The standard error is therefore a lower limit on a cell's total
 uncertainty. It falls as more footprints are averaged, and for coarse cells
 it can become much smaller than the systematic error.
 
+### Sensors without a standard error
+
+A standard error is built only from a valid noise-only σ for every
+retrieval. Where a sensor publishes none, its grids carry no standard error
+and none of the sums that hold σ (Σ *w*² σ², Σ *w* *W* σ²). Every other
+store is built as usual. A σ is never used on only some retrievals:
+those without one would have to be dropped, which would change the grid.
+The spread is not a substitute. It measures how much the retrievals in a
+cell differ, which includes real variability, not the noise of their mean.
+Which sensors have no standard error, and why, is in each product document
+(AIRS v1: [`tropess.md`](../products/tropess.md), "Gridding inputs, AIRS
+v1").
+
 ### Correlation between neighbouring cells
 
 A footprint contributes to every cell it covers, so neighbouring cells
@@ -429,6 +444,9 @@ chunk of a small tile of cells).
 | Σ *w* *A* | `gridding_weight_footprint_area_sum` | mol km² | |
 | Σ *w* *W* | `gridding_weight_footprint_weight_sum` | mol² | |
 | Σ *w* *W* σ² | `gridding_weight_footprint_weight_delta_d_variance_sum` | mol² 1e-6 | |
+
+A sensor without a valid σ has no standard error and no σ sums
+([Section 7](#7-uncertainty)).
 
 Every sum of [Section 6](#6-cell-values) is stored, in float64, so
 [Section 8](#8-combining-cells-and-days) can be applied directly to the

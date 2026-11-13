@@ -30,6 +30,7 @@ products/<source>.py         # per product: quality levels (selection_stores, se
 utils/                       # config, nomenclature, periods, grids, footprints, sums, l2 (reader), stores
 config/<product>/config_grid*.yaml
 validation/stage_fixture.py, validation/test_pipeline.py
+tools/survey/                # one-off evidence scripts behind decisions (each docstring: what, and how to run)
 ```
 
 The order for a product: build -> verify spatial -> finalize spatial
@@ -100,6 +101,36 @@ each `--apply`** (as l2/, user decision 2026-10-19).
   on sampled periods recomputed from L2 by independent code (shapely,
   pyproj, pandas); temporal stores compared with spatial on sampled tiles
   x periods. `verify.samples` / `verify.seed` in config.
+
+## AIRS v1 decisions (user, 2026-11-13; not built yet)
+
+D1-D8 in [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md)
+(evidence, options, order of work); the result is in `../docs/products/tropess.md`,
+"Gridding inputs, AIRS v1". They extend the engine; none applies to another
+sensor without the user's approval.
+
+- **Scope:** v1 only (RS and FS as separate products); v2 later.
+- **Footprint (D1):** the 1.1° FOV projected from 705.3 km onto WGS84 as a
+  32-vertex polygon, built here (model `airs_fov`) from four published
+  geometry fields added to L2 (`airs_granule`, `airs_atrack`,
+  `airs_xtrack`, `airs_view_ang`); validated once against a few L1B
+  granules (download shown to the user first). `MAX_VERTICES` follows the
+  vertex count.
+- **δD (D2):** computed here from the 17-level profiles, never TROPESS's
+  `dd_col_p`: per level (a level dimension, the surface level its own field)
+  and as the H2O-weighted 850-250 hPa partial column
+  (`water_vapor_column_delta_d_850_250hpa`, a new row); q and R linear in ln p,
+  exact cuts at 850, 250 hPa and the surface; δD with 3.11e-4.
+- **No σ (D3):** no standard error and no σ sums (method Section 7).
+- **Weight (D4):** overlap area × the layer's H2O partial column (mol),
+  g = 9.80665 and dry-air M; companion H2O statistics.
+- **Selection (D5):** `summary`: DOF > 1.1 (strict, float32), or DOF missing
+  and `dd_col_p` written. No cloud limit.
+- **Grid (D6):** 1° lat/lon (`latlon_1p0x1p0`), `day`; more on request.
+- **Store sets (D7):** every overpass and daytime only (`day_night_flag ==
+  1`, quality level `summary_daytime`), for RS and FS. **Approved exception,
+  for the AIRS v1 gridded stores only:** the set goes in the version slot,
+  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`.
 
 ## Rules particular to gridding
 
