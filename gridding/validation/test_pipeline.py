@@ -3,11 +3,12 @@
     uv run python validation/stage_fixture.py      # once
     TMPDIR=<scratch> uv run python validation/test_pipeline.py
 
-Drives the entry points as subprocesses on the TROPOMI fixture (three
-orbits, 1° and EASE 25 km, day / 3day / month) and asserts on exit codes,
-log text and store contents. Every guard is watched failing at least once
-(GLEAM finding 23), the verifier included: a build with a different
-selection must fail verification. ~5 min on a login node.
+Drives the entry points as subprocesses on the TROPOMI fixture (the column
+method: three orbits, 1° and EASE 25 km, day / 3day / month) and on the
+AIRS v1 RS fixture (the profile method: five days, 1°, day / 3day), and
+asserts on exit codes, log text and store contents. Every guard is watched
+failing at least once (GLEAM finding 23), the verifier included: a build
+with a different selection must fail verification. ~7 min on a login node.
 
 Cases, in order (each depends on the ones before):
  1. unit: periods, grid tokens, nomenclature guard, the TROPOMI optical-thickness boundary (T24)
@@ -20,6 +21,14 @@ Cases, in order (each depends on the ones before):
  8. rechunk to temporal; again is a no-op; verify temporal; finalize temporal
  9. relocate: the stores moved to another root, --relocate rewrites their
     path attributes (tags and values kept, a second run a no-op), then back
+10. unit, profile method: the column operator against a fine-grid integral,
+    the TROPESS Summary boundary (DOF exactly 1.1), store-set names, L2
+    tags per store
+11. AIRS build from nothing (32 stores per frequency, a level dimension);
+    the tiny days take a neighbour's orbit phase; rebuild is a no-op
+12. AIRS verify spatial passes; the daytime selection fails it
+13. AIRS finalize spatial, rechunk, verify and finalize temporal
+14. AIRS daytime store set: its own names beside the full set, verified
 """
 import hashlib
 import os
@@ -34,12 +43,13 @@ import numpy as np
 import yaml  # type: ignore
 import zarr  # type: ignore
 
-from products import tropomi
-from utils import config, nomenclature, periods, stores
+from products import tropess, tropomi
+from utils import airs_fov, columns, config, l2 as l2_utils, nomenclature, periods, stores
 from utils.grids import Ease2Grid, LatLonGrid
 
 GRIDDING = config.GRIDDING_ROOT
 FIXTURE = GRIDDING / 'config' / 'tropomi' / 'config_grid_fixture.yaml'
+AIRS_FIXTURE = GRIDDING / 'config' / 'airs_rs' / 'config_grid_fixture.yaml'
 PYTHON = [sys.executable]
 icechunk.set_logs_filter('error')
 RESULTS = []
@@ -87,9 +97,26 @@ def digest(paths):
     return h.hexdigest()
 
 
-def derived_config(directory, **changes):
-    """The fixture config with some keys replaced, written to a temporary file."""
-    data = yaml.safe_load(FIXTURE.read_text())
+def airs_settings():
+    """The AIRS fixture's settings; loading them makes its gridding key the one in use."""
+    return config.load_config(AIRS_FIXTURE)
+
+
+def airs_paths(layout, frequency, loaded=None):
+    loaded = loaded or airs_settings()
+    return [config.store_path(loaded, layout, frequency, 'latlon_1p0x1p0', row['canonical_name'])
+            for row in nomenclature.quantities().values()]
+
+
+def open_variable(path):
+    """A store's data variable at main, by the store's variable slot."""
+    name = os.path.basename(path).rsplit('.', 2)[-2]
+    return zarr.open_group(stores.open_repository(path).readonly_session(branch='main').store, mode='r')[name]
+
+
+def derived_config(directory, base=FIXTURE, **changes):
+    """A fixture config with some keys replaced, written to a temporary file."""
+    data = yaml.safe_load(base.read_text())
     for key, value in changes.items():
         data[key] = value
     path = Path(directory) / 'config.yaml'
@@ -284,11 +311,154 @@ def test_relocate():
     assert digest(spatial) == before
 
 
+@case('unit, profile method: column operator, Summary boundary, store-set names, tags per store')
+def test_profile_units():
+    # the column operator: exact for a mole fraction linear in ln p, against a fine-grid integral
+    pressure = np.array([[np.nan, 95000.0, 82540.0, 68129.0, 51090.0, 34807.0, 23714.0, 13335.0, 10.0]])
+    q = np.array([[np.nan, 9e-3, 6e-3, 3e-3, 1e-3, 3e-4, 5e-5, 5e-6, 4e-6]])
+    ratio = np.array([[np.nan, 2.9e-4, 2.8e-4, 2.7e-4, 2.5e-4, 2.2e-4, 1.9e-4, 1.5e-4, 2.5e-4]])
+    h2o, column_ratio, shares = columns.partial_columns(pressure, q, ratio, 85000.0, 25000.0)
+    ln_p = np.linspace(np.log(85000.0), np.log(25000.0), 200_001)
+    valid = np.isfinite(pressure[0])
+    fine_q = np.interp(-ln_p, -np.log(pressure[0][valid]), q[0][valid])
+    fine_hdo = np.interp(-ln_p, -np.log(pressure[0][valid]), (ratio * q)[0][valid])
+    dp = -np.diff(np.exp(ln_p))
+    integral_q = (0.5 * (fine_q[1:] + fine_q[:-1]) * dp).sum()
+    integral_hdo = (0.5 * (fine_hdo[1:] + fine_hdo[:-1]) * dp).sum()
+    assert abs(h2o[0] / (integral_q * columns.MOL_M2_PER_PA) - 1) < 1e-8
+    assert abs(column_ratio[0] / (integral_hdo / integral_q) - 1) < 1e-8
+    whole, _, shares = columns.partial_columns(pressure, q, ratio)
+    assert abs(np.nansum(shares) / whole[0] - 1) < 1e-13 and shares[0, 0] == 0
+    # a cut above the surface starts at the surface; no layer between the cuts gives no column
+    assert np.isfinite(columns.partial_columns(pressure, q, ratio, 99000.0, 25000.0)[0][0])
+    assert np.isnan(columns.partial_columns(pressure, q, ratio, 5.0, 1.0)[0][0])
+    # the Summary rule (D5): strictly above 1.1 at float32, or DOF missing and the marker written;
+    # daytime (D7) also needs flag 1, and the flag's fill is not daytime. Build and verifier agree
+    import verify_grid_wisosat as verifier
+    above = np.nextafter(np.float32(1.1), np.float32(2))
+    values = {tropess.DOF: np.array([1.1, above, np.nan, np.nan, 2.0, 2.0], dtype='float32'),
+              tropess.SUMMARY_MARKER: np.array([-200, -200, -200, np.nan, -200, -200], dtype='float32'),
+              tropess.DAY_NIGHT: np.int32([1, 1, 1, 1, 0, -999])}
+    fills = {tropess.DOF: None, tropess.SUMMARY_MARKER: None, tropess.DAY_NIGHT: -999}
+    frame = {**values, tropess.DAY_NIGHT: np.array([1, 1, 1, 1, 0, np.nan])}
+    for level, expected in (('summary', [False, True, True, False, True, True]),
+                            ('summary_daytime', [False, True, True, False, False, False])):
+        assert list(tropess.select(values, fills, {'quality_level': level})) == expected, level
+        assert list(verifier.tropess_passes(frame, level)) == expected, level
+    # a store set goes after the version in the gridded names only (D7, 7.1); L2 names keep theirs
+    loaded = airs_settings()
+    daytime = {**loaded, 'store_set': 'daytime'}
+    name = os.path.basename(config.store_path(daytime, 'spatial', 'day', 'latlon_1p0x1p0', 'observation_count'))
+    assert name == 'wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.observation_count.zarr', name
+    assert config.l2_store_path(daytime, 'pressure') == config.l2_store_path(loaded, 'pressure')
+    # L2 at a tag per store
+    assert config.l2_tag(loaded, 'scanline_index') == 'fixture-20261113-footprint'
+    assert config.l2_tag(loaded, 'pressure') == 'fixture-20261113'
+    assert 'scanline_index: fixture-20261113-footprint' in config.l2_tag_text(loaded)
+    assert nomenclature.has_levels() and len(nomenclature.quantities()) == 32
+    settings()
+    assert not nomenclature.has_levels() and len(nomenclature.quantities()) == 17
+
+
+@case('AIRS build from nothing; tiny days take a neighbour\'s orbit phase; rebuild is a no-op')
+def test_airs_build():
+    loaded = airs_settings()
+    for layout in config.LAYOUTS:
+        shutil.rmtree(os.path.join(loaded['directories']['zarr'], layout), ignore_errors=True)
+    output = script('grid_wisosat.py', config_path=AIRS_FIXTURE)
+    assert 'build complete' in output and 'committed' in output
+    # one row a day is the masked first profile of a Standard file (R22): no column, not gridded
+    assert '2014-04-08: 2,659 rows, 1,604 pass quality, 0 over a threshold, 1 missing an input' in output, output[-3000:]
+    for frequency in ('day', '3day'):
+        paths = airs_paths('spatial', frequency, loaded)
+        assert len(paths) == 32 and all(os.path.isdir(path) for path in paths)
+    by_name = {os.path.basename(path).rsplit('.', 2)[-2]: path for path in airs_paths('spatial', 'day', loaded)}
+    level = open_variable(by_name['water_vapor_delta_d'])
+    assert level.metadata.dimension_names == ('time', 'level', 'lat', 'lon') and level.shape == (6, 16, 180, 360)
+    assert open_variable(by_name['pressure_surface']).shape == (6, 180, 360)
+    # every gridded retrieval has a surface; a level counts only above it, so counts fall towards the ground
+    count = open_variable(by_name['observation_count'])[:]
+    assert np.array_equal(open_variable(by_name['observation_count_surface'])[:], count)
+    level_count = open_variable(by_name['observation_count_level'])[:]
+    assert (level_count <= count[:, None]).all() and level_count[:, 0].sum() < level_count[:, 5].sum()
+    assert np.array_equal(level_count[:, 5:], np.broadcast_to(count[:, None], level_count[:, 5:].shape))
+    # 3day sums are their days' sums
+    name = 'gridding_weight_level_delta_d_sum'
+    three = open_variable({os.path.basename(p).rsplit('.', 2)[-2]: p for p in airs_paths('spatial', '3day', loaded)}[name])[:]
+    days = open_variable(by_name[name])[:]
+    assert np.allclose(three[1], days[2:5].sum(axis=0), rtol=1e-12, atol=0)
+    # 2014-04-05 and -06 hold 12 and 13 retrievals: no sound fit of their own, so the nearest sound day's
+    phases = l2_utils.AirsPhases(l2_utils.L2(loaded), loaded['footprint'])
+    assert [airs_fov.is_sound(phases.own(k)) for k in range(5)] == [True, False, False, True, True]
+    assert phases.resolve(1)[1] == 1 and phases.resolve(1)[0] is phases.own(0)
+    assert phases.resolve(2)[1] == -1 and phases.resolve(2)[0] is phases.own(3)
+    before = digest(airs_paths('spatial', 'day', loaded))
+    assert 'nothing to do' in script('grid_wisosat.py', config_path=AIRS_FIXTURE)
+    assert digest(airs_paths('spatial', 'day', loaded)) == before
+
+
+@case('AIRS verify spatial passes; the daytime selection fails it')
+def test_airs_verify_spatial():
+    output = script('verify_grid_wisosat.py', '--layout', 'spatial', config_path=AIRS_FIXTURE)
+    assert 'stores verified' in output and ', 0 failures' in output
+    with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+        data = yaml.safe_load(AIRS_FIXTURE.read_text())
+        mutant = derived_config(directory, base=AIRS_FIXTURE, log_file='grid_airs_rs_fixture_mutant.log',
+                                selection={**data['selection'], 'quality_level': 'summary_daytime'},
+                                frequencies=['day'])
+        output = script('verify_grid_wisosat.py', '--layout', 'spatial', '--phases', 'samples', expect=1,
+                        config_path=mutant)
+        assert 'FAIL' in output and 'stores verified' not in output
+
+
+@case('AIRS finalize spatial, rechunk, verify and finalize temporal')
+def test_airs_temporal():
+    base = ('finalize_grid_wisosat.py', '--layout', 'spatial')
+    script(*base, '--attrs', '--apply', config_path=AIRS_FIXTURE)
+    script(*base, '--tag', 'fixture-spatial', '--apply', config_path=AIRS_FIXTURE)
+    script('rechunk_wisosat.py', config_path=AIRS_FIXTURE)
+    loaded = airs_settings()
+    by_name = {os.path.basename(path).rsplit('.', 2)[-2]: path for path in airs_paths('temporal', 'day', loaded)}
+    # the whole record per tile; one level per chunk in the temporal layout
+    assert open_variable(by_name['water_vapor_delta_d']).chunks == (6, 1, 20, 20)
+    assert open_variable(by_name['observation_count']).chunks == (6, 20, 20)
+    output = script('verify_grid_wisosat.py', '--layout', 'temporal', config_path=AIRS_FIXTURE)
+    assert 'stores verified' in output and ', 0 failures' in output
+    base = ('finalize_grid_wisosat.py', '--layout', 'temporal')
+    script(*base, '--attrs', '--apply', config_path=AIRS_FIXTURE)
+    script(*base, '--tag', 'fixture-temporal', '--apply', config_path=AIRS_FIXTURE)
+    assert 'missing attrs none' in script(*base, '--status', config_path=AIRS_FIXTURE)
+
+
+@case('AIRS daytime store set: its own names beside the full set, verified')
+def test_airs_daytime():
+    with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+        data = yaml.safe_load(AIRS_FIXTURE.read_text())
+        daytime = derived_config(directory, base=AIRS_FIXTURE, log_file='grid_airs_rs_fixture_daytime.log',
+                                 store_set='daytime', frequencies=['day'],
+                                 selection={**data['selection'], 'quality_level': 'summary_daytime'})
+        output = script('grid_wisosat.py', config_path=daytime)
+        assert 'build complete' in output
+        loaded = config.load_config(daytime)
+        paths = airs_paths('spatial', 'day', loaded)
+        assert all('.v_1.rs.daytime.day.' in os.path.basename(path) and os.path.isdir(path) for path in paths)
+        full = airs_paths('spatial', 'day', airs_settings())
+        assert not set(paths) & set(full)
+        pick = [os.path.basename(path).endswith('.observation_count.zarr') for path in paths].index(True)
+        day_count, all_count = open_variable(paths[pick])[:], open_variable(full[pick])[:]
+        assert (day_count <= all_count).all() and 0 < day_count.sum() < all_count.sum()
+        output = script('verify_grid_wisosat.py', '--layout', 'spatial', config_path=daytime)
+        assert 'stores verified' in output and ', 0 failures' in output
+
+
 def main():
-    if not os.path.isdir(settings()['l2']['directory']):
-        sys.exit('stage the fixture first: uv run python validation/stage_fixture.py')
+    for fixture in (settings(), airs_settings()):
+        if not os.path.isdir(fixture['l2']['directory']):
+            sys.exit('stage the fixtures first: uv run python validation/stage_fixture.py')
+    settings()
     for test in (test_units, test_config_guard, test_build, test_noop, test_resume, test_verify_spatial,
-                 test_finalize_spatial, test_temporal, test_relocate):
+                 test_finalize_spatial, test_temporal, test_relocate, test_profile_units, test_airs_build,
+                 test_airs_verify_spatial, test_airs_temporal, test_airs_daytime):
         test()
     print(f'{len(RESULTS)} cases passed')
 

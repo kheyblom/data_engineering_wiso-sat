@@ -11,7 +11,7 @@ Phases:
 - ``structure`` (every store): dims, dtype, chunks and fill as the config
   and the key say; the grid's coordinates against an independent
   computation (pyproj for EASE-Grid 2.0); ``time_bounds`` against periods
-  worked out independently with pandas; the 17 stores of a target agree;
+  worked out independently with pandas; the stores of a target agree;
   required attributes; ``source_l2_snapshots`` equals what the L2 tag names
   today.
 - ``samples`` (spatial): for sampled periods of each (grid, frequency) --
@@ -19,8 +19,10 @@ Phases:
   ``verify.seed`` -- every cell is recomputed from L2 by code independent of
   the build: its own L2 read, its own selection, footprint geometry and
   clipping by shapely, projection by pyproj, sums by pandas. Occupied cells
-  and counts must match exactly, sums to ``SUM_RTOL``, statistics to float32
-  rounding.
+  and counts must match exactly, sums to ``SUM_RTOL`` (or the config's
+  ``verify.sum_rtol``), statistics to float32 rounding. For the profile
+  method (AIRS) the columns, the orbit-phase fit and the footprint polygons
+  are recomputed too, by ``verify_profile.py``.
 - ``samples`` (temporal): sampled tiles x sampled periods compared bit for
   bit with the spatial store at ``temporal.source_tag``, which it was made
   from.
@@ -40,6 +42,7 @@ import pyproj  # type: ignore
 import shapely  # type: ignore
 import zarr  # type: ignore
 
+import verify_profile
 from utils import config, nomenclature
 from utils.grids import from_spec
 
@@ -187,8 +190,13 @@ class IndependentL2:
             chosen = np.ones(rows.size, dtype=bool) if keep is None else keep(frame)
             rows = rows[chosen]
             frame = {store: values[chosen] for store, values in frame.items()}
-            frame['lat_corners'] = geo['lat_corners'][window][rows]
-            frame['lon_corners'] = geo['lon_corners'][window][rows]
+            if 'lat_corners' in geo:
+                frame['lat_corners'] = geo['lat_corners'][window][rows]
+                frame['lon_corners'] = geo['lon_corners'][window][rows]
+            else:
+                # no published corners: the centres, and which observations they are (a footprint model draws them)
+                frame['lat'], frame['lon'] = geo['lat'][window][rows], geo['lon'][window][rows]
+                frame['obs'] = window.start + rows
             parts.append(frame)
         if not parts:
             return None
@@ -214,7 +222,29 @@ def tropomi_passes(v, level):
         return ok & (clear | ((v['height_scattering_layer'] <= 2000) & (tau >= 0.3)))
 
 
-SELECTIONS = {'tropomi': (tropomi_passes, {
+TROPESS_DOF = 'water_vapor_hdo_h2o_ratio_degrees_of_freedom_for_signal'
+TROPESS_MARKER = 'water_vapor_delta_d_850_250hpa'
+
+
+def tropess_passes(v, level):
+    """TROPESS's Summary rule (user decisions 2026-11-13, D5 and D7), written again for the verifier.
+
+    DOF above 1.1 at the stored float32, or DOF missing and the Summary
+    product's 850-250 hPa delta D written; 'summary_daytime' also needs the
+    published day/night flag to be 1.
+    """
+    dof = v[TROPESS_DOF]
+    assert dof.dtype == np.float32, dof.dtype
+    with np.errstate(invalid='ignore'):
+        ok = np.greater(dof, np.float32(1.1)) | (~np.isfinite(dof) & np.isfinite(v[TROPESS_MARKER]))
+        if level == 'summary_daytime':
+            ok = ok & (v['day_night_flag'] == 1)
+    return ok
+
+
+SELECTIONS = {'tropess': (tropess_passes, {'summary': [TROPESS_DOF, TROPESS_MARKER],
+                                           'summary_daytime': [TROPESS_DOF, TROPESS_MARKER, 'day_night_flag']}),
+              'tropomi': (tropomi_passes, {
     'success': ['quality_flags_retrieval'],
     'clear': ['quality_flags_retrieval', 'iterations_retrieval', 'spectral_point_count_retrieval',
               'spectral_point_count_prefit', 'chi_squared_retrieval', 'chi_squared_prefit', 'solar_zenith_angle',
@@ -246,16 +276,39 @@ def regrid_day(frame, settings, grid):
     keep &= np.isfinite(delta) & np.isfinite(sigma) & np.isfinite(h2o)
     lat, lon = frame['lat_corners'][keep].astype('float64'), frame['lon_corners'][keep].astype('float64')
     delta, sigma, h2o = delta[keep], sigma[keep], h2o[keep]
+    lat, lon, ok = griddable(lat, lon)
+    lat, lon, delta, sigma, h2o = lat[ok], lon[ok], delta[ok], sigma[ok], h2o[ok]
+    whole = whole_area(lat, lon)
+    parts = [_column_sums(pairs, delta, sigma, h2o, whole) for pairs in iter_pairs(lat, lon, grid, settings)]
+    if not parts:
+        return pd.DataFrame(columns=['count', *nomenclature.quantity_names('sum')], dtype='float64')
+    return pd.concat(parts).groupby(level=0).sum()
+
+
+def griddable(lat, lon):
+    """Polygons moved to one side of the antimeridian, and which can be gridded (all vertices, no pole)."""
     ok = np.isfinite(lat).all(1) & np.isfinite(lon).all(1)
     # one side of the antimeridian, then drop what still spans a pole
     wide = (np.nanmax(lon, 1) - np.nanmin(lon, 1)) > 180
     lon = np.where(wide[:, None] & (lon < 0), lon + 360, lon)
     ok &= (lon.max(1) - lon.min(1)) <= 90
-    lat, lon, delta, sigma, h2o = lat[ok], lon[ok], delta[ok], sigma[ok], h2o[ok]
-    rows, cols = grid.shape
-    # the footprint's whole area, km2, in EPSG:6933 (x is periodic in longitude)
+    return lat, lon, ok
+
+
+def whole_area(lat, lon):
+    """Each footprint's whole area, km2, in EPSG:6933 (x is periodic in longitude)."""
     x, y = _ease_xy(lat, lon)
-    whole = shapely.area(shapely.polygons(np.stack([x, y], -1))) / 1e6
+    return shapely.area(shapely.polygons(np.stack([x, y], -1))) / 1e6
+
+
+def iter_pairs(lat, lon, grid, settings):
+    """The (footprint, cell) overlaps of a day's polygons, by shapely, a block of whole footprints at a time.
+
+    Yields:
+        pandas.DataFrame: ``cell`` (flat), ``foot`` (row of ``lat``) and
+            ``area`` (km2) of each pair with a positive overlap.
+    """
+    rows, cols = grid.shape
     if grid.kind == 'latlon':
         size = 180 / rows
         u, v = lon, lat
@@ -264,34 +317,32 @@ def regrid_day(frame, settings, grid):
         col1 = np.floor((u.max(1) + 180) / size).astype(int)
         row0 = np.clip(np.floor((90 - v.max(1)) / size).astype(int), 0, rows - 1)
         row1 = np.clip(np.floor((90 - v.min(1)) / size).astype(int), 0, rows - 1)
+        x0y0 = None
     else:
         size = grid.size
+        x, y = _ease_xy(lat, lon)
         polygons = shapely.polygons(np.stack([x, y], -1))
         x0, y0 = -cols * size / 2, rows * size / 2
         col0 = np.floor((x.min(1) - x0) / size).astype(int)
         col1 = np.floor((x.max(1) - x0) / size).astype(int)
         row0 = np.clip(np.floor((y0 - y.max(1)) / size).astype(int), 0, rows - 1)
         row1 = np.clip(np.floor((y0 - y.min(1)) / size).astype(int), 0, rows - 1)
+        x0y0 = (x0, y0)
     n_pairs = (row1 - row0 + 1) * (col1 - col0 + 1)
     # whole footprints per block, about verify.max_pairs candidate pairs each, so
     # memory stays bounded (shapely objects are large); a footprint's W is
     # complete within its block
     limit = int((settings.get('verify') or {}).get('max_pairs', 2_000_000))
     ends = np.cumsum(n_pairs)
-    parts, first = [], 0
+    first = 0
     while first < lat.shape[0]:
         last = max(first + 1, int(np.searchsorted(ends, ends[first] - n_pairs[first] + limit, side='right')))
-        block = np.arange(first, last)
-        parts.append(_block_sums(block, n_pairs, row0, col0, col1, polygons, grid, size, delta, sigma, h2o, whole,
-                                 x0y0=None if grid.kind == 'latlon' else (x0, y0)))
+        yield _block_pairs(np.arange(first, last), n_pairs, row0, col0, col1, polygons, grid, size, x0y0)
         first = last
-    if not parts:
-        return pd.DataFrame(columns=['count', *nomenclature.quantity_names('sum')], dtype='float64')
-    return pd.concat(parts).groupby(level=0).sum()
 
 
-def _block_sums(block, n_pairs, row0, col0, col1, polygons, grid, size, delta, sigma, h2o, whole, x0y0):
-    """The per-cell sums of one block of whole footprints (``regrid_day``)."""
+def _block_pairs(block, n_pairs, row0, col0, col1, polygons, grid, size, x0y0):
+    """The overlaps of one block of whole footprints with the cells of their bounding boxes."""
     rows, cols = grid.shape
     counts = n_pairs[block]
     foot = np.repeat(block, counts)
@@ -313,7 +364,12 @@ def _block_sums(block, n_pairs, row0, col0, col1, polygons, grid, size, delta, s
         km2 = piece / size**2 * EARTH_KM**2 * np.deg2rad(size) * (np.sin(north) - np.sin(south))
     else:
         km2 = piece / 1e6
-    pairs = pd.DataFrame({'cell': row * cols + col, 'foot': foot, 'area': km2})
+    return pd.DataFrame({'cell': row * cols + col, 'foot': foot, 'area': km2})
+
+
+def _column_sums(pairs, delta, sigma, h2o, whole):
+    """The column method's per-cell sums of one block of pairs (``regrid_day``)."""
+    foot = pairs['foot'].to_numpy()
     pairs['weight'] = pairs['area'] * 1e6 * h2o[foot]
     big_w = pairs.groupby('foot')['weight'].transform('sum')
     d, var, a = delta[foot], sigma[foot] ** 2, whole[foot]
@@ -333,8 +389,45 @@ def _ease_xy(lat, lon):
 
 
 
+def recompute_profile(l2, settings, grid, start, end):
+    """``recompute`` for the profile method: every quantity of the three groups, independently."""
+    passes, stores_for = SELECTIONS[settings.get('source', settings['product'])]
+    selection, inputs = settings['selection'], settings['inputs']
+    if not hasattr(l2, 'phases'):
+        l2.phases = verify_profile.Phases(l2, settings)
+    needed = list(dict.fromkeys([*stores_for[selection['quality_level']],
+                                 *(store for name, store in inputs.items() if name != 'footprint'),
+                                 *settings['footprint'].values()]))
+    n_cells, n_levels = grid.shape[0] * grid.shape[1], len(settings['profile']['levels'])
+    groups = ([], [], [])
+    for day in range(start, end):
+        frame = l2.day(day, needed, lambda values: passes(values, selection['quality_level']))
+        if frame is None or not len(frame['obs']):
+            continue
+        derived = verify_profile.derive(frame, settings)
+        lat, lon = l2.phases.polygons(frame)
+        lat, lon, ok = griddable(lat, lon)
+        # a retrieval without the column is not gridded in any group
+        ok &= np.isfinite(derived['delta_d']) & np.isfinite(derived['h2o'])
+        lat, lon = lat[ok], lon[ok]
+        derived = {name: values[ok] for name, values in derived.items()}
+        whole = whole_area(lat, lon)
+        for pairs in iter_pairs(lat, lon, grid, settings):
+            for group, part in zip(groups, verify_profile.block_sums(pairs, derived, whole, n_cells)):
+                group.append(part)
+    if groups[0]:
+        column, level, surface = (pd.concat(parts).groupby(level=0).sum() for parts in groups)
+    else:
+        # a period with no gridded retrieval: every sum 0, every statistic missing
+        column, level, surface = verify_profile.empty_groups()
+    area = expected_coords(grid)['cell_area'][np.arange(n_cells) // grid.shape[1]]
+    return verify_profile.statistics(column, level, surface, area, n_cells, n_levels)
+
+
 def recompute(l2, settings, grid, start, end):
     """A period's sums and statistics on the whole grid, independently."""
+    if settings.get('method', 'column') == 'profile':
+        return recompute_profile(l2, settings, grid, start, end)
     passes, stores_for = SELECTIONS[settings.get('source', settings['product'])]
     needed = list(dict.fromkeys([*stores_for[settings['selection']['quality_level']],
                                  *(settings['selection'].get('thresholds') or {}),
@@ -407,11 +500,17 @@ def check_structure(report, settings, layout, grid, frequency, paths, first, las
         row = nomenclature.quantities()[quantity]
         name = row['canonical_name']
         array = group[name]
-        report.check(tuple(array.metadata.dimension_names) == ('time', row_dim, col_dim), f'{what}: dims')
+        levels = list(settings['profile']['levels']) if row.get('group') == 'level' else None
+        middle = ('level',) if levels else ()
+        report.check(tuple(array.metadata.dimension_names) == ('time', *middle, row_dim, col_dim), f'{what}: dims')
         report.check(array.dtype == np.dtype(row['dtype']), f'{what}: dtype {array.dtype} != {row["dtype"]}')
-        report.check(array.shape == (len(bounds), *grid.shape), f'{what}: shape {array.shape}')
-        report.check(tuple(array.chunks) == store_utils.layout_chunks(settings, grid, layout, len(bounds)),
+        report.check(array.shape == (len(bounds), *([len(levels)] if levels else []), *grid.shape),
+                     f'{what}: shape {array.shape}')
+        report.check(tuple(array.chunks) == store_utils.store_chunks(settings, grid, quantity, layout, len(bounds)),
                      f'{what}: chunks {array.chunks}')
+        if levels:
+            report.check('level' in group and np.array_equal(group['level'][:], np.asarray(levels, dtype='float64'))
+                         and group['level'].attrs.get('units') == 'Pa', f'{what}: level coordinate')
         report.check(array.attrs.get('units') == row['canonical_units'], f'{what}: units')
         stored = group['time_bounds'][:]
         report.check(np.array_equal(stored, bounds), f'{what}: time_bounds are not the expected periods')
@@ -451,10 +550,11 @@ def check_spatial_samples(report, settings, grid, frequency, paths, l2, first, l
             row = nomenclature.quantities()[quantity]
             stored = group[row['canonical_name']][k].reshape(-1)
             want = expected[quantity]
-            if quantity == 'count':
+            if np.issubdtype(stored.dtype, np.integer):
                 ok = np.array_equal(stored, want)
             elif row['kind'] == 'sum':
-                ok = np.allclose(stored, want, rtol=SUM_RTOL, atol=SUM_RTOL * max(np.abs(want).max(), 1e-300))
+                rtol = float((settings.get('verify') or {}).get('sum_rtol', SUM_RTOL))
+                ok = np.allclose(stored, want, rtol=rtol, atol=rtol * max(np.abs(want).max(), 1e-300))
             else:
                 ok = (np.array_equal(np.isnan(stored), np.isnan(want))
                       and np.allclose(stored, want, rtol=STAT_RTOL, atol=STAT_ATOL.get(quantity, 0), equal_nan=True))
@@ -473,16 +573,18 @@ def check_temporal_samples(report, settings, grid, frequency, spatial, temporal)
         name = nomenclature.quantities()[quantity]['canonical_name']
         target = open_group(path)[name]
         source = open_group(spatial[quantity], tag=tag)[name]
-        n_time, rows, cols = target.shape
-        _, tile_rows, tile_cols = target.chunks
+        # rows and cols are the last two dimensions (a level dimension may sit before them)
+        n_time, (rows, cols) = target.shape[0], target.shape[-2:]
+        tile_rows, tile_cols = target.chunks[-2:]
         tiles = [(r, c) for r in range(0, rows, tile_rows) for c in range(0, cols, tile_cols)]
         picks = [tiles[0], tiles[-1], *(tiles[i] for i in rng.choice(len(tiles), size=min(int(spec.get('tiles', 6)), len(tiles)), replace=False))]
         times = sorted({0, n_time - 1, *rng.choice(n_time, size=min(int(spec.get('times', 6)), n_time), replace=False).tolist()})
         planes = {t: source[t] for t in times}
         for r, c in picks:
-            block = target[:, r:r + tile_rows, c:c + tile_cols]
+            middle = (slice(None),) * (target.ndim - 3)
+            block = target[(slice(None), *middle, slice(r, r + tile_rows), slice(c, c + tile_cols))]
             for t in times:
-                report.check(np.array_equal(block[t], planes[t][r:r + tile_rows, c:c + tile_cols], equal_nan=block.dtype.kind == 'f'),
+                report.check(np.array_equal(block[t], planes[t][..., r:r + tile_rows, c:c + tile_cols], equal_nan=block.dtype.kind == 'f'),
                              f'{os.path.basename(path)}: tile ({r},{c}) period {t} differs from the spatial store')
         LOG.info(f'{os.path.basename(path)}: {len(picks)} tiles x {len(times)} periods equal to spatial@{tag}')
 

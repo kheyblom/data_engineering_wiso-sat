@@ -1,0 +1,112 @@
+# FIXTURE config: five AIRS v1 RS days (2014-04-04 .. 04-08, two of them with
+# 12 and 13 retrievals) staged by validation/stage_fixture.py, gridded with
+# the profile method onto 1 deg at day and 3day. Run by
+# validation/test_pipeline.py on a login node. Not data.
+product: airs
+# products/<source>.py: the quality levels and the footprint models
+source: tropess
+# the collection version and the stream, as the L2 stores name them (v_1.rs)
+version: '1'
+version_product: rs
+# delta D, H2O and the weights are derived here from the L2 profiles
+method: profile
+quantity_key: nomenclature-key_grid_tropess.md
+
+# The L2 stores, read only at a tag. The four footprint stores were added
+# later and carry their own (store_tags), as in production.
+l2:
+  directory: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/airs/l2
+  filename: 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr'
+  tag: fixture-20261113
+  store_tags:
+    granule_number_level_1b: fixture-20261113-footprint
+    scanline_index: fixture-20261113-footprint
+    ground_pixel_index: fixture-20261113-footprint
+    sensor_view_angle: fixture-20261113-footprint
+
+directories:
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/fixture/gridding/zarr/airs/l3
+  logs: ./logs
+output_conventions:
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+nomenclature_data: /glade/u/home/kheyblom/work/style_guides/nomenclature_data.md
+log_file: grid_airs_rs_fixture.log
+# only fixture configs may build from an uncommitted tree (test_pipeline.py checks)
+allow_dirty_tree: true
+
+# The L2 profiles everything gridded is derived from (docs/products/tropess.md,
+# "Gridding inputs, AIRS v1"). Units are checked against the gridding key.
+inputs:
+  ratio: water_vapor_hdo_h2o_ratio
+  h2o: water_vapor_h2o_mole_fraction_dry_air
+  pressure: pressure
+  apriori: water_vapor_hdo_h2o_ratio_apriori
+  # only its diagonal is read
+  kernel: water_vapor_hdo_h2o_ratio_averaging_kernel_log
+  # the 1.1 degree AIRS field of view drawn from the fields below (utils/airs_fov.py)
+  footprint: airs_fov
+footprint:
+  granule: granule_number_level_1b
+  scanline: scanline_index
+  pixel: ground_pixel_index
+  view_angle: sensor_view_angle
+profile:
+  # TROPESS's standard ratio (D2, 2.2)
+  ratio_standard: 3.11e-4
+  # the column group's layer, Pa (D2b): 850 to 250 hPa
+  column: {bottom: 85000.0, top: 25000.0}
+  # the 16 fixed pressure levels of the retrieval grid, Pa, surface first;
+  # L2 slot 0 is only ever a surface level (R10)
+  levels: [100000.0, 90851.0, 82540.0, 74989.0, 68129.0, 61897.0, 51090.0, 42170.0,
+           34807.0, 28730.0, 23714.0, 17783.0, 13335.0, 7499.0, 2873.0, 10.0]
+
+selection:
+  # TROPESS's Summary rule (user decision 2026-11-13, D5)
+  quality_level: summary
+  description: >-
+    A retrieval is kept if its degrees of freedom for signal exceed 1.1
+    (compared at the stored float32), or if they are missing and the Summary
+    product's 850-250 hPa delta D is written. A kept retrieval without a
+    column between 850 and 250 hPa is not gridded.
+
+grids:
+  - {type: latlon, resolution: 1.0}
+frequencies: [day, 3day]
+
+chunks:
+  spatial: {time: 4, rows: -1, cols: -1, time_coordinate: 365}
+  temporal: {time: -1, rows: 20, cols: 20}
+
+# 1, so the days make several append commits (the resume path)
+periods_per_commit: 1
+num_workers: 2
+max_pairs: 500000
+
+verify:
+  # the footprints depend on a fitted orbit phase, which the verifier fits on
+  # its own, so sums agree closely but not to the last bit: measured on this
+  # fixture they pass at 1e-8 and fail at 1e-9 (the column method's 1e-9
+  # default). 1e-7 leaves a decade of margin
+  sum_rtol: 1.0e-7
+
+temporal:
+  source_tag: fixture-spatial
+  block_rows: 60
+
+attrs:
+  title: >-
+    TEST FIXTURE, not data. WISO-SAT AIRS HDO (TROPESS reanalysis stream), gridded {frequency_long_name} on {grid_name}: {variable}
+  summary: >-
+    {long_name}, from the NASA TROPESS AIRS-Aqua HDO/H2O retrievals
+    (collection {version_label}) as distributed for WISO-SAT, gridded by
+    footprint overlap. The method is in gridding_method.
+  Conventions: ACDD-1.3
+  source: >-
+    The WISO-SAT AIRS Level 2 stores (source_l2_stores) at tag source_l2_tag
+  institution: University of Michigan
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  references: >-
+    Sarkar, M., et al. (2026), WISO-SAT: A global database of stable hydrogen
+    isotopes in water vapor from eight satellite missions, Scientific Data,
+    doi:10.1038/s41597-026-08218-8
