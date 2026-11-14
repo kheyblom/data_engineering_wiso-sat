@@ -1711,8 +1711,9 @@ with the user on 2026-11-13; the evidence and options are in
   (2026-11-13): no row has `dd_col_p` written with DOF ≤ 1.1; the rule
   keeps 11,065,071 RS and 19,126,176 FS rows. A rule on `dd_col_p` alone
   would drop the 1,939 RS and 54,510 FS rows with DOF > 1.1 and no
-  `dd_col_p` (expected to be the Standard-only days; the build confirms by
-  date), and a rule on DOF alone the 55,043 Summary-only rows. `dd_col_p`
+  `dd_col_p`, which are exactly the Standard-only days (R23; confirmed by
+  date 2026-11-14: RS 2002-08-30 and -31, FS six days), and a rule on DOF
+  alone the 55,043 Summary-only rows. `dd_col_p`
   itself is not gridded.
 - **Weight (D4, user decision 2026-11-13):** w = overlap area × the layer's
   H2O partial column, in mol, as for TROPOMI. With the partial-column δD,

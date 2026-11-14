@@ -20,9 +20,14 @@ Read this first in a new session. Update it whenever work lands.
     method; TROPOMI unchanged;
   - an AIRS fixture and five test cases (`TESTING.md`): 14 cases pass.
   The 25 new store names (D9, 9.3) were approved by the user on 2026-11-14
-  (style_guides `540b122`). **Bench submitted 2026-11-14** (RS June 2010,
-  FS June 2022; `config/airs_*/config_grid_bench.yaml`; results go in
-  TESTING.md Tier 2).
+  (style_guides `540b122`). **Bench done 2026-11-14** (TESTING.md, "AIRS
+  bench"): RS June 2010 and FS June 2022 build, verify, rechunk and verify
+  again with 0 failures, after both orbit-phase fits were made to reach the
+  least-squares minimum (finding 1). The chunks in the configs stand.
+  **Next: production of the four store sets, each job shown to the user
+  first.** The bench root
+  `/glade/derecho/scratch/kheyblom/data/wisosat/bench/zarr/airs/` (1.1 GiB,
+  64 + 64 stores) is throwaway: delete it only with the user's approval.
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
@@ -144,23 +149,23 @@ sensor without the user's approval.
           before production). One config per set: the two sets of a stream
           read the same L2 days, so they could share a pass only with an
           engine change (not planned);
-        - a one-month bench each for RS and FS (job shown to the user
-          first). It settles the chunks: at 1° a 2-D period is 0.26 MB
-          (float32), so TROPOMI's 4 periods per chunk would make ~1,600
-          files per RS store; to try: spatial `{time: 8, level: -1}`
-          (~800 files, 66 MB raw per float64 level chunk) and temporal
-          `{time: -1, level: 1, rows: 36, cols: 36}` (800 chunks per level
-          store). `block_rows` must follow the temporal tile (36) and the
-          memory of a level buffer (RS: 6,372 x 16 x rows x 360 x 8 B);
+        - ~~a one-month bench each for RS and FS~~ (done 2026-11-14;
+          spatial `{time: 8, level: -1}`, temporal `{time: -1, level: 1,
+          rows: 36, cols: 36}`, `block_rows: 36` kept);
         - production, verify, finalize (`--attrs`, `--tag`, `--gc`),
           rechunk and the temporal finalize, each `--apply` signed off.
-        **To watch in the bench and production logs:** days counted as
-        "missing an input" beyond the one R22 row a day; a build stopping
-        on a level slot that holds another pressure (`utils/profiles.py`)
-        or on an AIRS day with no sound orbit-phase fit within 30 days
-        (`utils/airs_fov.py`); and D5's check by date that the DOF-only
-        rows (RS 1,939, FS 54,510) are the Standard-only days. Each worker
-        fits the orbit phase of the AIRS days it touches (~0.3 s a day).
+        Production plan (TESTING.md, "AIRS bench"): four builds on develop
+        (8 cores, 32 GB; RS ~1.5 h, RS daytime ~1.2 h, FS sets ~0.7 h
+        each; they write different stores, so they may run side by side),
+        each followed `afterany` by its spatial verify; then finalize
+        spatial with the user's sign-offs, set `temporal.source_tag`,
+        rechunk (1 core, 48 GB) and verify temporal, finalize temporal.
+        ~40 core-hours, ~180 GiB.
+        **To watch in the production logs:** days counted as "missing an
+        input" beyond the one R22 row a day; a build stopping on a level
+        slot that holds another pressure (`utils/profiles.py`) or on an
+        AIRS day with no sound orbit-phase fit within 30 days
+        (`utils/airs_fov.py`): the bench months held neither.
    - **CrIS (TROPESS):** as AIRS, once AIRS is built; SNPP RS and FS
      overlap 2021-02..05 (R26), so gridding both double counts.
    - **IASI, TES:** not built in L2 yet.

@@ -401,7 +401,7 @@ FS. Whether to add a cloud limit is your call.
 Thresholds are compared at the stored precision, and the rows are checked
 for gaps between them (the TROPOMI T24 rule).
 
-**Your decision:** `summary` as recommended, with no cloud limit (2026-11-13). Recorded in `docs/products/tropess.md` ("Gridding inputs, AIRS v1"). The build confirms by date that the DOF-only rows (RS 1,939, FS 54,510) are the Standard-only days.
+**Your decision:** `summary` as recommended, with no cloud limit (2026-11-13). Recorded in `docs/products/tropess.md` ("Gridding inputs, AIRS v1"). Confirmed by date on 2026-11-14 from the L2 stores: the DOF-only rows (RS 1,939, FS 54,510) are exactly the declared Standard-only days (RS 2002-08-30 and -31; FS 2021-02-12, 2024-02-07, 2024-08-05, 2025-01-12, 2025-01-24, 2025-03-05).
 
 ## D6. Grid and frequency [COMPLETED 2026-11-13]
 
@@ -668,7 +668,9 @@ RS/FS overlap (R26).
    `gridding/STATE.md`; cut them there once the docs carry them.
 5. Nomenclature rows in style_guides, shown to you before the commit.
 6. Engine changes and the fixture test, committed from a clean tree.
-7. A one-month bench each for RS and FS v1, with the job shown to you first.
+7. ~~A one-month bench each for RS and FS v1, with the job shown to you first.~~
+   Done 2026-11-14 (`gridding/TESTING.md`, "AIRS bench"): every check passes
+   after both orbit-phase fits were made to run to the minimum.
 8. Production for RS and FS v1, then verify, finalize (`--attrs`, `--tag`,
    `--gc`), rechunk and the temporal finalize, with your sign-off on every
    `--apply`.

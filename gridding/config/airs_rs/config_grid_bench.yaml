@@ -82,15 +82,17 @@ grids:
 frequencies: [day]
 
 chunks:
-  # PLACEHOLDERS until the bench (gridding/STATE.md). At 1 degree a period is
-  # 0.26 MiB (float32): 8 days per chunk keeps a store near 800 files over
+  # From the bench (TESTING.md, AIRS bench 2026-11-14). At 1 degree a period
+  # is 0.26 MiB (float32): 8 days per chunk keeps a store near 800 files over
   # the RS record; a level store's chunk holds all 16 levels (66 MiB raw in
-  # float64, mostly empty cells)
+  # float64, 3-12 MiB stored: most cells are empty)
   spatial: {time: 8, level: -1, rows: -1, cols: -1, time_coordinate: 365}
-  # the whole record per tile of 36 x 36 cells, one level per chunk
+  # the whole record per tile of 36 x 36 cells, one level per chunk: 50 tiles,
+  # so at most 800 chunks per level store
   temporal: {time: -1, level: 1, rows: 36, cols: 36}
 
-# Scale settings (per product, never in code): placeholders until the bench.
+# Scale settings (per product, never in code), from the bench: 8 workers do
+# 0.5 s (RS) to 1.0 s (FS) per day in ~7 GiB.
 # a multiple of the spatial time chunk (8), so each commit writes whole chunks
 periods_per_commit: 40
 num_workers: 8

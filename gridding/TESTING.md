@@ -174,6 +174,54 @@ The first TROPOMI build is **0.25° at day** (user decision 2026-11-10).
   ~300 for each time coordinate in the spatial layout (over the ~2,000-3,000
   guidance); 36 x 72 = 2,592 tiles in the temporal layout.
 
+### AIRS bench (2026-11-14)
+
+One month of each stream, every overpass: RS June 2010 and FS June 2022
+(`config/airs_{rs,fs}/config_grid_bench.yaml`), 1°, day, 32 stores per
+layout, on develop from `4fe4f77`. A first round from `80ac59b` built and
+verified RS cleanly but failed 7 of 972 FS checks: finding 1 above; its
+stores were deleted (user approval) and the round repeated.
+
+| job | what | cores | wall | result |
+| --- | --- | --- | --- | --- |
+| 8186532 | RS build, 30 days | 8 | 33 s | 16 s gridding, 8.6 s for the one commit of 32 stores; peak 6.2 GiB |
+| 8186533 | RS verify spatial | 8 | 40 s | **972 checks, 0 failures** (5 days, every cell) |
+| 8186534 | FS build, 30 days | 8 | 43 s | 30 s gridding, 6.2 s commit; peak 7.1 GiB |
+| 8186535 | FS verify spatial | 8 | 51 s | **972 checks, 0 failures** |
+| 8186570 | RS rechunk | 1 | 55 s | 32 stores, 5 blocks of 36 rows each |
+| 8186571 | RS verify temporal | 1 | 23 s | **2,820 checks, 0 failures** |
+| 8186572 | FS rechunk | 1 | 59 s | |
+| 8186573 | FS verify temporal | 1 | 45 s | **2,820 checks, 0 failures** |
+
+Under 0.1 core-hours in all (both rounds).
+
+- **Per day, 8 workers:** RS 0.5 s (~2,000 retrievals gridded), FS 1.0 s
+  (~13,000). Each worker fits the orbit phase of the AIRS days it touches
+  (RS ~1 s, FS ~1.8 s a fit).
+- **Sizes for the month:** spatial RS 100 MiB, FS 412 MiB; temporal RS 130
+  MiB, FS 476 MiB. The level sums dominate (a float64 level store: RS 11
+  MiB, FS 48 MiB).
+- **Chunks (the configs' values, kept):** spatial 8 periods x 16 levels x
+  the whole grid: 804 chunk files per store over the RS record, a level
+  sum chunk ~3 MiB (RS) to ~12 MiB (FS) stored. Temporal the whole record
+  x 1 level x 36 x 36 cells: 50 tiles, so at most 800 chunks per level
+  store (675-691 written; empty tiles are not) and 50 per 2-D store,
+  whatever the record's length; a level sum tile is 67 MB raw over the RS
+  record.
+- **Selection:** FS gridded every kept retrieval of the month; RS dropped
+  16 (the masked first profile of a Standard file, R22, on the days it
+  passes the selection).
+- **D5's check by date** (from the L2 stores, 2026-11-14): the rows with
+  DOF > 1.1 and no `dd_col_p` are exactly the declared Standard-only days:
+  RS 1,939 rows on 2002-08-30 and -31; FS 54,510 on 2021-02-12, 2024-02-07,
+  2024-08-05, 2025-01-12, 2025-01-24 and 2025-03-05.
+- **Production estimate** (four store sets, each its own build): RS ~1.5 h
+  and RS daytime ~1.2 h, FS and FS daytime ~0.7 h each, on 8 cores: ~33
+  core-hours; verify (12 sampled days each), rechunk (1 core, a 10.7 GB
+  buffer per block of an RS level store: ask for 48 GB) and temporal
+  verify ~7 more. Stores: RS ~48 GiB, RS daytime ~24, FS ~54, FS daytime
+  ~52: ~180 GiB in both layouts.
+
 ## Tier 3: production
 
 0.25° at day (user decision 2026-11-10), 4-day spatial chunks.
