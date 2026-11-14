@@ -2,7 +2,21 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Start here: AIRS v1 production (approved 2026-11-14, nothing submitted yet)
+## Start here: AIRS v1 production (submitted 2026-11-14)
+
+**Done 2026-11-14:** task 1 (bench root deleted) and task 2 (eight jobs
+submitted; all four builds started at 12:10 from `9a7c2bb`, clean, so the
+tree no longer has to stay clean). Jobs, build then verify:
+
+| config | build | verify |
+| --- | --- | --- |
+| `airs_rs/config_grid.yaml` | 8186697 | 8186698 |
+| `airs_rs/config_grid_daytime.yaml` | 8186699 | 8186700 |
+| `airs_fs/config_grid.yaml` | 8186701 | 8186702 |
+| `airs_fs/config_grid_daytime.yaml` | 8186703 | 8186704 |
+
+Next: check the logs against "Expected in the logs" below, then the steps
+after them. The text below is the handoff as approved, kept for reference.
 
 Everything up to production is done and committed; the engine, fixture and
 bench all pass. The user asked for this handoff so a new session runs
