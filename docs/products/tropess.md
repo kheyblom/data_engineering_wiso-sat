@@ -1796,7 +1796,9 @@ Validated once against AIRS L1B (AIRIBRAD.005) on eight granules of
 2010-06-15, 2022-06-01 and 2026-05-15, 2,548 targets: indices and side
 exact on every target; bearing to nadir within 2.1° of `satazi`; polygon
 area 0.997-1.011 of the polygon drawn from L1B's own satellite position,
-and at least 0.987 of their area in common. Production reads no L1B. The
+and at least 0.987 of their area in common (the prototype on 2026-11-13,
+and the engine's own module on 2026-11-14, with the same figures).
+Production reads no L1B. The
 model leaves out the beam's true shape (the field stop and the scan smear,
 which JPL gives only at nadir), terrain height, and the satellite's motion
 during a scan line (a 0.5° skew). Evidence: `airs-gridding-decisions.md`

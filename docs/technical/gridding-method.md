@@ -1,6 +1,6 @@
 # Gridding Level 2 water-isotope retrievals
 
-*Last edited: 2026-11-13 (profile sensors: Sections 2, 5, 6 and 10)*
+*Last edited: 2026-11-14 (profile sensors: Sections 1, 2, 5, 6, 7, 8, 10 and 11)*
 
 This document describes how WISO-SAT Level 2 retrievals are averaged onto regular grids, by day or over
 longer periods, and what each gridded quantity means. The method is the same for every sensor. What
@@ -40,6 +40,11 @@ set of cells to give a regional mean with bounds on its standard error
 Each grid is built directly from the Level 2 data. A coarse grid is never
 derived from a finer one, so every cell value, including its standard
 error, is exact at the grid's own cell size.
+
+A sensor that retrieves profiles is gridded the same way three times over:
+for a column between two pressures, for each fixed pressure level, and for
+the surface level, each with the H2O partial column of its own layer as
+the weight ([Section 2](#sensors-that-retrieve-profiles)).
 
 ## 2. Inputs
 
@@ -404,6 +409,13 @@ means.
 Grids do not carry averaging kernels. Applications that need them, such as
 comparing with a model, should use the Level 2 averaging-kernel data.
 
+The level stores of a profile sensor carry one number from the kernel: the
+weighted mean of its diagonal at each level, beside the mean a priori δD.
+Together they show where a level's δD comes from the measurement and where
+it is mostly the a priori (a diagonal near 0). They are a guide to reading
+the grid, not a kernel: the rows and the off-diagonal terms needed to
+smooth a model profile are only in the Level 2 data.
+
 ## 8. Combining cells and days
 
 ### Over days
@@ -412,6 +424,12 @@ Each footprint belongs to exactly one day, so every per-cell sum adds
 exactly over days. To get a cell value for a longer period (a month, a
 season), add each sum over the days, then apply the formulas in
 [Section 6](#6-cell-values). Do not average the daily cell values.
+
+The same holds for the per-level sums of a profile sensor, level by level.
+They also add over levels: Σ *w* δ and Σ *w* summed over several levels
+give the H2O-weighted δD of the layer those levels span. The surface group
+stores statistics only, so a longer period for it is gridded again from
+Level 2, not combined from the daily stores.
 
 ### Over a set of cells
 
@@ -556,6 +574,15 @@ ratio is `footprint_area` over the `cell_area` coordinate.
 | *W*_f | footprint's total weight, Σ_c *w*_fc | mol |
 | *N* | count of contributing footprints | |
 | *R* | a set of cells | |
+| *p* | pressure of a level; of the surface level in the surface group | Pa |
+| *q* | H2O dry-air mole fraction at a level | 1e-6 |
+| δa | a priori δD at a level | 1e-3 |
+| *K* | diagonal of the averaging kernel of ln(HDO/H2O) at a level | |
+| *g*, *M* | standard gravity, molar mass of dry air (partial columns) | m s⁻², kg mol⁻¹ |
+
+For a profile sensor, δ_f and *H*_f are those of the group being gridded:
+the column's, or a level's (its δD and the H2O partial column of its
+layer).
 
 ## 12. References
 

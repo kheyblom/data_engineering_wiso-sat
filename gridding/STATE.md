@@ -84,10 +84,9 @@ product; one finalize action per invocation, dry run first):
    `VERIFY=1 LAYOUT=temporal` `AFTER` each. Bench: about a minute for a
    month; the RS record reads each spatial store five times.
 4. Finalize temporal the same way.
-5. Wrap up: cut "AIRS v1 decisions" below (the docs carry it), update
+5. Wrap up: cut "AIRS v1 decisions" below (the docs carry it), and update
    `../TASKS.md` and the root CLAUDE.md if a line there names AIRS
-   gridding, and ask the user about the L1B validation granules (458 MB,
-   `/glade/derecho/scratch/$USER/data/wisosat_validation/airs_l1b/`).
+   gridding.
 
 ## Where we are (2026-11-14)
 
@@ -168,9 +167,10 @@ sensor without the user's approval.
   inertial heading, side from `airs_xtrack` (≤ 44 left), indices 0-based.
   **Height from the orbit phase, not 705.3 km (user decision 2026-11-13,
   revising 1.4):** the height runs 692-720 km over the record. Areas within
-  about 1% of L1B's, common area ≥ 0.987. The eight L1B granules are in
-  `/glade/derecho/scratch/kheyblom/data/wisosat_validation/airs_l1b/`
-  (458 MB; delete only with the user's say).
+  about 1% of L1B's, common area ≥ 0.987. The engine's `utils/airs_fov.py` was run against the same granules on
+  2026-11-14 with the same result (`logs/airs_fov_engine_l1b_20261114.log`);
+  the eight L1B granules were then deleted (user approval);
+  `tools/survey/airs_l1b_fetch.sh` fetches them again (show the user first).
 - **δD (D2):** computed here from the 17-level profiles, never TROPESS's
   `dd_col_p`: per level (a level dimension, the surface level its own field)
   and as the H2O-weighted 850-250 hPa partial column

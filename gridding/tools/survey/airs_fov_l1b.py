@@ -2,7 +2,8 @@
 
 The one-off validation of the `airs_fov` prototype (`airs_fov_polygon.py`)
 against the eight AIRIBRAD.005 granules fetched by `airs_l1b_fetch.sh`
-(2026-11-13). Production reads no L1B. For every target TROPESS retrieved
+(2026-11-13; deleted 2026-11-14 once the engine's module had been checked
+against them too: fetch them again to rerun this). Production reads no L1B. For every target TROPESS retrieved
 in those granules it checks, against L1B:
 
 - **the indices** (1.3): `airs_atrack`/`airs_xtrack` address L1B's arrays

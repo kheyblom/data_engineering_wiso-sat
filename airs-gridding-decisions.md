@@ -160,8 +160,13 @@ granules (RS 2010-06-15: 126, 182, 235; FS 2022-06-01: 053, 115, 180; FS
 2026-05-15: 193, 232), every target TROPESS retrieved in them (2,548).
 Scripts `gridding/tools/survey/airs_fov_polygon.py` (the model and its
 L2-only self-checks), `airs_l1b_fetch.sh` and `airs_fov_l1b.py`; output in
-`gridding/logs/airs_fov_{polygon,l1b}_20261113.log`; granules in
-`/glade/derecho/scratch/kheyblom/data/wisosat_validation/airs_l1b/`.
+`gridding/logs/airs_fov_{polygon,l1b}_20261113.log`. The engine's own
+module (`gridding/utils/airs_fov.py`, the code production runs) was checked
+against the same granules on 2026-11-14, after its orbit-phase fit was
+tightened: area 0.997-1.011 of L1B's, common area at least 0.987, the side
+right on all 2,548 (`gridding/logs/airs_fov_engine_l1b_20261114.log`). The
+granules (458 MB) were then deleted with the user's approval;
+`airs_l1b_fetch.sh` fetches them again.
 
 | sub-decision | result |
 | --- | --- |
