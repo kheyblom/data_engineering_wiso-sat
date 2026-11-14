@@ -71,13 +71,22 @@ bench, then production (root CLAUDE.md: the allocation is finite).
 
 ### Findings (2026-11-13)
 
-1. **The independent recomputation of AIRS agrees with the build to 1e-8
-   on sums, not 1e-9.** The footprints depend on a fitted orbit phase; the
-   build fits it by Gauss-Newton on spherical trigonometry, the verifier by
-   scipy on unit vectors, and the two stop ~1e-9° apart. Sums pass at
-   `sum_rtol` 1e-8 and fail at 1e-9 (the column method's default, kept for
-   TROPOMI). AIRS configs set `verify.sum_rtol: 1.0e-7`. Counts and
-   occupied cells matched exactly.
+1. **Both orbit-phase fits must reach the least-squares minimum itself**
+   (found on the fixture 2026-11-13, fixed after the bench 2026-11-14). The
+   footprints depend on a fitted orbit phase, which the build fits by
+   Gauss-Newton on spherical trigonometry and the verifier by scipy on unit
+   vectors. The misfit is not zero at the minimum (~0.1°), so a fit with
+   one-sided differences settles off it, and scipy with a badly scaled
+   phase rate stopped early: the two phases differed by 1e-7° on RS and up
+   to 6e-5° on an FS day. Sums then agreed only to 1e-8, and on the FS
+   bench 7 of 972 checks failed (coverage of sliver overlaps on every
+   sampled day, a kernel-diagonal mean near zero; absolute differences
+   ~2e-8). With central differences run until the steps vanish, and the
+   phase rate scaled by the scans' half-span in the verifier, the phases
+   agree to ~1e-9° and the sums pass at 1e-10 (fail at 1e-11): the default
+   `SUM_RTOL` of 1e-9 holds, and no AIRS config sets `verify.sum_rtol`. A
+   profile-method statistic is also allowed an absolute difference of
+   `SUM_RTOL` times its largest value, for means of signed values near 0.
 2. **A day's own phase fit can be badly wrong where it has few targets**
    (`../docs/products/tropess.md`, "Footprint model"): RS 2014-12-13 (10
    retrievals within 134 scans) fits a phase rate 0.5% off, which is 25 km

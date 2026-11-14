@@ -14,15 +14,20 @@ config and the gridding key. What is the same is the method
   antiderivative of a mole fraction linear in ln p (the build builds
   vectorized level weights);
 - **orbit phase:** ``scipy.optimize.least_squares`` on a residual built
-  from 3-D unit vectors (the build: Gauss-Newton on spherical trigonometry);
+  from 3-D unit vectors (the build: Gauss-Newton on spherical trigonometry).
+  Both use central differences and run to the least-squares minimum, so the
+  two phases agree far more closely than either's search would by itself;
 - **footprints:** unit-vector rotations for the scan plane and the
   satellite's place, the ellipsoid met by solving the quadratic in ECEF,
   and pyproj for every geodetic conversion;
 - **sums:** pandas group-bys over the (footprint, cell) pairs shapely gives.
 
-The two fits stop at slightly different phases (~1e-9 degrees), so
-footprint overlaps agree to about 1e-8 relative, not to the last bit: the
-config's ``verify.sum_rtol`` says how closely sums must match.
+Both orbit-phase fits run to the least-squares minimum (central
+differences, steps down to rounding), so the two phases agree to ~1e-9
+degrees and the sums to ~1e-10 relative: the verifier's default ``SUM_RTOL``
+holds for this method too. With one-sided differences the fits stopped
+1e-7 to 6e-5 degrees apart, and statistics of sliver overlaps failed
+(gridding/TESTING.md, AIRS bench).
 """
 import math
 
@@ -192,15 +197,24 @@ def fit(n, lat, scan):
     n_mid = 0.5 * (n.min() + n.max())
     height = np.full(n.shape, model.FIT_HEIGHT)
 
+    # the phase rate is fitted as its phase over the half-span of the scans, so both parameters
+    # move the targets by about as much per unit and the solver's steps are well scaled
+    reach = max(float(np.abs(n - n_mid).max()), 1.0)
+
     def residual(parameters):
-        placed, _, _ = _model_track(parameters[0] + parameters[1] * (n - n_mid), scan, radius, height)
+        placed, _, _ = _model_track(parameters[0] + parameters[1] * (n - n_mid) / reach, scan, radius, height)
         return np.arcsin(np.clip(placed[:, 2], -1, 1)) - target_lat
 
-    start = min(np.radians(np.arange(0, 360, 2.0)), key=lambda u0: float(np.square(residual((u0, model.K0))).sum()))
-    solution = scipy.optimize.least_squares(residual, (start, model.K0), x_scale=(1.0, 1e-6), xtol=1e-15,
-                                            ftol=1e-15, gtol=1e-15)
-    return {'u0': float(solution.x[0]), 'k': float(solution.x[1]), 'n_mid': float(n_mid), 'targets': int(n.size),
-            'span': float(n.max() - n.min()), 'residual': float(np.degrees(np.abs(residual(solution.x)).max()))}
+    start = min(np.radians(np.arange(0, 360, 2.0)),
+                key=lambda u0: float(np.square(residual((u0, model.K0 * reach))).sum()))
+    # central differences and the tightest tolerances, twice: the least-squares minimum itself,
+    # which the build's fit also reaches, not wherever a looser search would stop
+    best = np.array([start, model.K0 * reach])
+    for _ in range(2):
+        best = scipy.optimize.least_squares(residual, best, jac='3-point', xtol=1e-15, ftol=1e-15, gtol=1e-15,
+                                            max_nfev=2000).x
+    return {'u0': float(best[0]), 'k': float(best[1] / reach), 'n_mid': float(n_mid), 'targets': int(n.size),
+            'span': float(n.max() - n.min()), 'residual': float(np.degrees(np.abs(residual(best)).max()))}
 
 
 def sound(result):

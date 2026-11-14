@@ -110,9 +110,6 @@ verify:
   samples: {day: 10}
   tiles: 6
   times: 6
-  # the verifier fits the orbit phase on its own, so sums agree to ~1e-8, not
-  # to the column method's 1e-9 (TESTING.md finding 1)
-  sum_rtol: 1.0e-7
 
 # rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
 temporal:

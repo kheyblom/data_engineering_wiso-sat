@@ -65,8 +65,10 @@ what settings, is in each product document and `STATE.md`.
   stores were finalized at different times.
 - **The verifier recomputes the profile method on its own**
   (`verify_profile.py`), sharing only a footprint model's constants. A
-  fitted model (an orbit phase) is fitted again there, so sums agree to
-  ~1e-8, not 1e-9: such configs set `verify.sum_rtol` (TESTING.md).
+  fitted model (an orbit phase) is fitted again there: **both fits must run
+  to the minimum itself** (central differences, well-scaled parameters), or
+  they stop apart and sliver overlaps fail verification (TESTING.md).
+  `verify.sum_rtol` can loosen the sums' tolerance; no config needs it.
 - **A method, key or footprint model built for one product is used for
   another only with the user's approval.**
 

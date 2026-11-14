@@ -82,13 +82,6 @@ periods_per_commit: 1
 num_workers: 2
 max_pairs: 500000
 
-verify:
-  # the footprints depend on a fitted orbit phase, which the verifier fits on
-  # its own, so sums agree closely but not to the last bit: measured on this
-  # fixture they pass at 1e-8 and fail at 1e-9 (the column method's 1e-9
-  # default). 1e-7 leaves a decade of margin
-  sum_rtol: 1.0e-7
-
 temporal:
   source_tag: fixture-spatial
   block_rows: 60

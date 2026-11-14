@@ -168,12 +168,19 @@ def fit_phase(n, lat, scan):
     # the phase is found by a scan first: the misfit has a second minimum half an orbit away
     u0 = min(np.radians(np.arange(0, 360, 2.0)), key=lambda v: np.square(residual(v, K0)).sum())
     k = K0
-    for _ in range(30):
+    # Gauss-Newton with central differences, run until both steps vanish. The fit must reach
+    # the least-squares minimum itself, not a point that depends on how it was searched: the
+    # residual is not zero there (~0.1 degrees), so a one-sided Jacobian settles ~1e-7 degrees
+    # off, and the verifier's own fit would then disagree by as much (TESTING.md finding 5)
+    reach = max(float(np.abs(x).max()), 1.0)
+    du, dk = 1e-5, 1e-5 / reach
+    for _ in range(60):
         r = residual(u0, k)
-        jacobian = np.stack([(residual(u0 + 1e-6, k) - r) / 1e-6, (residual(u0, k + 1e-9) - r) / 1e-9], axis=1)
+        jacobian = np.stack([(residual(u0 + du, k) - residual(u0 - du, k)) / (2 * du),
+                             (residual(u0, k + dk) - residual(u0, k - dk)) / (2 * dk)], axis=1)
         step = np.linalg.lstsq(jacobian, -r, rcond=None)[0]
         u0, k = u0 + step[0], k + step[1]
-        if abs(step[0]) < 1e-10:
+        if abs(step[0]) < 1e-14 and abs(step[1]) * reach < 1e-14:
             break
     return {'u0': float(u0), 'k': float(k), 'n_mid': float(n_mid),
             'residual': float(np.degrees(np.abs(residual(u0, k)).max())), 'targets': int(n.size),

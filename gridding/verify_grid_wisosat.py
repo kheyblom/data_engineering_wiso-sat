@@ -556,8 +556,13 @@ def check_spatial_samples(report, settings, grid, frequency, paths, l2, first, l
                 rtol = float((settings.get('verify') or {}).get('sum_rtol', SUM_RTOL))
                 ok = np.allclose(stored, want, rtol=rtol, atol=rtol * max(np.abs(want).max(), 1e-300))
             else:
+                atol = STAT_ATOL.get(quantity, 0)
+                if settings.get('method', 'column') == 'profile' and np.isfinite(want).any():
+                    # a mean of signed values (a kernel diagonal) can lie near 0, where a relative
+                    # tolerance means nothing: allow what the sums' own tolerance allows
+                    atol = max(atol, SUM_RTOL * float(np.nanmax(np.abs(want))))
                 ok = (np.array_equal(np.isnan(stored), np.isnan(want))
-                      and np.allclose(stored, want, rtol=STAT_RTOL, atol=STAT_ATOL.get(quantity, 0), equal_nan=True))
+                      and np.allclose(stored, want, rtol=STAT_RTOL, atol=atol, equal_nan=True))
             if not report.check(ok, f'{label} {quantity}'):
                 diff = np.abs(stored.astype('float64') - want)
                 LOG.error(f'  max |diff| {np.nanmax(diff):.3g} at cell {int(np.nanargmax(diff))}; stored occupied '
