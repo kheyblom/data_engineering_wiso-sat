@@ -1732,8 +1732,8 @@ with the user on 2026-11-13; the evidence and options are in
 
 32 stores per store set, grid and frequency, in each layout (14 column, 12
 level, 6 surface; the gridding key `gridding/nomenclature-key_grid_tropess.md`
-is the machine-read list). **The names are proposed, not yet approved:**
-their 25 new rows are in style_guides, uncommitted, for the user's review.
+is the machine-read list). The names were approved by the user on
+2026-11-14 (25 new rows, style_guides `540b122`).
 
 | group | store variables |
 | --- | --- |

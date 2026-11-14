@@ -27,7 +27,7 @@ finalize_grid_wisosat.py     # --layout ...; --status, then --attrs, --tag, --gc
                              # --relocate after a move rewrites the path attributes
 submit_grid_wisosat.sh       # CONFIG=... [VERIFY=1 LAYOUT=...|RECHUNK=1] ./submit_grid_wisosat.sh; show the user first
 nomenclature-key_grid.md     # machine read: quantity -> canonical name, units, kind, dtype; input units; frequencies
-nomenclature-key_grid_tropess.md  # the same for the profile method (AIRS v1): 32 quantities in three groups
+nomenclature-key_grid_<source>.md  # the same for a profile-method source (quantities in three groups)
 products/<source>.py         # per product: quality levels (selection_stores, select), FOOTPRINT_MODELS
 utils/                       # config, nomenclature, periods, grids, footprints, sums, l2 (readers), stores,
                              # columns + profiles (the profile method's derived inputs), airs_fov (AIRS footprints)
@@ -45,34 +45,30 @@ each `--apply`** (as l2/, user decision 2026-10-19).
 ## Two methods (2026-11-13)
 
 A config's `method` picks how the inputs are made; everything after the
-(footprint, cell) overlaps is shared.
+(footprint, cell) overlaps is shared. Which products use which, and with
+what settings, is in each product document and `STATE.md`.
 
-- **`column`** (default; TROPOMI): δD, σ and the H2O column are L2
-  variables, and the footprint is the L2 corners. Key
-  `nomenclature-key_grid.md`, 17 stores per (grid, frequency, layout).
-- **`profile`** (AIRS v1; `../docs/products/tropess.md`, "Gridding inputs,
-  AIRS v1"): everything gridded is derived here from L2 profiles
-  (`utils/columns.py`, `utils/profiles.py`), in three groups: the column
-  between `profile.column`'s pressures, each fixed level of
-  `profile.levels` (a `level` dimension), and the surface level. The
-  footprint is drawn by `airs_fov` from the L2 fields the config's
-  `footprint` block names. Key `nomenclature-key_grid_tropess.md` (config
-  `quantity_key`), 32 stores; no σ, so no standard error.
+- **`column`** (default): δD, σ and the H2O column are L2 variables, and
+  the footprint is the L2 corners. Key `nomenclature-key_grid.md`.
+- **`profile`**: everything gridded is derived here from L2 profiles
+  (`utils/columns.py`, `utils/profiles.py`), in three groups of stores: a
+  column between two pressures, each fixed level (a `level` dimension) and
+  the surface level. The footprint is drawn by a model from the L2 fields
+  the config's `footprint` block names. Its key has a `group` column.
 - **A config names its key** (`quantity_key`), and `config.load_config`
   makes it the key in use: one config, one key, per process. A key without
   the standard error builds no σ sums.
-- **`store_set`** adds a token after the version in the gridded names only
-  (`v_1.rs.daytime`): an approved exception for the AIRS v1 gridded stores
-  (D7); never set it for another product without the user's approval.
-- **`l2.store_tags`** reads a store at its own tag (AIRS v1's four
-  footprint stores carry `v1-verified-20261113`, the rest
-  `v1-verified-20261023`; user decision 2026-11-13).
+- **`store_set`** adds a token after the version in the gridded names
+  only. It is a style-guide exception: set it only where the user has
+  approved it for that product.
+- **`l2.store_tags`** reads a store at its own tag, where a product's L2
+  stores were finalized at different times.
 - **The verifier recomputes the profile method on its own**
-  (`verify_profile.py`), sharing only the footprint model's constants. Its
-  orbit-phase fit and the build's stop ~1e-9° apart, so AIRS configs set
-  `verify.sum_rtol: 1.0e-7` (TESTING.md finding 1).
-- **Using the profile method, its key or `airs_fov` for another product or
-  collection (CrIS, AIRS v2) needs the user's approval first.**
+  (`verify_profile.py`), sharing only a footprint model's constants. A
+  fitted model (an orbit phase) is fitted again there, so sums agree to
+  ~1e-8, not 1e-9: such configs set `verify.sum_rtol` (TESTING.md).
+- **A method, key or footprint model built for one product is used for
+  another only with the user's approval.**
 
 ## Inputs: the L2 stores only
 

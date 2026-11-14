@@ -19,11 +19,10 @@ Read this first in a new session. Update it whenever work lands.
     config, store sets, L2 tags per store, the verifier's own profile
     method; TROPOMI unchanged;
   - an AIRS fixture and five test cases (`TESTING.md`): 14 cases pass.
-  **Open with the user: the 25 new store names** (D9, 9.3), written to
-  `style_guides/nomenclature_data.md` and left uncommitted for review. The
-  key `nomenclature-key_grid_tropess.md` uses them; a renamed row means the
-  same edit there, in `tropess.md` ("Gridded stores") and the method doc's
-  Section 10 example.
+  The 25 new store names (D9, 9.3) were approved by the user on 2026-11-14
+  (style_guides `540b122`). **Bench submitted 2026-11-14** (RS June 2010,
+  FS June 2022; `config/airs_*/config_grid_bench.yaml`; results go in
+  TESTING.md Tier 2).
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
@@ -139,15 +138,12 @@ sensor without the user's approval.
      3. ~~D9, the method doc, the engine changes, the AIRS fixture.~~ Done
         2026-11-13 (see "Where we are").
      4. **Next, in order:**
-        - the user's review of the 25 names, then the style_guides commit;
-        - production configs for the four store sets (`v_1.rs`,
-          `v_1.rs.daytime`, `v_1.fs`, `v_1.fs.daytime`; D7): `l2.tag`
-          `v1-verified-20261023` with `store_tags` `v1-verified-20261113`
-          for the four footprint stores, `verify.sum_rtol: 1.0e-7`, the
-          attribute texts (user-facing: title, summary, comments per
-          quantity). One config per set: the two sets of a stream read the
-          same L2 days, so they could share a pass only with an engine
-          change (not planned);
+        - ~~production configs for the four store sets~~ (written
+          2026-11-13: `config/airs_{rs,fs}/config_grid{,_daytime}.yaml`;
+          their attribute texts are user-facing and worth the user's read
+          before production). One config per set: the two sets of a stream
+          read the same L2 days, so they could share a pass only with an
+          engine change (not planned);
         - a one-month bench each for RS and FS (job shown to the user
           first). It settles the chunks: at 1° a 2-D period is 0.26 MB
           (float32), so TROPOMI's 4 periods per chunk would make ~1,600
