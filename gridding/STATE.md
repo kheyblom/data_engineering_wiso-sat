@@ -6,13 +6,18 @@ Read this first in a new session. Update it whenever work lands.
 
 **Done 2026-11-14:** task 1 (bench root deleted) and task 2 (eight jobs
 submitted; all four builds started at 12:10 from `9a7c2bb`, clean, so the
-tree no longer has to stay clean). Jobs, build then verify:
+tree no longer has to stay clean). Then the user had the every-overpass set
+renamed `all` (D7 below): its two builds (8186697, 8186701) and their
+verifies (8186698, 8186702) were cancelled at ~12:24, their 64 partial
+stores deleted, and both rebuilt at 12:27 from `d3b7c7f`. Their logs
+(`grid_airs_{rs,fs}.log`) hold the cancelled run first; the rebuild starts
+at the `revision d3b7c7f` line. Jobs, build then verify:
 
 | config | build | verify |
 | --- | --- | --- |
-| `airs_rs/config_grid.yaml` | 8186697 | 8186698 |
+| `airs_rs/config_grid.yaml` (`v_1.rs.all`) | 8186771 | 8186772 |
 | `airs_rs/config_grid_daytime.yaml` | 8186699 | 8186700 |
-| `airs_fs/config_grid.yaml` | 8186701 | 8186702 |
+| `airs_fs/config_grid.yaml` (`v_1.fs.all`) | 8186773 | 8186774 |
 | `airs_fs/config_grid_daytime.yaml` | 8186703 | 8186704 |
 
 Next: check the logs against "Expected in the logs" below, then the steps
