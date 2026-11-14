@@ -1686,11 +1686,13 @@ with the user on 2026-11-13; the evidence and options are in
 
 - **Products and store sets (D7, D8, user decisions 2026-11-13):** v1
   only (v2 later). RS and FS are gridded as separate products, each as two
-  store sets: every overpass (`v_1.rs`, `v_1.fs`) and daytime only
+  store sets: every overpass (`v_1.rs.all`, `v_1.fs.all`) and daytime only
   (`v_1.rs.daytime`, `v_1.fs.daytime`), e.g.
+  `wisosat.airs.v_1.rs.all.day.latlon_1p0x1p0.<variable>.zarr` and
   `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`. The
-  `daytime` token in the version slot is an approved style-guide exception
-  for these stores only. Daytime is `day_night_flag == 1` as published
+  set token in the version slot (`all` or `daytime`) is an approved
+  style-guide exception for these stores only (`all` added 2026-11-14, so
+  that neither set has the bare name). Daytime is `day_night_flag == 1` as published
   (TROPESS's `sunlit_binary_mask`; quality level `summary_daytime` = D5's
   `summary` and flag 1); flag -999 rows go only into the every-overpass set.
   Of the selected rows, RS is 45.8% flag 1, 54.2% flag 0 and 5 rows -999;

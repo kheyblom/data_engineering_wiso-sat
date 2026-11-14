@@ -202,7 +202,9 @@ sensor without the user's approval.
 - **Store sets (D7):** every overpass and daytime only (`day_night_flag ==
   1`, quality level `summary_daytime`), for RS and FS. **Approved exception,
   for the AIRS v1 gridded stores only:** the set goes in the version slot,
-  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`.
+  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`, and
+  the every-overpass set carries `all` (user, 2026-11-14):
+  `wisosat.airs.v_1.rs.all.day.latlon_1p0x1p0.<variable>.zarr`.
 
 ## Next
 

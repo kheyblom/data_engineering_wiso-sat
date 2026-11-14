@@ -1,4 +1,4 @@
-# Production config for the AIRS gridded stores, store set v_1.rs (TROPESS AIRS-Aqua HDO
+# Production config for the AIRS gridded stores, store set v_1.rs.all (TROPESS AIRS-Aqua HDO
 # L2, collection 1, reanalysis stream; every overpass).
 #
 # One build (grid_wisosat.py) writes the spatial stores in one pass over the UTC days;
@@ -11,6 +11,10 @@ source: tropess
 # the collection version and the stream, as the L2 stores name them (v_1.rs)
 version: '1'
 version_product: rs
+# every overpass as a store set of its own beside the daytime one: the token goes after
+# the version in the gridded names (v_1.rs.all). An approved style-guide exception for
+# the AIRS v1 gridded stores only (user decisions 2026-11-13, D7; the token 2026-11-14)
+store_set: all
 # delta D, H2O and the weights are derived here from the L2 profiles
 # (gridding/CLAUDE.md, "Two methods"); the key lists the 32 stores
 method: profile
@@ -116,14 +120,15 @@ temporal:
 
 attrs:
   title: >-
-    WISO-SAT AIRS HDO (TROPESS reanalysis stream), gridded {frequency_long_name} on {grid_name}: {variable}
+    WISO-SAT AIRS HDO (TROPESS reanalysis stream, all overpasses), gridded {frequency_long_name} on {grid_name}: {variable}
   summary: >-
     {long_name}, from the NASA TROPESS AIRS-Aqua HDO/H2O retrievals of the
     reanalysis stream (collection {version_label}) as distributed for
     WISO-SAT, gridded by footprint overlap: each retrieval's footprint
     contributes to every cell it overlaps with weight w = overlap area x H2O
     partial column, and every retrieval whose UTC time falls in the period is
-    averaged. A daytime-only set of the same stores has "daytime" after the version in its name. Delta D and the H2O partial columns are computed in gridding
+    averaged. This is the set of every overpass ("all" after the version in its name); the
+    "daytime" set holds only retrievals in sunlight. Delta D and the H2O partial columns are computed in gridding
     from the retrieved profiles; the method is in gridding_method.
   Conventions: ACDD-1.3
   source: >-

@@ -11,7 +11,7 @@ source: tropess
 # the collection version and the stream, as the L2 stores name them (v_1.rs)
 version: '1'
 version_product: rs
-# the daytime selection as a store set of its own beside the full one: the token goes after
+# the daytime selection as a store set of its own beside the set of every overpass (all): the token goes after
 # the version in the gridded names (v_1.rs.daytime). An approved style-guide exception for
 # the AIRS v1 gridded stores only (user decision 2026-11-13, D7)
 store_set: daytime
@@ -129,8 +129,8 @@ attrs:
     WISO-SAT, gridded by footprint overlap: each retrieval's footprint
     contributes to every cell it overlaps with weight w = overlap area x H2O
     partial column, and every retrieval whose UTC time falls in the period is
-    averaged. This is the daytime set: only retrievals in sunlight (day_night_flag 1); the set without
-    "daytime" in its name holds every overpass. Delta D and the H2O partial columns are computed in gridding
+    averaged. This is the daytime set: only retrievals in sunlight (day_night_flag 1); the "all" set
+    holds every overpass. Delta D and the H2O partial columns are computed in gridding
     from the retrieved profiles; the method is in gridding_method.
   Conventions: ACDD-1.3
   source: >-

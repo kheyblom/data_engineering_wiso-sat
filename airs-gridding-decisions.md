@@ -500,7 +500,7 @@ nearly all 13:30 passes (R13), has 3.5% flag 0.
 | 7.3 | A daytime FS set too | yes: `v_1.fs.daytime` beside `v_1.fs`   | Then the daytime record runs on one basis across the RS-FS change. It is cheap: it drops FS's 3.5% flag 0 and 0.2% flag -999 rows. Without it, RS daytime continues into an FS set that still holds polar-night rows. |
 | 7.4 | The selection | a quality level `summary_daytime` in `products/tropess.py`: D5's `summary` rule and flag 1 | Every value falls in a row: `summary` holds all of `summary_daytime`, and the rows dropped from it are flag 0 or -999. |
 
-**Your decision:** C, and 7.1-7.4 as recommended (2026-11-13). 7.1 is an approved style-guide exception for the AIRS v1 gridded stores only (the `daytime` token in the version slot); it is not carried to another product or collection without approval. Recorded in `docs/products/tropess.md` ("Gridding inputs, AIRS v1").
+**Your decision:** C, and 7.1-7.4 as recommended (2026-11-13). 7.1 is an approved style-guide exception for the AIRS v1 gridded stores only (the `daytime` token in the version slot); it is not carried to another product or collection without approval. **Revised 2026-11-14 (user):** the every-overpass set carries a token too, `all` (`wisosat.airs.v_1.rs.all.day.latlon_1p0x1p0.<variable>.zarr`), so neither set has the bare name; the exception covers both tokens. The two every-overpass builds already running under the bare name were cancelled and rebuilt. Recorded in `docs/products/tropess.md` ("Gridding inputs, AIRS v1").
 
 ## D8. Products, and when to grid v2 [COMPLETED 2026-11-13 for v1]
 
