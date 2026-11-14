@@ -26,7 +26,8 @@ Cases, in order (each depends on the ones before):
     tags per store
 11. AIRS build from nothing (32 stores per frequency, a level dimension);
     the tiny days take a neighbour's orbit phase; rebuild is a no-op
-12. AIRS verify spatial passes; the daytime selection fails it
+12. AIRS verify spatial passes; the daytime selection fails it; an empty
+    period is expected as the build stores it
 13. AIRS finalize spatial, rechunk, verify and finalize temporal
 14. AIRS daytime store set: its own names beside the full set, verified
 """
@@ -44,7 +45,7 @@ import yaml  # type: ignore
 import zarr  # type: ignore
 
 from products import tropess, tropomi
-from utils import airs_fov, columns, config, l2 as l2_utils, nomenclature, periods, stores
+from utils import airs_fov, columns, config, l2 as l2_utils, nomenclature, periods, stores, sums
 from utils.grids import Ease2Grid, LatLonGrid
 
 GRIDDING = config.GRIDDING_ROOT
@@ -399,6 +400,7 @@ def test_airs_build():
 
 @case('AIRS verify spatial passes; the daytime selection fails it')
 def test_airs_verify_spatial():
+    import verify_grid_wisosat as verifier
     output = script('verify_grid_wisosat.py', '--layout', 'spatial', config_path=AIRS_FIXTURE)
     assert 'stores verified' in output and ', 0 failures' in output
     with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
@@ -409,6 +411,17 @@ def test_airs_verify_spatial():
         output = script('verify_grid_wisosat.py', '--layout', 'spatial', '--phases', 'samples', expect=1,
                         config_path=mutant)
         assert 'FAIL' in output and 'stores verified' not in output
+    # a period with no retrieval at all (the records hold such days): the verifier expects
+    # exactly what the build stores for it: sums 0, statistics missing, counts 0
+    loaded = airs_settings()
+    grid = LatLonGrid(1.0)
+    empty_day = periods.day_number('2014-04-01')
+    expected = verifier.recompute(verifier.IndependentL2(loaded), loaded, grid, empty_day, empty_day + 1)
+    area = grid.row_area_km2()[np.arange(grid.n_cells) // grid.shape[1]]
+    stored = sums.fields(sums.Accumulator(grid.n_cells, len(loaded['profile']['levels'])), area)
+    for name, row in nomenclature.quantities().items():
+        ours = stored[name].reshape(-1).astype(row['dtype'])
+        assert np.array_equal(ours, expected[name].astype(ours.dtype), equal_nan=ours.dtype.kind == 'f'), name
 
 
 @case('AIRS finalize spatial, rechunk, verify and finalize temporal')
