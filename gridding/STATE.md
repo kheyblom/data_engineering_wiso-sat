@@ -30,8 +30,11 @@ finalize action for it (2026-11-15): `--text`, added in `1edfd51` (fixture
 test 14 cases pass); `--status` now shows `stale text ['summary']` on
 exactly those 64. Applied 2026-11-15 (user sign-off each): `--attrs` on
 all 128, then `--text` on the 64 daytime; `--status` clean on all 128
-(`stale text none`). Next: `--tag v1-verified-20261115` (dry run clean,
-128 stores), then `--gc`. The text below is the handoff as approved, kept
+(`stale text none`). Then `--tag v1-verified-20261115 --apply` on all
+128 (user sign-off); `--gc` dry run: 0 chunks, manifests or snapshots to
+collect, so no `--gc --apply`. **Spatial finalized 2026-11-15.** Next:
+step 3 (`temporal.source_tag: v1-verified-20261115`, rechunk), with the
+user's sign-off. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and
