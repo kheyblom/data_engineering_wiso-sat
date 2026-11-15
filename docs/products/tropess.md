@@ -1738,6 +1738,12 @@ level, 6 surface; the gridding key `gridding/nomenclature-key_grid_tropess.md`
 is the machine-read list). The names were approved by the user on
 2026-11-14 (25 new rows, style_guides `540b122`).
 
+**Finalized 2026-11-15**, tag `v1-verified-20261115` on all 256 stores
+(four store sets x 32 stores x two layouts), under
+`/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/l3/spatial/` and
+`.../l3/temporal/`: RS 2002-08-30 to 2020-04-01, FS 2021-02-01 to
+2026-05-31 (`gridding/TESTING.md` Tier 3, "AIRS production").
+
 | group | store variables |
 | --- | --- |
 | column, 850-250 hPa | `water_vapor_column_delta_d_850_250hpa`, `..._standard_deviation`, `water_vapor_column_h2o_850_250hpa`, `observation_count`, `observation_count_effective`, `footprint_coverage`, `footprint_area`, `footprint_overlap_area_sum`, and six sums `gridding_weight_850_250hpa_*_sum` |

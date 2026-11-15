@@ -2,166 +2,25 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Start here: AIRS v1 production (submitted 2026-11-14)
+## Where we are (2026-11-15)
 
-**Done 2026-11-14:** task 1 (bench root deleted) and task 2 (eight jobs
-submitted; all four builds started at 12:10 from `9a7c2bb`, clean, so the
-tree no longer has to stay clean). Then the user had the every-overpass set
-renamed `all` (D7 below): its two builds (8186697, 8186701) and their
-verifies (8186698, 8186702) were cancelled at ~12:24, their 64 partial
-stores deleted, and both rebuilt at 12:27 from `d3b7c7f`. Their logs
-(`grid_airs_{rs,fs}.log`) hold the cancelled run first; the rebuild starts
-at the `revision d3b7c7f` line. Jobs, build then verify:
-
-| config | build | verify |
-| --- | --- | --- |
-| `airs_rs/config_grid.yaml` (`v_1.rs.all`) | 8186771 | 8186772 |
-| `airs_rs/config_grid_daytime.yaml` | 8186699 | 8186700 |
-| `airs_fs/config_grid.yaml` (`v_1.fs.all`) | 8186773 | 8186774 |
-| `airs_fs/config_grid_daytime.yaml` | 8186703 | 8186704 |
-
-**All four builds and spatial verifies passed** (2026-11-14; every check
-below as expected; TESTING.md Tier 3, "AIRS production"): step 1 below is
-done. Next: step 2, finalize spatial. `--status` and the `--attrs` dry run
-(2026-11-15) are clean on all 128 stores, **but no `--apply` yet: the 64
-daytime stores' `summary` still says "the set without 'daytime' in its name
-holds every overpass"** (built before the `all` rename). The user chose a
-finalize action for it (2026-11-15): `--text`, added in `1edfd51` (fixture
-test 14 cases pass); `--status` now shows `stale text ['summary']` on
-exactly those 64. Applied 2026-11-15 (user sign-off each): `--attrs` on
-all 128, then `--text` on the 64 daytime; `--status` clean on all 128
-(`stale text none`). Then `--tag v1-verified-20261115 --apply` on all
-128 (user sign-off); `--gc` dry run: 0 chunks, manifests or snapshots to
-collect, so no `--gc --apply`. **Spatial finalized 2026-11-15.** Step 3
-signed off and submitted 2026-11-15 10:24 (`source_tag` set in
-`8641502`): rechunk (develop, 1 cpu, 48 GB; 3 h RS, 2 h FS) then
-temporal verify `afterany` (1 cpu, 32 GB, 1 h):
-
-| config | rechunk | verify temporal |
-| --- | --- | --- |
-| `airs_rs/config_grid.yaml` | 8196538 | 8196539 |
-| `airs_rs/config_grid_daytime.yaml` | 8196540 | 8196541 |
-| `airs_fs/config_grid.yaml` | 8196542 | 8196543 |
-| `airs_fs/config_grid_daytime.yaml` | 8196544 | 8196545 |
-
-**Done 2026-11-15:** all eight exit 0; rechunks 34-52 min (peak memory up
-to 44 GiB, fs.all, of the 48 GB request); each temporal verify **2,860
-checks, 0 failures**, 1-2 min. 72 GiB of temporal stores, at most 837
-files per store. Temporal `--status` and `--attrs` dry runs clean on all
-128 (`stale text none`). Step 4: temporal `--attrs --apply` on all 128
-(user sign-off), `--status` clean; `--tag v1-verified-20261115` dry run
-clean, applied (sign-off); `--gc` dry run 0 to collect, so no `--gc
---apply`. **AIRS v1 finalized 2026-11-15** (TESTING.md Tier 3, "AIRS
-production"): 256 stores at `v1-verified-20261115`. Next: step 5, the
-wrap-up, with the user's sign-off. The text below is the handoff as approved, kept
-for reference.
-
-Everything up to production is done and committed; the engine, fixture and
-bench all pass. The user asked for this handoff so a new session runs
-production. **Two tasks are already approved by the user (2026-11-14):
-do them without asking again, exactly as written.** Everything after them
-needs the user's sign-off as usual.
-
-**Before anything:** from `gridding/`, `git status --short` shows nothing,
-`bash -lc 'qstat -u $USER'` shows no job, and
-`/glade/derecho/scratch/$USER/data/wisosat/zarr/airs/` holds only `l2/`
-(no `l3/` yet). If any of that is not so, stop and tell the user.
-
-**Approved task 1: delete the AIRS bench root.** It is throwaway (128
-stores, 1.1 GiB); its results are in TESTING.md ("AIRS bench") and its logs
-stay in `logs/`. Look, then delete only this directory:
-
-```bash
-ls /glade/derecho/scratch/$USER/data/wisosat/bench/zarr/airs/l3
-rm -rf /glade/derecho/scratch/$USER/data/wisosat/bench/zarr/airs
-```
-
-**Approved task 2: submit the eight production jobs.** Four builds
-(develop, 8 cores, 32 GB; walltime 3 h for the RS sets, 2 h for the FS
-sets), each followed `afterany` by its spatial verify (develop, 1 core, 32
-GB, 1 h). The four sets write different stores, so the builds may run side
-by side. The build refuses a dirty `gridding/` tree at submit and again at
-start: keep the tree clean until every build has started.
-
-```bash
-bash -lc 'cd /glade/work/$USER/data_engineering/data_engineering_wiso-sat/gridding &&
-for spec in "airs_rs/config_grid.yaml 03:00:00" "airs_rs/config_grid_daytime.yaml 03:00:00" \
-            "airs_fs/config_grid.yaml 02:00:00" "airs_fs/config_grid_daytime.yaml 02:00:00"; do
-  set -- $spec; C=config/$1
-  b=$(CONFIG=$C QUEUE=develop NCPUS=8 MEM=32GB WALLTIME=$2 ./submit_grid_wisosat.sh) && echo "$C build $b" &&
-  v=$(CONFIG=$C VERIFY=1 LAYOUT=spatial AFTER=$b QUEUE=develop NCPUS=1 MEM=32GB WALLTIME=01:00:00 ./submit_grid_wisosat.sh) &&
-  echo "$C verify $v"
-done'
-```
-
-- **What was approved:** these eight jobs, the stores under
-  `/glade/derecho/scratch/$USER/data/wisosat/zarr/airs/l3/spatial`, and
-  the cost: expected ~35 core-hours (bench: RS ~1.5 h, RS daytime ~1.2 h,
-  FS sets ~0.7 h each on 8 cores), at most ~84 if every job hit its
-  walltime; ~95 GiB of spatial stores. If a job will cost more than that,
-  or develop will not take four builds at once, say so before changing
-  anything. A build stopped by walltime resumes: resubmit it `AFTER` the
-  stopped one, and tell the user.
-- **Attribute texts:** the build writes each store's title, summary and
-  per-variable comments from `config/airs_{rs,fs}/config_grid{,_daytime}.yaml`
-  (`attrs`, `variable_attrs`). The user was offered a read of them before
-  production and chose to go ahead.
-- **Expected in the logs** (`logs/grid_airs_<set>.log`,
-  `logs/verify_grid_airs_<set>.log`): 6,425 days for RS, 1,946 for FS;
-  "missing an input" 0 or 1 a day (the masked first profile of a Standard
-  file, R22); each verify ending `N checks, 0 failures` and `stores
-  verified`. Selected rows over the record should come to RS 11,065,071
-  (daytime 5,066,094) and FS 19,126,176 (daytime 18,423,705), less the R22
-  rows (`tropess.md`, "Gridding inputs, AIRS v1").
-- **A build may stop on purpose** on something the bench months did not
-  hold: a level slot above a surface holding another pressure
-  (`utils/profiles.py`), or an AIRS day with no sound orbit-phase fit
-  within 30 days (`utils/airs_fov.py`). Neither is to be worked around:
-  measure what the data holds and put it to the user.
-- **A verify failure** is investigated, not tolerated: the bench's only
-  failures came from the two orbit-phase fits stopping apart (TESTING.md
-  finding 1, fixed). `verify.sum_rtol` exists but no config sets it.
-
-**Then, each step with the user's sign-off** (CLAUDE.md, the order for a
-product; one finalize action per invocation, dry run first):
-
-1. Report the builds and verifies (wall, days, rows, checks) and add an
-   "AIRS production" run log to TESTING.md Tier 3.
-2. Finalize spatial for each of the four configs: `--status`, `--attrs`,
-   `--tag v1-verified-<YYYYMMDD>`, `--gc` (dry run of each first; every
-   `--apply` signed off).
-3. Set `temporal.source_tag` to that tag in the four configs (it is `null`
-   now), commit, and show the user the rechunk jobs: one per config, 1
-   core, **48 GB** (a block of an RS level sum is a 10.7 GB buffer), then
-   `VERIFY=1 LAYOUT=temporal` `AFTER` each. Bench: about a minute for a
-   month; the RS record reads each spatial store five times.
-4. Finalize temporal the same way.
-5. Wrap up: cut "AIRS v1 decisions" below (the docs carry it), and update
-   `../TASKS.md` and the root CLAUDE.md if a line there names AIRS
-   gridding.
-
-## Where we are (2026-11-14)
-
-- **AIRS v1: engine, fixture and bench done; production approved, not
-  run** (above). Decisions D1-D9 and their evidence:
-  [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md); what
-  users need: `../docs/products/tropess.md` ("Gridding inputs, AIRS v1",
-  "Gridded stores", "Footprint model") and the method doc (profile
-  sensors: Sections 2, 5, 6, 10). What was built on 2026-11-13/14:
-  - the footprint model, validated against AIRS L1B (D1; the height from
-    the orbit phase, a revision the user approved);
-  - L2: four footprint stores per stream, built, verified, finalized
-    (`../l2/TESTING.md`), tag `v1-verified-20261113` on those only, so
-    gridding reads L2 at a tag per store (`l2.store_tags`);
-  - the engine's second method, `profile` (`CLAUDE.md`, "Two methods"),
-    with the verifier's own version of it; TROPOMI unchanged;
-  - an AIRS fixture and five test cases: `validation/test_pipeline.py`
-    passes 14 cases (~7 min);
-  - the 25 store names, approved by the user (style_guides `540b122`);
-  - the bench (TESTING.md, "AIRS bench"): RS June 2010 and FS June 2022
-    build, verify, rechunk and verify again with 0 failures, once both
-    orbit-phase fits were made to reach the least-squares minimum
-    (finding 1). The chunks in the configs stand.
+- **AIRS v1 1° daily finalized** (2026-11-15; TESTING.md Tier 3, "AIRS
+  production"): four store sets, `v_1.rs.all`, `v_1.rs.daytime`,
+  `v_1.fs.all` and `v_1.fs.daytime` (the set token in the version slot is
+  an approved exception for these stores only; `all` added 2026-11-14,
+  user decision), 32 stores each per layout: 256 stores under
+  `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/airs/l3/` (`spatial/`
+  65 GiB, `temporal/` 72 GiB), tag **`v1-verified-20261115`** on all.
+  RS 6,425 days (2002-08-30 to 2020-04-01), FS 1,946 (2021-02-01 to
+  2026-05-31). Verify spatial 1,196 checks, temporal 2,860, per set, 0
+  failures; `--gc` found nothing to collect. ~19 core-hours. The daytime
+  summaries were corrected after the rename by `finalize --text` (added
+  for it, `1edfd51`; recorded in each store's `history`). Decisions D1-D9
+  and their evidence: [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md);
+  what users need: `../docs/products/tropess.md` ("Gridding inputs, AIRS
+  v1", "Gridded stores", "Footprint model") and the method doc. Memory at
+  the limit twice (fs.daytime build 32 GiB of 32; fs.all rechunk 44 of
+  48), likely page cache: size a longer or finer AIRS run with headroom.
 
 - **TROPOMI 0.25° daily finalized** (2026-11-11; TESTING.md Tier 3): 2,945
   days (2017-11-08 to 2025-11-30), 17 spatial and 17 temporal stores, 134
@@ -197,53 +56,6 @@ product; one finalize action per invocation, dry run first):
   1e-9 (TESTING.md).
 - **The method doc** has its store table (Section 10) and the weight in mol.
 
-## AIRS v1 decisions (user, 2026-11-13/14; cut this section once production is finalized)
-
-Kept here while AIRS is in progress; what users need is already in the
-docs (`tropess.md`, the method doc).
-
-D1-D9 in [`../airs-gridding-decisions.md`](../airs-gridding-decisions.md)
-(evidence, options, order of work); the result is in `../docs/products/tropess.md`,
-"Gridding inputs, AIRS v1". They extend the engine; none applies to another
-sensor without the user's approval.
-
-- **Scope:** v1 only (RS and FS as separate products); v2 later.
-- **Footprint (D1):** the 1.1° FOV projected onto WGS84 as a 32-vertex
-  polygon, built here (model `airs_fov`) from four published geometry
-  fields added to L2 (`airs_granule`, `airs_atrack`, `airs_xtrack`,
-  `airs_view_ang`). **Prototyped and validated against L1B 2026-11-13**
-  (`tools/survey/airs_fov_polygon.py`, ported to `utils/airs_fov.py`;
-  `airs_fov_l1b.py`; logs
-  `logs/airs_fov_*_20261113.log`; `tropess.md`, "Footprint model"): orbit
-  model with one phase fit per file, scan plane perpendicular to the
-  inertial heading, side from `airs_xtrack` (≤ 44 left), indices 0-based.
-  **Height from the orbit phase, not 705.3 km (user decision 2026-11-13,
-  revising 1.4):** the height runs 692-720 km over the record. Areas within
-  about 1% of L1B's, common area ≥ 0.987. The engine's `utils/airs_fov.py` was run against the same granules on
-  2026-11-14 with the same result (`logs/airs_fov_engine_l1b_20261114.log`);
-  the eight L1B granules were then deleted (user approval);
-  `tools/survey/airs_l1b_fetch.sh` fetches them again (show the user first).
-- **δD (D2):** computed here from the 17-level profiles, never TROPESS's
-  `dd_col_p`: per level (a level dimension, the surface level its own field)
-  and as the H2O-weighted 850-250 hPa partial column
-  (`water_vapor_column_delta_d_850_250hpa`, a new row); q and HDO (R·q) linear in ln p,
-  exact cuts at 850, 250 hPa and the surface; δD with 3.11e-4.
-- **Stores (D9):** 32 per set, grid, frequency and layout: 14 column, 12
-  level (the four sums beyond 2.7 added), 6 surface statistics.
-- **No σ (D3):** no standard error and no σ sums (`CLAUDE.md`; method
-  Section 7).
-- **Weight (D4):** overlap area × the layer's H2O partial column (mol),
-  g = 9.80665 and dry-air M; companion H2O statistics.
-- **Selection (D5):** `summary`: DOF > 1.1 (strict, float32), or DOF missing
-  and `dd_col_p` written. No cloud limit.
-- **Grid (D6):** 1° lat/lon (`latlon_1p0x1p0`), `day`; more on request.
-- **Store sets (D7):** every overpass and daytime only (`day_night_flag ==
-  1`, quality level `summary_daytime`), for RS and FS. **Approved exception,
-  for the AIRS v1 gridded stores only:** the set goes in the version slot,
-  `wisosat.airs.v_1.rs.daytime.day.latlon_1p0x1p0.<variable>.zarr`, and
-  the every-overpass set carries `all` (user, 2026-11-14):
-  `wisosat.airs.v_1.rs.all.day.latlon_1p0x1p0.<variable>.zarr`.
-
 ## Next
 
 1. **TROPOMI first: 0.25° at day** (user decision 2026-11-10); the other
@@ -262,12 +74,14 @@ sensor without the user's approval.
    - **GOSAT, GOSAT-2:** centres only (~10 km circle, Sarkar et al.);
      column-averaged δD with a 1σ of undocumented kind; only XH2O (1e-6),
      absent on ~56% of δD soundings (G1) and sometimes negative (G8).
-   - **AIRS v1:** decided, built to the bench; production is the handoff
-     at the top of this file. One config per store set: the two sets of a
-     stream read the same L2 days, so they could share a pass only with an
-     engine change (not planned).
-   - **CrIS (TROPESS):** as AIRS, once AIRS is built; SNPP RS and FS
-     overlap 2021-02..05 (R26), so gridding both double counts.
+   - **AIRS v1:** finalized 2026-11-15 (above). Further grids or
+     frequencies, and v2, on the user's request. One config per store set:
+     the two sets of a stream read the same L2 days, so they could share a
+     pass only with an engine change (not planned).
+   - **CrIS (TROPESS): the next candidate.** As AIRS (the profile method),
+     but its footprint model, selection and store sets need the user's
+     decisions first, and SNPP RS and FS overlap 2021-02..05 (R26), so
+     gridding both double counts.
    - **IASI, TES:** not built in L2 yet.
    Each needs: a footprint model (e.g. a centred circle of a stated
    diameter), the δ, σ and weight variables (or a decision to weight by

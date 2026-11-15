@@ -137,12 +137,14 @@ the pipeline reproduces the drafting code on a full production day.
 - **TROPOMI 0.25° daily finalized 2026-11-11**, tag `v8.1-verified-20261111`
   on all 17 spatial and 17 temporal stores (`gridding/TESTING.md` Tier 3).
   Other TROPOMI grids or frequencies are added on request.
-- **AIRS v1 gridding decided 2026-11-13** (D1-D8 with the user,
-  `airs-gridding-decisions.md`; v2 later): footprint polygons, δD computed
-  from the profiles (per level and an H2O-weighted 850-250 hPa column), no
-  standard error, 1° daily, every-overpass and daytime store sets. Next: the
-  L1B validation of the footprints, the L2 geometry stores, then the engine
-  (`gridding/STATE.md`).
+- **AIRS v1 gridding [COMPLETED 2026-11-15]**: decided 2026-11-13
+  (D1-D9 with the user, `airs-gridding-decisions.md`; v2 later): footprint
+  polygons validated against L1B, δD computed from the profiles (per level
+  and an H2O-weighted 850-250 hPa column), no standard error, 1° daily.
+  Finalized 2026-11-15, tag `v1-verified-20261115` on all 256 stores: the
+  spatial and temporal layouts of four store sets, `v_1.rs.all`,
+  `v_1.rs.daytime`, `v_1.fs.all`, `v_1.fs.daytime` (`gridding/TESTING.md`
+  Tier 3, "AIRS production").
 - **Other sensors:** each needs its gridding inputs decided first (footprint
   model, δD, σ, weight, selection); what each lacks is in `gridding/STATE.md`.
 
