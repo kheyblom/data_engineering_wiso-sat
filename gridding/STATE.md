@@ -28,9 +28,10 @@ daytime stores' `summary` still says "the set without 'daytime' in its name
 holds every overpass"** (built before the `all` rename). The user chose a
 finalize action for it (2026-11-15): `--text`, added in `1edfd51` (fixture
 test 14 cases pass); `--status` now shows `stale text ['summary']` on
-exactly those 64. Order from here, each `--apply` signed off: `--attrs` on
-all four configs, `--text` on the two daytime configs (dry run first),
-then `--tag`, then `--gc`. The text below is the handoff as approved, kept
+exactly those 64. Applied 2026-11-15 (user sign-off each): `--attrs` on
+all 128, then `--text` on the 64 daytime; `--status` clean on all 128
+(`stale text none`). Next: `--tag v1-verified-20261115` (dry run clean,
+128 stores), then `--gc`. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and
