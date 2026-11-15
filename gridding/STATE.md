@@ -48,8 +48,9 @@ temporal verify `afterany` (1 cpu, 32 GB, 1 h):
 to 44 GiB, fs.all, of the 48 GB request); each temporal verify **2,860
 checks, 0 failures**, 1-2 min. 72 GiB of temporal stores, at most 837
 files per store. Temporal `--status` and `--attrs` dry runs clean on all
-128 (`stale text none`). Next: step 4, `--attrs --apply` (user sign-off),
-then `--tag v1-verified-20261115`, `--gc`. The text below is the handoff as approved, kept
+128 (`stale text none`). Step 4: temporal `--attrs --apply` on all 128
+(user sign-off), `--status` clean; `--tag v1-verified-20261115` dry run
+clean. Next: the tag's `--apply` (sign-off), then `--gc`. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and
