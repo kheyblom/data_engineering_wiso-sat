@@ -113,7 +113,7 @@ verify:
 
 # rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
 temporal:
-  source_tag: null
+  source_tag: v1-verified-20261115
   # a multiple of the temporal tile (36 rows); a block's buffer for a level
   # store is record x 16 x block_rows x 360 x 8 B
   block_rows: 36
