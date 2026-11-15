@@ -50,7 +50,10 @@ checks, 0 failures**, 1-2 min. 72 GiB of temporal stores, at most 837
 files per store. Temporal `--status` and `--attrs` dry runs clean on all
 128 (`stale text none`). Step 4: temporal `--attrs --apply` on all 128
 (user sign-off), `--status` clean; `--tag v1-verified-20261115` dry run
-clean. Next: the tag's `--apply` (sign-off), then `--gc`. The text below is the handoff as approved, kept
+clean, applied (sign-off); `--gc` dry run 0 to collect, so no `--gc
+--apply`. **AIRS v1 finalized 2026-11-15** (TESTING.md Tier 3, "AIRS
+production"): 256 stores at `v1-verified-20261115`. Next: step 5, the
+wrap-up, with the user's sign-off. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and

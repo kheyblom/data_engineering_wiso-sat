@@ -316,3 +316,36 @@ Every job on develop: builds 8 cpus, 32 GB; verifies 1 cpu, 32 GB, each
   1,000. FS stores at most 548 files.
 - **Cost:** ~16.5 core-hours in all (builds 12.8, verifies 0.2, cancelled
   builds 3.5), against ~35 expected.
+- **Finalize spatial** (2026-11-15, login node, user sign-off on each
+  `--apply`): `--attrs` on all 128; then `--text` on the 64 daytime stores,
+  whose `summary` still named "the set without 'daytime' in its name"
+  (built before the `all` rename; `--text` added for it in `1edfd51`,
+  user decision; fixture test 14 cases pass); `--tag
+  v1-verified-20261115` on all 128; `--gc` dry run 0 to collect, so no
+  `--gc --apply`. `temporal.source_tag` set to the tag (`8641502`).
+- **Rechunk** (develop, 1 cpu, 48 GB, `block_rows: 36`, `8641502`; exit 0):
+
+  | set | job | wall | peak mem (GiB) |
+  | --- | --- | --- | --- |
+  | `rs.all` | 8196538 | 51.5 min | 31.9 |
+  | `rs.daytime` | 8196540 | 39.2 min | 19.7 |
+  | `fs.all` | 8196542 | 34.8 min | 44.1 |
+  | `fs.daytime` | 8196544 | 33.6 min | 28.0 |
+
+  Small stores ~1 s a 36-row block; the level sums 12-50 s. fs.all's 44.1
+  GiB peak is far above its largest block buffer (~3.2 GB; RS ~10.7 GB):
+  likely page cache again (as fs.daytime's build), not measured further,
+  but close to the request: for a longer record or a finer grid, ask for
+  more memory or halve `block_rows`. Temporal stores: 72 GiB for the 128
+  (rs.all 20, rs.daytime 9.5, fs.all 22, fs.daytime 21), at most 837
+  files per store, 6 commits each.
+- **Verify temporal** (jobs 8196539, 8196541, 8196543, 8196545, 1 cpu):
+  **2,860 checks, 0 failures** on each set, 1.1-1.9 min, 4.4-5.8 GiB.
+- **Finalize temporal** (2026-11-15, user sign-off): `--attrs`, then
+  `--tag v1-verified-20261115` on all 128; `--status` shows every store
+  tagged with nothing missing or stale; `--gc` dry run 0 to collect, so no
+  `--gc --apply`. **AIRS v1 1° daily is finalized**: 256 stores, the
+  spatial and temporal layouts of `v_1.rs.all`, `v_1.rs.daytime`,
+  `v_1.fs.all` and `v_1.fs.daytime`, all at `v1-verified-20261115`.
+- **Cost of production:** ~19 core-hours (builds 12.8, cancelled builds
+  3.5, rechunks 2.7, verifies 0.3), against ~35 expected.
