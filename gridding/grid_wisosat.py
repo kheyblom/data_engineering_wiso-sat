@@ -157,20 +157,14 @@ def resume_state(target, snapshots):
 def global_attrs(settings, grid, frequency, layout, snapshots, quantity):
     """A store's global attributes at build time (finalize adds history, verification, coverage)."""
     row = nomenclature.quantities()[quantity]
-    fields = {
-        'product': settings['product'], 'version': config.gridded_version_token(settings),
-        'version_label': str(settings['version']), 'frequency': frequency, 'grid_name': grid.name,
-        'variable': row['canonical_name'], 'long_name': nomenclature.authority_attrs(settings, quantity)['long_name'],
-        'frequency_long_name': nomenclature.frequency_long_name(settings, frequency),
-    }
-    attrs = {key: str(value).format(**fields).strip() for key, value in settings['attrs'].items()}
+    attrs = stores.text_attrs(settings, frequency, grid.name, quantity)
     chunks = stores.store_chunks(settings, grid, quantity, layout)
     chunk_dims = '(time, level, rows, cols)' if stores.has_level(quantity) else '(time, rows, cols)'
     other = 'temporal' if layout == 'spatial' else 'spatial'
     attrs.update({
         'cdm_data_type': 'Grid',
         'temporal_frequency': frequency,
-        'temporal_frequency_long_name': fields['frequency_long_name'],
+        'temporal_frequency_long_name': nomenclature.frequency_long_name(settings, frequency),
         'time_coverage_resolution': periods.coverage_resolution(frequency),
         'period_anchor': ('periods are consecutive blocks counted from 1900-01-01; n-month periods start '
                           'in January'),

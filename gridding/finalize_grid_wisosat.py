@@ -5,6 +5,7 @@
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --tag NAME [--apply]
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --gc [--apply]
     uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --relocate [--apply]
+    uv run python finalize_grid_wisosat.py --config CONFIG --layout spatial --text [--apply]
 
 One action per invocation; nothing is written without ``--apply`` (dry run
 first). The order is load-bearing, as in GLEAM and l2/: ``--attrs``, then
@@ -20,6 +21,17 @@ the build would now write them and, on a finalized store, appends the move
 to ``history``. Values, verification and tags are untouched, so a tag made
 before the move still names the old paths; a store already matching is
 left alone.
+
+``--text`` is for a config's text attributes (``attrs``: title, summary,
+...) changed after a build (2026-11-15: the AIRS daytime summary named the
+every-overpass set before it was renamed ``all``, user decision). It
+rewrites the keys that differ from the config, formatted as the build
+formats them (``stores.text_attrs``), and appends the rewrite to
+``history``, so it needs ``--attrs`` first; values, verification and tags
+are untouched (a tag made before keeps the old text). The verifier checks
+only that these attributes are present, so a rewrite needs no new verify.
+Attributes the build derives from other config keys (``gridding_selection``,
+``gridding_inputs``) are not rewritten.
 
 ``--attrs`` writes ``history``, ``date_created``, ``verification`` and the
 time coverage, and only for stores a passing verify run of this layout
@@ -48,6 +60,7 @@ from utils.grids import from_spec
 LOG = logging.getLogger('finalize_grid_wisosat')
 ATTRS_MESSAGE = 'add provenance and discovery attributes'
 RELOCATE_MESSAGE = 'rewrite path attributes after a move'
+TEXT_MESSAGE = 'rewrite text attributes from the config'
 FINAL_ATTRS = ('history', 'date_created', 'verification', 'time_coverage_start', 'time_coverage_end')
 LINE_RE = re.compile(r'^(?P<stamp>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ \w+ verify_grid_wisosat: (?P<text>.*)$')
 STORES_RE = re.compile(r'^layout: (?P<layout>\w+); phases: \[(?P<phases>[^\]]*)\]; stores: \[(?P<stores>[^\]]*)\]$')
@@ -66,19 +79,20 @@ def parse_args():
     action.add_argument('--tag')
     action.add_argument('--gc', action='store_true')
     action.add_argument('--relocate', action='store_true')
+    action.add_argument('--text', action='store_true')
     parser.add_argument('--apply', action='store_true', help='write; without it, report only')
     return parser.parse_args()
 
 
 def store_paths(settings, layout):
-    """(grid, frequency, variable, path) of every store of this layout."""
+    """(grid, frequency, quantity, path) of every store of this layout."""
     paths = []
     for spec in settings['grids']:
         grid = from_spec(spec)
         for frequency in settings['frequencies']:
-            paths += [(grid, frequency, row['canonical_name'],
+            paths += [(grid, frequency, quantity,
                        config.store_path(settings, layout, frequency, grid.name, row['canonical_name']))
-                      for row in nomenclature.quantities().values()]
+                      for quantity, row in nomenclature.quantities().items()]
     return paths
 
 
@@ -108,6 +122,16 @@ def relocated_attrs(settings, layout, grid, frequency, variable, group):
                               f'path attributes ({", ".join(sorted(changed))}) rewritten by '
                               f'finalize_grid_wisosat.py --relocate, values unchanged.')
     return changed
+
+
+def stale_text(settings, grid, frequency, quantity, group):
+    """The config's text attributes that differ from the store's, as the build would now write them.
+
+    Returns:
+        dict: Attribute -> new value; empty when the store already matches.
+    """
+    wanted = stores.text_attrs(settings, frequency, grid.name, quantity)
+    return {key: value for key, value in wanted.items() if group.attrs.get(key) != value}
 
 
 def verification_evidence(settings, layout):
@@ -144,7 +168,7 @@ def verification_evidence(settings, layout):
 def build_commits(repository):
     """The build's commits on main, oldest first (skeleton, appends and blocks; not this script's)."""
     commits = [snapshot for snapshot in repository.ancestry(branch=stores.BRANCH)
-               if snapshot.message not in ('Repository initialized', ATTRS_MESSAGE, RELOCATE_MESSAGE)]
+               if snapshot.message not in ('Repository initialized', ATTRS_MESSAGE, RELOCATE_MESSAGE, TEXT_MESSAGE)]
     return commits[::-1]
 
 
@@ -187,7 +211,8 @@ def main():
     evidence = verification_evidence(settings, args.layout)
     mode = 'APPLY' if args.apply else 'dry run'
     problems = 0
-    for grid, frequency, variable, path in store_paths(settings, args.layout):
+    for grid, frequency, quantity, path in store_paths(settings, args.layout):
+        variable = nomenclature.quantities()[quantity]['canonical_name']
         name = path.rsplit('/', 1)[-1]
         try:
             repository = stores.open_repository(path)
@@ -200,9 +225,10 @@ def main():
         tags = sorted(repository.list_tags())
         if args.status:
             stale = sorted(set(relocated_attrs(settings, args.layout, grid, frequency, variable, group)) - {'history'})
+            text = sorted(stale_text(settings, grid, frequency, quantity, group))
             LOG.info(f'{name}: tags {tags or "none"}; missing attrs {missing or "none"}; '
                      f'verified {evidence[name]["date"] if name in evidence else "no"}; '
-                     f'stale paths {stale or "none"}')
+                     f'stale paths {stale or "none"}; stale text {text or "none"}')
         elif args.relocate:
             attrs = relocated_attrs(settings, args.layout, grid, frequency, variable, group)
             if not attrs:
@@ -213,6 +239,23 @@ def main():
                 session = repository.writable_session(stores.BRANCH)
                 zarr.open_group(session.store, mode='r+').update_attributes(attrs)
                 session.commit(RELOCATE_MESSAGE)
+        elif args.text:
+            if 'history' not in group.attrs:
+                LOG.error(f'{name}: no history; run --attrs first')
+                problems += 1
+                continue
+            attrs = stale_text(settings, grid, frequency, quantity, group)
+            if not attrs:
+                LOG.info(f'{name}: text matches the config; nothing to do')
+                continue
+            attrs['history'] = (f'{group.attrs["history"]} {datetime.date.today().isoformat()}: text attributes '
+                                f'({", ".join(sorted(attrs))}) rewritten from the config by '
+                                f'finalize_grid_wisosat.py --text, values unchanged.')
+            LOG.info(f'{mode} {name}: ' + '; '.join(f'{key}={value!r}' for key, value in attrs.items()))
+            if args.apply:
+                session = repository.writable_session(stores.BRANCH)
+                zarr.open_group(session.store, mode='r+').update_attributes(attrs)
+                session.commit(TEXT_MESSAGE)
         elif args.attrs:
             if name not in evidence:
                 LOG.error(f'{name}: no passing verify run of the {args.layout} layout covers it')

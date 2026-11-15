@@ -32,7 +32,7 @@ import xarray as xr  # type: ignore
 import zarr  # type: ignore
 from icechunk.xarray import to_icechunk  # type: ignore
 
-from utils import nomenclature, periods
+from utils import config, nomenclature, periods
 
 LOG = logging.getLogger(__name__)
 BRANCH = 'main'
@@ -45,6 +45,25 @@ BLOCK_RE = re.compile(r'^write rows \[(?P<row0>\d+):(?P<row1>\d+)\) @ (?P<revisi
 SKELETON_MESSAGE = 'create skeleton @ {revision}'
 
 icechunk.set_logs_filter('error')
+
+
+def text_attrs(settings, frequency, grid_name, quantity):
+    """The config's ``attrs`` (title, summary, ...) formatted for one store.
+
+    The build writes these, and ``finalize_grid_wisosat.py --text`` rewrites a
+    store's from the config: one formatter, so a rewrite matches a fresh build.
+
+    Returns:
+        dict: Attribute -> text.
+    """
+    row = nomenclature.quantities()[quantity]
+    fields = {
+        'product': settings['product'], 'version': config.gridded_version_token(settings),
+        'version_label': str(settings['version']), 'frequency': frequency, 'grid_name': grid_name,
+        'variable': row['canonical_name'], 'long_name': nomenclature.authority_attrs(settings, quantity)['long_name'],
+        'frequency_long_name': nomenclature.frequency_long_name(settings, frequency),
+    }
+    return {key: str(value).format(**fields).strip() for key, value in settings['attrs'].items()}
 
 
 def dims(grid):

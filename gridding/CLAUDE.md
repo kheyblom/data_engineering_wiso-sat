@@ -24,7 +24,8 @@ rechunk_wisosat.py           # spatial (at temporal.source_tag) -> temporal stor
 verify_grid_wisosat.py       # read-only; --layout spatial|temporal; sampled (see below)
 verify_profile.py            # the verifier's own profile method (columns, orbit phase, polygons, sums)
 finalize_grid_wisosat.py     # --layout ...; --status, then --attrs, --tag, --gc (dry run without --apply);
-                             # --relocate after a move rewrites the path attributes
+                             # --relocate after a move rewrites the path attributes;
+                             # --text (after --attrs) rewrites the config's attrs text after a config change
 submit_grid_wisosat.sh       # CONFIG=... [VERIFY=1 LAYOUT=...|RECHUNK=1] ./submit_grid_wisosat.sh; show the user first
 nomenclature-key_grid.md     # machine read: quantity -> canonical name, units, kind, dtype; input units; frequencies
 nomenclature-key_grid_<source>.md  # the same for a profile-method source (quantities in three groups)
@@ -181,6 +182,10 @@ what settings, is in each product document and `STATE.md`.
 - `finalize --attrs` merges root attributes only; it cannot drop variable
   attributes. It credits only a passing verify of the same layout
   (`logs/verify_<log_file>`): never run two verifies of one config at once.
+- A config's `attrs` text changed after a build reaches the stores only
+  through `finalize --text` (2026-11-15): the verifier checks that title and
+  summary exist, not what they say. Run it before `--tag`, so the tag and
+  the temporal stores (which copy the spatial text) carry the new text.
 - `logs/` is evidence (gitignored): never delete or move it.
 - xarray drops a lazy variable's `coordinates` list when writing a
   skeleton: `rechunk_wisosat.py` carries the spatial store's over, or EASE

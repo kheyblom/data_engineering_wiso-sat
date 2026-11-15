@@ -17,7 +17,8 @@ Cases, in order (each depends on the ones before):
  4. rebuild is a no-op
  5. resume: one target rewound to its first commit rebuilds to the same values
  6. verify spatial passes; a build it did not make fails it
- 7. finalize spatial: --tag refused before --attrs; --attrs, --tag, --gc
+ 7. finalize spatial: --tag and --text refused before --attrs; --attrs;
+    --text rewrites a changed summary (and back), values kept; --tag, --gc
  8. rechunk to temporal; again is a no-op; verify temporal; finalize temporal
  9. relocate: the stores moved to another root, --relocate rewrites their
     path attributes (tags and values kept, a second run a no-op), then back
@@ -238,8 +239,28 @@ def test_finalize_spatial():
     base = ('finalize_grid_wisosat.py', '--layout', 'spatial')
     output = script(*base, '--tag', 'fixture-spatial', '--apply', expect=1)
     assert 'run --attrs first' in output
+    assert 'run --attrs first' in script(*base, '--text', '--apply', expect=1)
     assert 'APPLY' not in script(*base, '--attrs')
     script(*base, '--attrs', '--apply')
+    # --text: a summary changed in the config after the build is rewritten, and back
+    assert 'stale text none' in script(*base, '--status')
+    paths = target_paths('spatial', 'latlon_1p0x1p0', 'day')
+    before = digest(paths)
+    with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+        data = yaml.safe_load(FIXTURE.read_text())
+        changed = derived_config(directory, attrs={**data['attrs'], 'summary': 'A changed summary of {variable}.'})
+        assert "stale text ['summary']" in script(*base, '--status', config_path=changed)
+        assert 'APPLY' not in script(*base, '--text', config_path=changed)
+        script(*base, '--text', '--apply', config_path=changed)
+        output = script(*base, '--text', config_path=changed)
+        assert 'APPLY' not in output and 'nothing to do' in output
+    attrs = zarr.open_group(stores.open_repository(paths[0]).readonly_session(branch='main').store, mode='r').attrs
+    variable = os.path.basename(paths[0]).rsplit('.', 2)[-2]
+    assert attrs['summary'] == f'A changed summary of {variable}.', attrs['summary']
+    assert 'text attributes (summary) rewritten from the config' in attrs['history'], attrs['history']
+    script(*base, '--text', '--apply')
+    assert 'stale text none' in script(*base, '--status')
+    assert digest(paths) == before
     script(*base, '--tag', 'fixture-spatial', '--apply')
     output = script(*base, '--tag', 'fixture-spatial', '--apply', expect=1)
     assert 'exists' in output
