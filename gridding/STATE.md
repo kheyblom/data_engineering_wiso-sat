@@ -32,9 +32,21 @@ exactly those 64. Applied 2026-11-15 (user sign-off each): `--attrs` on
 all 128, then `--text` on the 64 daytime; `--status` clean on all 128
 (`stale text none`). Then `--tag v1-verified-20261115 --apply` on all
 128 (user sign-off); `--gc` dry run: 0 chunks, manifests or snapshots to
-collect, so no `--gc --apply`. **Spatial finalized 2026-11-15.** Next:
-step 3 (`temporal.source_tag: v1-verified-20261115`, rechunk), with the
-user's sign-off. The text below is the handoff as approved, kept
+collect, so no `--gc --apply`. **Spatial finalized 2026-11-15.** Step 3
+signed off and submitted 2026-11-15 10:24 (`source_tag` set in
+`8641502`): rechunk (develop, 1 cpu, 48 GB; 3 h RS, 2 h FS) then
+temporal verify `afterany` (1 cpu, 32 GB, 1 h):
+
+| config | rechunk | verify temporal |
+| --- | --- | --- |
+| `airs_rs/config_grid.yaml` | 8196538 | 8196539 |
+| `airs_rs/config_grid_daytime.yaml` | 8196540 | 8196541 |
+| `airs_fs/config_grid.yaml` | 8196542 | 8196543 |
+| `airs_fs/config_grid_daytime.yaml` | 8196544 | 8196545 |
+
+Next: check `logs/rechunk_grid_airs_<set>.log` and
+`logs/verify_grid_airs_<set>.log` (`0 failures`, `stores verified`), then
+step 4, finalize temporal. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and
