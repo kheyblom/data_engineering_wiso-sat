@@ -224,6 +224,8 @@ Under 0.1 core-hours in all (both rounds).
 
 ## Tier 3: production
 
+### TROPOMI production (2026-11-11)
+
 0.25° at day (user decision 2026-11-10), 4-day spatial chunks.
 
 - **Build** (job 8144353, develop, 18 cpus, 64 GB, `0ebec61`): 2,945 days
@@ -263,3 +265,54 @@ Under 0.1 core-hours in all (both rounds).
   chunks, manifests or snapshots to collect, so no `--gc --apply`.
   **TROPOMI 0.25° daily is finalized.** The bench root was deleted
   2026-11-11 (user decision).
+
+### AIRS production (2026-11-14)
+
+1° lat/lon at day (D6), four store sets (D7): `v_1.rs.all`,
+`v_1.rs.daytime`, `v_1.fs.all`, `v_1.fs.daytime`, 32 spatial stores each.
+Every job on develop: builds 8 cpus, 32 GB; verifies 1 cpu, 32 GB, each
+`afterany` its build. All four builds ran side by side.
+
+- **The every-overpass set renamed mid-run** (user, 2026-11-14): the four
+  builds started at 12:10 from `9a7c2bb`; the user then had the
+  every-overpass set carry the token `all`. Its two builds (8186697,
+  8186701) and held verifies (8186698, 8186702) were cancelled at ~12:24
+  (exit 271, ~3.5 core-hours spent), the 64 partial stores deleted, and
+  both rebuilt from `d3b7c7f` (configs only). `grid_airs_{rs,fs}.log` hold
+  the cancelled run first; the rebuild starts at the `revision d3b7c7f`
+  line.
+- **Builds** (exit 0, no warnings):
+
+  | set | job | revision | wall | peak mem (GiB) | days | rows | pass quality | missing an input (R22) | gridded |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `rs.all` | 8186771 | `d3b7c7f` | 31.7 min | 14.3 | 6,425 | 17,109,546 | 11,065,071 | 2,713 | 11,062,358 |
+  | `rs.daytime` | 8186699 | `9a7c2bb` | 24.7 min | 22.1 | 6,425 | 17,109,546 | 5,066,094 | 87 | 5,066,007 |
+  | `fs.all` | 8186773 | `d3b7c7f` | 22.2 min | 9.6 | 1,946 | 47,882,856 | 19,126,176 | 101 | 19,126,075 |
+  | `fs.daytime` | 8186703 | `9a7c2bb` | 17.1 min | 32.0 | 1,946 | 47,882,856 | 18,423,705 | 30 | 18,423,675 |
+
+  "Pass quality" equals D5's selected rows by `day_night_flag`
+  (`tropess.md`, D7) exactly. "Missing an input" is at most 1 a day (R22);
+  0 over a threshold, 0 not griddable. RS days run 2002-08-30 to 2020-04-01
+  (the last 16 rows, all unlit, spill into 2020-04-01 UTC), FS 2021-02-01
+  to 2026-05-31.
+- **Faster than the bench predicted** (RS ~1.5 h, FS ~0.7 h): 17-32 min
+  each, 12.8 core-hours for the four builds.
+- **fs.daytime peaked at its whole 32 GB request** (32.0 GiB) and
+  still finished, while fs.all, with more rows, peaked at 9.6 GiB: likely
+  page cache counted against the job, not measured further. Watch it if a
+  later build runs longer or on a finer grid.
+- **Verify spatial** (jobs 8186772, 8186700, 8186774, 8186704): **1,196
+  checks, 0 failures** on each set, 1.3-4.1 min, 0.9-3.9 GiB. Days
+  recomputed in every occupied cell: RS 2002-08-30, 2005-01-04,
+  2005-09-18, 2005-11-23, 2006-05-14, 2012-04-12, 2016-01-24, 2017-05-18,
+  2017-07-05, 2019-01-22, 2019-11-18, 2020-04-01; FS 2021-02-01,
+  2021-10-19, 2022-01-05, 2022-01-24, 2022-03-17, 2024-01-01, 2025-02-19,
+  2025-07-14, 2025-07-28, 2026-01-13, 2026-04-19, 2026-05-31 (the same
+  days for both sets of a stream).
+- **Sizes:** 65 GiB for the 128 spatial stores (expected ~95): rs.all 18
+  GiB, rs.daytime 8.8, fs.all 20, fs.daytime 19. Per RS store at most
+  1,780 files: 805 chunk files (as the bench predicted), 489 manifests,
+  162 snapshots, 162 transactions, 161 overwritten; no directory over
+  1,000. FS stores at most 548 files.
+- **Cost:** ~16.5 core-hours in all (builds 12.8, verifies 0.2, cancelled
+  builds 3.5), against ~35 expected.

@@ -20,8 +20,10 @@ at the `revision d3b7c7f` line. Jobs, build then verify:
 | `airs_fs/config_grid.yaml` (`v_1.fs.all`) | 8186773 | 8186774 |
 | `airs_fs/config_grid_daytime.yaml` | 8186703 | 8186704 |
 
-Next: check the logs against "Expected in the logs" below, then the steps
-after them. The text below is the handoff as approved, kept for reference.
+**All four builds and spatial verifies passed** (2026-11-14; every check
+below as expected; TESTING.md Tier 3, "AIRS production"): step 1 below is
+done. Next: step 2, finalize spatial. The text below is the handoff as
+approved, kept for reference.
 
 Everything up to production is done and committed; the engine, fixture and
 bench all pass. The user asked for this handoff so a new session runs
