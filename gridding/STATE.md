@@ -25,10 +25,13 @@ below as expected; TESTING.md Tier 3, "AIRS production"): step 1 below is
 done. Next: step 2, finalize spatial. `--status` and the `--attrs` dry run
 (2026-11-15) are clean on all 128 stores, **but no `--apply` yet: the 64
 daytime stores' `summary` still says "the set without 'daytime' in its name
-holds every overpass"** (built before the `all` rename). `--attrs` cannot
-rewrite it and the verifier checks only its presence; how to fix it is the
-user's call (rebuild the daytime sets, or a finalize action for config
-text). The text below is the handoff as approved, kept for reference.
+holds every overpass"** (built before the `all` rename). The user chose a
+finalize action for it (2026-11-15): `--text`, added in `1edfd51` (fixture
+test 14 cases pass); `--status` now shows `stale text ['summary']` on
+exactly those 64. Order from here, each `--apply` signed off: `--attrs` on
+all four configs, `--text` on the two daytime configs (dry run first),
+then `--tag`, then `--gc`. The text below is the handoff as approved, kept
+for reference.
 
 Everything up to production is done and committed; the engine, fixture and
 bench all pass. The user asked for this handoff so a new session runs
