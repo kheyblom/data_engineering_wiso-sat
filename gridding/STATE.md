@@ -44,9 +44,12 @@ temporal verify `afterany` (1 cpu, 32 GB, 1 h):
 | `airs_fs/config_grid.yaml` | 8196542 | 8196543 |
 | `airs_fs/config_grid_daytime.yaml` | 8196544 | 8196545 |
 
-Next: check `logs/rechunk_grid_airs_<set>.log` and
-`logs/verify_grid_airs_<set>.log` (`0 failures`, `stores verified`), then
-step 4, finalize temporal. The text below is the handoff as approved, kept
+**Done 2026-11-15:** all eight exit 0; rechunks 34-52 min (peak memory up
+to 44 GiB, fs.all, of the 48 GB request); each temporal verify **2,860
+checks, 0 failures**, 1-2 min. 72 GiB of temporal stores, at most 837
+files per store. Temporal `--status` and `--attrs` dry runs clean on all
+128 (`stale text none`). Next: step 4, `--attrs --apply` (user sign-off),
+then `--tag v1-verified-20261115`, `--gc`. The text below is the handoff as approved, kept
 for reference.
 
 Everything up to production is done and committed; the engine, fixture and
