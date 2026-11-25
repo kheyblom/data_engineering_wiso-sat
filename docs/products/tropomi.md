@@ -183,7 +183,7 @@ selection's quality level (user decision 2026-11-25; gridding/CLAUDE.md,
 
 | set | selection | frequency, grid | period | tag |
 | --- | --- | --- | --- | --- |
-| `clear_or_low_cloud` | as above (Schneider et al. 2022 Table 1, T23, T24) | `day`, `latlon_0p25x0p25` | 2017-11-08 to 2025-11-30 | built and verified 2026-11-11 (`v8.1-verified-20261111`) as `wisosat.tropomi.v_8_1.day...`; renamed to carry its set 2026-11-25, re-verified and tagged: in progress |
+| `clear_or_low_cloud` | as above (Schneider et al. 2022 Table 1, T23, T24) | `day`, `latlon_0p25x0p25` | 2017-11-08 to 2025-11-30 | **`v8.1-verified-20261125`** (built 2026-11-11 as `wisosat.tropomi.v_8_1.day...`, tag `v8.1-verified-20261111`; renamed to carry its set and verified again 2026-11-25, values unchanged; gridding/TESTING.md) |
 
 ## Build details (built 2026-10-14; every file audited 2026-10-16; bench next)
 

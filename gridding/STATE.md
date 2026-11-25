@@ -15,15 +15,12 @@ Read this first in a new session. Update it whenever work lands.
     `wisosat.tropomi.v_8_1.day...` -> `...v_8_1.clear_or_low_cloud.day...`,
     title and summary name the set, then they are verified again and get a
     new tag (`v8.1-verified-<date>`).
-  - **W1 done so far (2026-11-25):** code `0c4a853` (fixture test 15
-    pass); "before" record `logs/rename_tropomi_0p25_before.json`; the 34
-    stores renamed (mv); `--relocate --apply` and `--text --apply` on both
-    layouts (user sign-off); `rename_evidence.py check`: 34 stores, 0
-    failures (`logs/rename_tropomi_0p25_check.log`). **Next:** verify
-    spatial (job 8308416) and temporal (8308417, afterany) -> `--attrs`,
-    `--tag v8.1-verified-<date>`, `--gc` (dry run) per layout, each signed
-    off. `temporal.source_tag` stays `v8.1-verified-20261111` (the spatial
-    stores keep that tag too).
+  - **W1 done (2026-11-25):** the 34 stores renamed to
+    `wisosat.tropomi.v_8_1.clear_or_low_cloud.day.latlon_0p25x0p25.<variable>.zarr`,
+    values unchanged (evidence check 34/0), verified again (629 and 1,513
+    checks, 0 failures), tag **`v8.1-verified-20261125`** on all 34 (they
+    keep `v8.1-verified-20261111`); TESTING.md, "TROPOMI 0.25° renamed".
+    `temporal.source_tag` stays `v8.1-verified-20261111`.
   - **W2, W3 builds running** (configs `e95abb0`: `config_grid_0p5_1p0.yaml`,
     `config_grid_clear.yaml`; chunks the same in cells as 0.25°, user
     decision): W2 job 8308418 (resume 8308419), W3 job 8308421 (resume

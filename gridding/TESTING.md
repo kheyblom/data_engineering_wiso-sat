@@ -271,6 +271,33 @@ Under 0.1 core-hours in all (both rounds).
   **TROPOMI 0.25° daily is finalized.** The bench root was deleted
   2026-11-11 (user decision).
 
+### TROPOMI 0.25° renamed to carry its set (2026-11-25, request W1)
+
+User decisions 2026-11-25: every gridded name carries its set; the 34
+stores renamed `wisosat.tropomi.v_8_1.day...` ->
+`wisosat.tropomi.v_8_1.clear_or_low_cloud.day...`, verified again and tagged
+anew. Code `0c4a853`; each `--apply` signed off.
+
+- **Before:** `tools/survey/rename_evidence.py record` (login node, 1 min 55 s):
+  tags, head, arrays and 2,607 chunk and manifest files per store
+  (`logs/rename_tropomi_0p25_before.json`).
+- **Rename:** `os.rename` of the 34 directories in place; `--relocate
+  --apply` (path attributes; history "renamed from ... to ...") and `--text
+  --apply` (title and summary name the set) on both layouts.
+- **Check:** `rename_evidence.py check`: **34 stores, 0 failures**: the old
+  names gone; every chunk and manifest file of before present at the same
+  size, no new chunk file; the same arrays; the tag on the same snapshot;
+  the icechunk diff from the tag to main changes group attributes only
+  (`logs/rename_tropomi_0p25_check.log`).
+- **Verify** (develop, 2 cpus; running beside the W2 and W3 builds): spatial
+  job 8308416, **629 checks, 0 failures**, ~44 min (~4.5 min per sampled
+  day, against 2.5-3 on 2026-11-11 alone on its node); temporal job
+  8308417, **1,513 checks, 0 failures**: the same counts as on 2026-11-11.
+- **Finalize** both layouts: `--attrs` (new `verification`, one history
+  line), `--tag v8.1-verified-20261125` on all 34; `--gc` dry runs: nothing
+  to collect. The stores also keep `v8.1-verified-20261111`, whose snapshot
+  holds the old path attributes and text; the values are the same.
+
 ### AIRS production (2026-11-14)
 
 1° lat/lon at day (D6), four store sets (D7): `v_1.rs.all`,
