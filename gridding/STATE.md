@@ -15,17 +15,22 @@ Read this first in a new session. Update it whenever work lands.
     `wisosat.tropomi.v_8_1.day...` -> `...v_8_1.clear_or_low_cloud.day...`,
     title and summary name the set, then they are verified again and get a
     new tag (`v8.1-verified-<date>`).
-  - **W1 steps:** code and configs (store_set required; `--relocate`
-    records a rename; `--attrs` appends a second verify to history; fixture
-    case `test_rename`) -> fixture test (15 cases) -> commit -> "before"
-    record (done: `logs/rename_tropomi_0p25_before.json`, by
-    `tools/survey/rename_evidence.py record`) -> mv the 34 stores ->
-    `--relocate` and `--text`, both layouts -> `rename_evidence.py check` ->
-    verify spatial and temporal (jobs) -> `--attrs`, `--tag`, `--gc`
-    (dry run) per layout -> `temporal.source_tag` unchanged (the spatial
-    stores keep `v8.1-verified-20261111` too).
-  - **W2, W3 next:** `clear_or_low_cloud` at 0.5° and 1°; `clear` at 0.25°,
-    0.5° and 1°, with a subset check against `clear_or_low_cloud`.
+  - **W1 done so far (2026-11-25):** code `0c4a853` (fixture test 15
+    pass); "before" record `logs/rename_tropomi_0p25_before.json`; the 34
+    stores renamed (mv); `--relocate --apply` and `--text --apply` on both
+    layouts (user sign-off); `rename_evidence.py check`: 34 stores, 0
+    failures (`logs/rename_tropomi_0p25_check.log`). **Next:** verify
+    spatial (job 8308416) and temporal (8308417, afterany) -> `--attrs`,
+    `--tag v8.1-verified-<date>`, `--gc` (dry run) per layout, each signed
+    off. `temporal.source_tag` stays `v8.1-verified-20261111` (the spatial
+    stores keep that tag too).
+  - **W2, W3 builds running** (configs `e95abb0`: `config_grid_0p5_1p0.yaml`,
+    `config_grid_clear.yaml`; chunks the same in cells as 0.25°, user
+    decision): W2 job 8308418 (resume 8308419), W3 job 8308421 (resume
+    8308422), develop, 18 cpus, 64 GB, 6 h. Then per config: verify
+    spatial -> finalize -> `temporal.source_tag` -> rechunk -> verify ->
+    finalize temporal. W3 also: `tools/verify_subset.py` (every cell-day,
+    clear <= clear_or_low_cloud; tested on the fixture both ways), as a job.
 
 - **AIRS v1 1° daily finalized** (2026-11-15; TESTING.md Tier 3, "AIRS
   production"): four store sets, `v_1.rs.all`, `v_1.rs.daytime`,
