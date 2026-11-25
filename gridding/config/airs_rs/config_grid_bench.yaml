@@ -8,6 +8,9 @@ source: tropess
 # the collection version and the stream, as the L2 stores name them (v_1.rs)
 version: '1'
 version_product: rs
+# every overpass, as the production configs (v_1.<stream>.all); every WISO-SAT
+# gridded name carries its set (user decision 2026-11-25)
+store_set: all
 # delta D, H2O and the weights are derived here from the L2 profiles
 # (gridding/CLAUDE.md, "Two methods"); the key lists the 32 stores
 method: profile

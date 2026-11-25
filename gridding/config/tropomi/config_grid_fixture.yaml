@@ -7,6 +7,10 @@ product: tropomi
 source: tropomi
 # the L2 processor version, as the L2 stores name it (v_8_1)
 version: '8.1'
+# the selection's set token, after the version in the gridded names
+# (v_8_1.clear_or_low_cloud): the quality level below. Every WISO-SAT gridded
+# name carries its set (user decision 2026-11-25)
+store_set: clear_or_low_cloud
 
 # The finalized L2 stores, read only at one tag (gridding/CLAUDE.md). The 19
 # core stores carry v8.1-verified-20261018; gridding reads only core stores.

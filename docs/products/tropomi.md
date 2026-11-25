@@ -173,6 +173,18 @@ applies to TROPOMI.
 - **Poles:** the few footprints that enclose a pole are not gridded (4 on
   2020-07-01).
 
+## Gridded stores
+
+Under `/glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l3/{spatial,temporal}/`,
+named `wisosat.tropomi.v_8_1.<set>.<frequency>.<grid>.<variable>.zarr`, 17
+stores per (set, frequency, grid, layout). Every name carries its set, the
+selection's quality level (user decision 2026-11-25; gridding/CLAUDE.md,
+"Names").
+
+| set | selection | frequency, grid | period | tag |
+| --- | --- | --- | --- | --- |
+| `clear_or_low_cloud` | as above (Schneider et al. 2022 Table 1, T23, T24) | `day`, `latlon_0p25x0p25` | 2017-11-08 to 2025-11-30 | built and verified 2026-11-11 (`v8.1-verified-20261111`) as `wisosat.tropomi.v_8_1.day...`; renamed to carry its set 2026-11-25, re-verified and tagged: in progress |
+
 ## Build details (built 2026-10-14; every file audited 2026-10-16; bench next)
 
 - **Granule:** an orbit. The granule index has ~38.6k entries and is stored

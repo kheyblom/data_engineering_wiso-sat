@@ -45,6 +45,11 @@ bench, then production (root CLAUDE.md: the allocation is finite).
   polar ones). Grid of one day at 1° on a login node: 42 s including the
   read.
 
+- **2026-11-25: 15 cases passed** (login node, ~7 min), with case 9b,
+  `test_rename` (request W1: every gridded name carries its set). The first
+  run failed there: a second `finalize --attrs --apply` with nothing to
+  change raised icechunk's empty-commit error (never exercised before);
+  `--attrs` now skips a store whose attributes already match.
 - **2026-11-13: 14 cases passed** (login node, ~7 min), with the AIRS
   fixture and cases 10-14 added (below). The nine TROPOMI cases passed
   unchanged after each engine change of the day (three runs).

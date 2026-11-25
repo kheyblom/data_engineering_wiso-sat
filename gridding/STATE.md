@@ -2,7 +2,30 @@
 
 Read this first in a new session. Update it whenever work lands.
 
-## Where we are (2026-11-15)
+## Where we are (2026-11-25)
+
+- **In progress: requests W1-W3 from `isotopes_transpiration`**
+  (`/glade/work/kheyblom/projects/isotopes_transpiration/docs/handoffs/data-engineering-requests.md`;
+  GLEAM's G1 is built in `data_engineering_gleam` on the same 0.5° and 1°
+  grids).
+  - **W1, decided (user, 2026-11-25):** every WISO-SAT gridded name
+    carries its set (`store_set` now required; gridding/CLAUDE.md
+    "Names"); TROPOMI tokens `clear_or_low_cloud` and `clear`; the 34
+    finalized 0.25° stores are renamed
+    `wisosat.tropomi.v_8_1.day...` -> `...v_8_1.clear_or_low_cloud.day...`,
+    title and summary name the set, then they are verified again and get a
+    new tag (`v8.1-verified-<date>`).
+  - **W1 steps:** code and configs (store_set required; `--relocate`
+    records a rename; `--attrs` appends a second verify to history; fixture
+    case `test_rename`) -> fixture test (15 cases) -> commit -> "before"
+    record (done: `logs/rename_tropomi_0p25_before.json`, by
+    `tools/survey/rename_evidence.py record`) -> mv the 34 stores ->
+    `--relocate` and `--text`, both layouts -> `rename_evidence.py check` ->
+    verify spatial and temporal (jobs) -> `--attrs`, `--tag`, `--gc`
+    (dry run) per layout -> `temporal.source_tag` unchanged (the spatial
+    stores keep `v8.1-verified-20261111` too).
+  - **W2, W3 next:** `clear_or_low_cloud` at 0.5° and 1°; `clear` at 0.25°,
+    0.5° and 1°, with a subset check against `clear_or_low_cloud`.
 
 - **AIRS v1 1° daily finalized** (2026-11-15; TESTING.md Tier 3, "AIRS
   production"): four store sets, `v_1.rs.all`, `v_1.rs.daytime`,

@@ -13,8 +13,9 @@ first). The order is load-bearing, as in GLEAM and l2/: ``--attrs``, then
 attributes would name a store that does not describe itself; ``--tag``
 refuses a store without them.
 
-``--relocate`` is for stores moved on disk after their build (2026-11-11:
-``grid/<product>/`` to ``zarr/<product>/l3/``, user decision). Three root
+``--relocate`` is for stores moved or renamed on disk after their build
+(2026-11-11: ``grid/<product>/`` to ``zarr/<product>/l3/``; 2026-11-25: the
+TROPOMI 0.25 degree stores renamed to carry their set; user decisions). Three root
 attributes hold absolute paths: ``related_store``, ``source_l2_stores`` and,
 on temporal stores, ``rechunked_from``. It rewrites them from the config as
 the build would now write them and, on a finalized store, appends the move
@@ -38,7 +39,8 @@ time coverage, and only for stores a passing verify run of this layout
 covered (``logs/verify_<log_file>``: its ``stores:`` line, then ``0
 failures`` and ``stores verified``). It merges into the root group's
 attributes; it never touches variable attributes. Once written, ``history``
-is not regenerated.
+is not regenerated: a later passing verify (after a rename, say) rewrites
+``verification`` and appends one line to ``history``.
 
 Tag names: ``<version>-<grid_name>-<frequency>-<layout>-verified-YYYYMMDD``
 is a reasonable form; the name is the caller's.
@@ -114,11 +116,19 @@ def relocated_attrs(settings, layout, grid, frequency, variable, group):
         wanted['rechunked_from'] = wanted['related_store'] + old[old.index(' at tag '):]
     changed = {key: value for key, value in wanted.items() if group.attrs.get(key) != value}
     if changed and group.attrs.get('history'):
-        # related_store is <root>/<other layout>/<name>, so its grandparent is the old root
+        # related_store is <root>/<other layout>/<name>: its grandparent is the old root, its
+        # basename the old name (both layouts share a name)
         old_root = os.path.dirname(os.path.dirname(group.attrs['related_store']))
+        old_name = os.path.basename(group.attrs['related_store'])
         new_root = settings['directories']['zarr']
-        moved = f'from {old_root}/{layout}/ to {new_root}/{layout}/' if old_root != new_root else 'L2 stores moved'
-        changed['history'] = (f'{group.attrs["history"]} {datetime.date.today().isoformat()}: moved {moved}; '
+        new_name = os.path.basename(wanted['related_store'])
+        events = []
+        if old_root != new_root:
+            events.append(f'moved from {old_root}/{layout}/ to {new_root}/{layout}/')
+        if old_name != new_name:
+            events.append(f'renamed from {old_name} to {new_name}')
+        changed['history'] = (f'{group.attrs["history"]} {datetime.date.today().isoformat()}: '
+                              f'{" and ".join(events) or "L2 stores moved"}; '
                               f'path attributes ({", ".join(sorted(changed))}) rewritten by '
                               f'finalize_grid_wisosat.py --relocate, values unchanged.')
     return changed
@@ -195,8 +205,15 @@ def derive_attrs(settings, layout, path, group, repository, evidence):
     verification = (f'{evidence["date"]}: verify_grid_wisosat.py --layout {layout}, phases [{evidence["phases"]}], '
                     f'{evidence["checks"]} checks over {len(evidence["stores"])} stores, 0 failures. Checks: '
                     f'{scheme}. Sampled by decision (user, 2026-11-10), not every value.')
+    if group.attrs.get('history'):
+        # a finalized store verified again (2026-11-25: the TROPOMI stores after their rename):
+        # history is never regenerated, so the new run is appended, once
+        history = group.attrs['history']
+        if group.attrs.get('verification') != verification:
+            history = (f'{history} {today}: verified again by verify_grid_wisosat.py and finalized by '
+                       f'finalize_grid_wisosat.py (verification).')
     return {
-        'history': group.attrs.get('history') or history,
+        'history': history,
         'date_created': last.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'verification': verification,
         'time_coverage_start': str(periods.day_date(int(bounds[0][0]))),
@@ -262,6 +279,10 @@ def main():
                 problems += 1
                 continue
             attrs = derive_attrs(settings, args.layout, path, group, repository, evidence[name])
+            if all(group.attrs.get(key) == value for key, value in attrs.items()):
+                # icechunk refuses an empty commit, and there is nothing to write
+                LOG.info(f'{name}: attributes match the last verify; nothing to do')
+                continue
             LOG.info(f'{mode} {name}: ' + '; '.join(f'{key}={value!r}' for key, value in attrs.items()))
             if args.apply:
                 session = repository.writable_session(stores.BRANCH)

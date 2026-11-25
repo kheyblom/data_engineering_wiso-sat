@@ -12,8 +12,9 @@ source: tropess
 version: '1'
 version_product: fs
 # every overpass as a store set of its own beside the daytime one: the token goes after
-# the version in the gridded names (v_1.fs.all). An approved style-guide exception for
-# the AIRS v1 gridded stores only (user decisions 2026-11-13, D7; the token 2026-11-14)
+# the version in the gridded names (v_1.fs.all). Approved for AIRS v1 (user decisions
+# 2026-11-13, D7; the token 2026-11-14), then made the rule for every WISO-SAT gridded
+# product (user decision 2026-11-25)
 store_set: all
 # delta D, H2O and the weights are derived here from the L2 profiles
 # (gridding/CLAUDE.md, "Two methods"); the key lists the 32 stores

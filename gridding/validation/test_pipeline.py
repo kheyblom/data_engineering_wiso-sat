@@ -22,6 +22,9 @@ Cases, in order (each depends on the ones before):
  8. rechunk to temporal; again is a no-op; verify temporal; finalize temporal
  9. relocate: the stores moved to another root, --relocate rewrites their
     path attributes (tags and values kept, a second run a no-op), then back
+ 9b. rename: store_set required; the stores renamed to another set token,
+    --relocate rewrites their paths (values, tags kept; tag to main changes
+    root attributes only); a second verify appended to history once; back
 10. unit, profile method: the column operator against a fine-grid integral,
     the TROPESS Summary boundary (DOF exactly 1.1), store-set names, L2
     tags per store
@@ -333,6 +336,79 @@ def test_relocate():
     assert digest(spatial) == before
 
 
+@case('rename: stores renamed to a new set token, --relocate, values and tags kept, a second verify appended')
+def test_rename():
+    loaded = settings()
+    # every WISO-SAT gridded name carries its set (user decision 2026-11-25)
+    try:
+        config.gridded_version_token({key: value for key, value in loaded.items() if key != 'store_set'})
+    except ValueError as error:
+        assert 'store_set is required' in str(error)
+    else:
+        raise AssertionError('a config without store_set was accepted')
+    root = loaded['directories']['zarr']
+    old_token, new_token = '.v_8_1.clear_or_low_cloud.', '.v_8_1.renamed.'
+    names = {layout: sorted(name for name in os.listdir(os.path.join(root, layout)) if old_token in name)
+             for layout in config.LAYOUTS}
+    assert all(names.values()), names
+    spatial = target_paths('spatial', 'latlon_1p0x1p0', 'day')
+    before = digest(spatial)
+
+    def rename(forward):
+        for layout, layout_names in names.items():
+            for name in layout_names:
+                pair = [os.path.join(root, layout, name), os.path.join(root, layout, name.replace(old_token, new_token))]
+                os.rename(*(pair if forward else pair[::-1]))
+
+    with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+        renamed = derived_config(directory, store_set='renamed', log_file='grid_tropomi_fixture_rename.log')
+        rename(True)
+        try:
+            for layout in config.LAYOUTS:
+                base = ('finalize_grid_wisosat.py', '--layout', layout)
+                assert 'stale paths none' not in script(*base, '--status', config_path=renamed)
+                assert 'APPLY' not in script(*base, '--relocate', config_path=renamed)
+                script(*base, '--relocate', '--apply', config_path=renamed)
+                output = script(*base, '--relocate', config_path=renamed)
+                assert 'APPLY' not in output and 'nothing to do' in output
+                assert 'stale paths none' in script(*base, '--status', config_path=renamed)
+            name = os.path.basename(spatial[0])
+            new_name = name.replace(old_token, new_token)
+            new_spatial = os.path.join(root, 'spatial', new_name)
+            repository = stores.open_repository(new_spatial)
+            attrs = zarr.open_group(repository.readonly_session(branch='main').store, mode='r').attrs
+            assert attrs['related_store'] == os.path.join(root, 'temporal', new_name), attrs['related_store']
+            assert f'renamed from {name} to {new_name}' in attrs['history'], attrs['history']
+            assert 'moved from' not in attrs['history'].rsplit('renamed from', 1)[-1]
+            # the tag still names the old paths; tag to main changes the root attributes only
+            tagged = zarr.open_group(repository.readonly_session(tag='fixture-spatial').store, mode='r').attrs
+            assert tagged['related_store'] == os.path.join(root, 'temporal', name)
+            diff = repository.diff(from_tag='fixture-spatial', to_branch='main')
+            assert not (diff.updated_chunks or diff.updated_arrays or diff.new_arrays or diff.deleted_arrays
+                        or diff.moved_nodes), diff
+            temporal = zarr.open_group(stores.open_repository(os.path.join(root, 'temporal', new_name))
+                                       .readonly_session(branch='main').store, mode='r').attrs
+            assert temporal['rechunked_from'].startswith(f'{new_spatial} at tag fixture-spatial, by ')
+            # verified again under the new names: --attrs appends it to history, once
+            output = script('verify_grid_wisosat.py', '--layout', 'spatial', '--phases', 'structure',
+                            config_path=renamed)
+            assert 'stores verified' in output and ', 0 failures' in output
+            base = ('finalize_grid_wisosat.py', '--layout', 'spatial')
+            script(*base, '--attrs', '--apply', config_path=renamed)
+            output = script(*base, '--attrs', '--apply', config_path=renamed)
+            assert 'APPLY' not in output and 'nothing to do' in output
+            attrs = zarr.open_group(repository.readonly_session(branch='main').store, mode='r').attrs
+            assert attrs['history'].count('verified again by verify_grid_wisosat.py') == 1, attrs['history']
+            assert 'phases [structure]' in attrs['verification'], attrs['verification']
+        finally:
+            rename(False)
+    # renamed back: the fixture config's names again
+    for layout in config.LAYOUTS:
+        script('finalize_grid_wisosat.py', '--layout', layout, '--relocate', '--apply')
+        assert 'stale paths none' in script('finalize_grid_wisosat.py', '--layout', layout, '--status')
+    assert digest(spatial) == before
+
+
 @case('unit, profile method: column operator, Summary boundary, store-set names, tags per store')
 def test_profile_units():
     # the column operator: exact for a mole fraction linear in ln p, against a fine-grid integral
@@ -491,7 +567,7 @@ def main():
             sys.exit('stage the fixtures first: uv run python validation/stage_fixture.py')
     settings()
     for test in (test_units, test_config_guard, test_build, test_noop, test_resume, test_verify_spatial,
-                 test_finalize_spatial, test_temporal, test_relocate, test_profile_units, test_airs_build,
+                 test_finalize_spatial, test_temporal, test_relocate, test_rename, test_profile_units, test_airs_build,
                  test_airs_verify_spatial, test_airs_temporal, test_airs_daytime):
         test()
     print(f'{len(RESULTS)} cases passed')

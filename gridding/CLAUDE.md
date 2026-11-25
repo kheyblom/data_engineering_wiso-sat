@@ -59,9 +59,13 @@ what settings, is in each product document and `STATE.md`.
 - **A config names its key** (`quantity_key`), and `config.load_config`
   makes it the key in use: one config, one key, per process. A key without
   the standard error builds no σ sums.
-- **`store_set`** adds a token after the version in the gridded names
-  only. It is a style-guide exception: set it only where the user has
-  approved it for that product.
+- **`store_set`** is the set token after the version in the gridded names
+  only (L2 names carry none). **Every WISO-SAT gridded config sets it**,
+  and the engine refuses one without it: a style-guide exception approved
+  for AIRS v1 (2026-11-13), then made the rule for every WISO-SAT gridded
+  product (user decision 2026-11-25). The token names the selection:
+  TROPOMI's are its quality levels (`clear_or_low_cloud`, `clear`), AIRS's
+  `all` and `daytime`. A new token for a product is the user's decision.
 - **`l2.store_tags`** reads a store at its own tag, where a product's L2
   stores were finalized at different times.
 - **The verifier recomputes the profile method on its own**
@@ -109,7 +113,9 @@ what settings, is in each product document and `STATE.md`.
 - **Periods** are blocks counted from 1900-01-01 (n-day exactly n days,
   same boundaries for every sensor and year); n-month blocks start in
   January, n divides 12. A period's sums are its days' sums.
-- **Names:** `<layout>/wisosat.<product>.<version>.<frequency>.<grid_name>.<variable>.zarr`
+- **Names:** `<layout>/wisosat.<product>.<version>[.<stream>].<set>.<frequency>.<grid_name>.<variable>.zarr`
+  (`<set>` required, the config's `store_set`, since 2026-11-25; `<stream>`
+  is the L2 `version_product`, AIRS only)
   under `directories.zarr` = `.../data/wisosat/zarr/<product>/l3/`, beside
   the product's L2 stores in `l2/` (user decision 2026-11-11; the root
   CLAUDE.md, "Store layout"),
@@ -164,7 +170,7 @@ what settings, is in each product document and `STATE.md`.
   `gridding/`: `uv run python validation/stage_fixture.py` once (it refuses
   to restage over an existing fixture), then
   `TMPDIR=/glade/derecho/scratch/$USER/tmp uv run python validation/test_pipeline.py`
-  (14 cases over the TROPOMI and AIRS fixtures, ~7 min, login node; the
+  (15 cases over the TROPOMI and AIRS fixtures, ~7 min, login node; the
   stager adds a missing fixture and leaves a staged one alone).
 - **A store's last period can be partial** (the record ends inside it;
   `time_coverage_end` says where). A build does not reopen a written

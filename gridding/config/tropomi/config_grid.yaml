@@ -9,6 +9,10 @@ product: tropomi
 source: tropomi
 # the L2 processor version, as the L2 stores name it (v_8_1)
 version: '8.1'
+# the selection's set token, after the version in the gridded names
+# (v_8_1.clear_or_low_cloud): the quality level below. Every WISO-SAT gridded
+# name carries its set (user decision 2026-11-25)
+store_set: clear_or_low_cloud
 
 # The finalized L2 stores, read only at one tag (gridding/CLAUDE.md). The 19
 # core stores carry v8.1-verified-20261018; gridding reads only core stores.
@@ -100,14 +104,17 @@ temporal:
 
 attrs:
   title: >-
-    WISO-SAT TROPOMI HDO, gridded {frequency_long_name} on {grid_name}: {variable}
+    WISO-SAT TROPOMI HDO (clear-sky and low-cloud scenes), gridded {frequency_long_name} on {grid_name}: {variable}
   summary: >-
     {long_name}, from the SRON TROPOMI HDO/H2O total column retrieval
     (Schneider et al. 2022, processor {version_label}) as distributed for
     WISO-SAT, gridded by footprint overlap: each footprint polygon
     contributes to every cell it overlaps with weight w = overlap area x H2O
     column, and every observation whose UTC time falls in the period is
-    averaged. The method is in gridding_method.
+    averaged. The method is in gridding_method. This is the set of clear-sky
+    and low-cloud scenes ("clear_or_low_cloud" after the version in its
+    name), the recommendation of Schneider et al. (2022) Table 1;
+    gridding_selection gives the selection in full.
   Conventions: ACDD-1.3
   source: >-
     The finalized WISO-SAT TROPOMI Level 2 stores (source_l2_stores) at tag

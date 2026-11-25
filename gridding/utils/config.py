@@ -83,16 +83,23 @@ def version_token(settings):
 
 
 def gridded_version_token(settings):
-    """The version slot of the gridded store names: the L2 token, then any ``store_set``.
+    """The version slot of the gridded store names: the L2 token, then the ``store_set``.
 
-    ``store_set`` names a selection gridded as a set of its own beside the
-    full one (``v_1.rs.daytime``): an approved style-guide exception for the
-    AIRS v1 gridded stores only (user decision 2026-11-13, D7), so a config
-    sets it only with the user's approval.
+    ``store_set`` names the selection a store holds (``v_1.rs.daytime``,
+    ``v_8_1.clear_or_low_cloud``), so that two sets of one product never
+    share a name. It is required in every WISO-SAT gridded config: a
+    style-guide exception approved for AIRS v1 (2026-11-13, D7) and made the
+    rule for every WISO-SAT gridded product (user decision 2026-11-25). L2
+    names carry no set.
+
+    Raises:
+        ValueError: The config sets no ``store_set``.
     """
-    token = version_token(settings)
     store_set = settings.get('store_set')
-    return f'{token}.{store_set}' if store_set else token
+    if not store_set:
+        raise ValueError('store_set is required: every WISO-SAT gridded store name carries its set '
+                         '(user decision 2026-11-25)')
+    return f'{version_token(settings)}.{store_set}'
 
 
 def source_module(settings):
