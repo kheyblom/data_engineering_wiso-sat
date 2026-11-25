@@ -1,0 +1,173 @@
+# TROPOMI gridded stores, set clear_or_low_cloud, at 0.5 and 1 degree (SRON HDO
+# L2, processor 8.1): request W2 of isotopes_transpiration (2026-11-25; its
+# handoff, docs/handoffs/data-engineering-requests.md). Everything but the grids
+# as config_grid.yaml, whose 0.25 degree stores are finalized: same L2 tag,
+# selection, method, 17 stores and period. Made from L2, never by coarsening the
+# 0.25 degree stores (gridding/CLAUDE.md: each grid is made from L2): the counts,
+# sums of w^2 and sigma sums would not add, since a footprint is counted in every
+# cell it touches. GLEAM v4.3a is built on the same two grids (request G1,
+# data_engineering_gleam): the cell centres, 90 - (i + 0.5) x size and
+# -180 + (j + 0.5) x size, are exact in float64 on both.
+#
+# One build writes both grids in one pass over the UTC days; rechunk_wisosat.py
+# then makes the temporal stores from the tagged spatial ones.
+product: tropomi
+# products/<source>.py: the quality levels and the footprint models
+source: tropomi
+# the L2 processor version, as the L2 stores name it (v_8_1)
+version: '8.1'
+# the selection's set token, after the version in the gridded names
+# (v_8_1.clear_or_low_cloud): the quality level below. Every WISO-SAT gridded
+# name carries its set (user decision 2026-11-25)
+store_set: clear_or_low_cloud
+
+# The finalized L2 stores, read only at one tag (gridding/CLAUDE.md). The 19
+# core stores carry v8.1-verified-20261018; gridding reads only core stores.
+l2:
+  directory: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l2
+  filename: 'wisosat.{product}.{version}.inst.native_swath.{store}.zarr'
+  tag: v8.1-verified-20261018
+
+directories:
+  zarr: /glade/derecho/scratch/kheyblom/data/wisosat/zarr/tropomi/l3
+  logs: ./logs
+output_conventions:
+  # <data_source>.<version>.<frequency>.<grid_name>.<variable>.zarr, under
+  # spatial/ or temporal/ (user decision 2026-11-10)
+  filename: 'wisosat.{product}.{version}.{frequency}.{grid_name}.{variable}.zarr'
+nomenclature_data: /glade/u/home/kheyblom/work/style_guides/nomenclature_data.md
+log_file: grid_tropomi_0p5_1p0.log
+
+# The gridding inputs (gridding-method.md, Section 2; docs/products/tropomi.md,
+# "Gridding inputs"). Units are checked against nomenclature-key_grid.md.
+inputs:
+  delta_d: water_vapor_column_delta_d
+  # SRON deltad_precision: the random (noise) part of the retrieval error
+  delta_d_uncertainty: water_vapor_column_delta_d_standard_error
+  weight: water_vapor_column_h2o
+  footprint: corners
+
+selection:
+  # Schneider et al. (2022) Table 1, their recommendation (user decision 2026-11-09)
+  quality_level: clear_or_low_cloud
+  # TROPOMI T23 (user decision 2026-11-10): H2O columns above 100 kg m-2
+  thresholds:
+    water_vapor_column_h2o: {max: 5551.0}
+  description: >-
+    The cloudy row of Schneider et al. (2022) Table 1 is taken as optical
+    thickness >= 0.3, not > 0.3, so a value of exactly 0.3 falls in a row
+    (TROPOMI issue T24; user decision 2026-11-10); thresholds are compared at
+    the stored float32 precision. The H2O column limit (5551 mol m-2, 100 kg
+    m-2) drops broken retrievals under clear_or_low_cloud (TROPOMI issue T23,
+    22-71 a day): above it delta D runs to +817 per mil and columns to 2,500
+    kg m-2, and they would dominate H2O-weighted cells.
+
+# Each grid is made straight from L2; one pass writes both. Chunks as at 0.25 deg
+# (4 days x the whole grid; the record x 20 x 20 cells).
+grids:
+  - {type: latlon, resolution: 0.5}
+  - {type: latlon, resolution: 1.0}
+# day, <n>day, month or <n>month, each with a nomenclature_data.md row
+frequencies: [day]
+
+chunks:
+  # 4 days, the whole grid (user decision 2026-11-10, after the bench): 0.25 deg
+  # is 720 x 1440, so 15.8 MiB raw float32 and 31.6 MiB float64 per chunk
+  # (~7 and ~15 MiB stored), ~740 files per store over the record rather than
+  # ~2,950; a one-day map read decompresses 4 days. time_coordinate: periods
+  # per chunk of time and time_bounds.
+  spatial: {time: 4, rows: -1, cols: -1, time_coordinate: 365}
+  # the whole record per tile of 20 x 20 cells
+  temporal: {time: -1, rows: 20, cols: 20}
+
+# Scale settings (per product, never in code), from the bench: 16 workers do
+# ~5.6 s per day (~4.6 h for the record) in ~45 GB on a develop node.
+# a multiple of the spatial time chunk (4), so each commit writes whole chunks
+periods_per_commit: 12
+num_workers: 16
+# (footprint, cell) pairs clipped at once; bounds a worker's memory
+max_pairs: 500000
+# obs per L2 read block: a multiple of the geolocation chunk (4,194,304)
+read_block_obs: 4194304
+
+# verify_grid_wisosat.py: sampled by decision (user, 2026-11-10). Besides the
+# first and last period, `samples` more periods per frequency are drawn with
+# `seed` and every cell recomputed from L2; a month sample regrids 28-31 days.
+# Temporal stores: `tiles` x `times` samples per store against the spatial
+# store. Placeholders until the bench measures the cost.
+verify:
+  seed: 20261110
+  samples: {day: 10}
+  tiles: 6
+  times: 6
+
+# rechunk_wisosat.py reads the spatial stores at this tag (set after finalize)
+temporal:
+  source_tag: null
+  # the whole grid in one block per store (block_rows is capped at a grid's rows),
+  # as at 0.25 deg; the largest block is 2,945 x 360 x 720 x 8 B =
+  # 6.1 GB (0.5 deg float64)
+  block_rows: 720
+
+attrs:
+  title: >-
+    WISO-SAT TROPOMI HDO (clear-sky and low-cloud scenes), gridded {frequency_long_name} on {grid_name}: {variable}
+  summary: >-
+    {long_name}, from the SRON TROPOMI HDO/H2O total column retrieval
+    (Schneider et al. 2022, processor {version_label}) as distributed for
+    WISO-SAT, gridded by footprint overlap: each footprint polygon
+    contributes to every cell it overlaps with weight w = overlap area x H2O
+    column, and every observation whose UTC time falls in the period is
+    averaged. The method is in gridding_method. This is the set of clear-sky
+    and low-cloud scenes ("clear_or_low_cloud" after the version in its
+    name), the recommendation of Schneider et al. (2022) Table 1;
+    gridding_selection gives the selection in full.
+  Conventions: ACDD-1.3
+  source: >-
+    The finalized WISO-SAT TROPOMI Level 2 stores (source_l2_stores) at tag
+    source_l2_tag
+  institution: University of Michigan
+  creator_name: Kyle Heyblom
+  creator_email: heyblom@umich.edu
+  # the WISO-SAT paper, whose data these stores grid (user decision 2026-11-10)
+  references: >-
+    Sarkar, M., et al. (2026), WISO-SAT: A global database of stable hydrogen
+    isotopes in water vapor from eight satellite missions, Scientific Data,
+    doi:10.1038/s41597-026-08218-8;
+    Schneider, A., et al. (2022), Retrieving H2O/HDO columns over cloudy and
+    clear-sky scenes from the Tropospheric Monitoring Instrument (TROPOMI),
+    Atmos. Meas. Tech., 15, 2251-2275, doi:10.5194/amt-15-2251-2022
+  neighbouring_cells: >-
+    Cells are filled by footprint overlap: a footprint contributes to every
+    cell it covers, so neighbouring cells share footprints and their errors
+    are correlated, most strongly east-west and where cells are smaller than
+    the footprints. Each cell's standard error is correct on its own; a mean
+    over several cells computed as if they were independent understates its
+    standard error. For such means, add the sums over the cells
+    (gridding_method, Section 8).
+
+# Per quantity (nomenclature-key_grid.md names), merged over the
+# nomenclature's long_name and units.
+variable_attrs:
+  standard_error:
+    # version A, user decision 2026-11-10
+    comment: >-
+      The standard error covers retrieval noise only (the L2
+      deltad_precision), assumes independent footprint errors, and excludes
+      systematic error, which averaging does not reduce. It also excludes the
+      error from sampling: each satellite pass sees its own part of the cell,
+      at its own viewing geometry and with its own mix of clear and low-cloud
+      retrievals. Two passes over the same cell an orbit apart typically
+      differ by much more than this standard error. Cells seen by one pass
+      carry this error in full; cells seen by several passes (north of ~60N,
+      and at high southern latitudes in austral summer) average part of it
+      away.
+  coverage:
+    comment: >-
+      Adds up footprint areas, so it exceeds 1 where passes overlap; it is not
+      the fraction of the cell observed.
+  footprint_area:
+    comment: >-
+      Divide by cell_area for the footprint-to-cell ratio: above 1, the cell
+      is smaller than the footprints behind it and neighbouring cells repeat
+      one another.
